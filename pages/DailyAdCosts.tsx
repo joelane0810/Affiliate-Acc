@@ -186,7 +186,8 @@ const AdCostsContent = () => {
         if ('id' in cost && cost.id) {
             updateDailyAdCost(cost as DailyAdCost);
         } else {
-            addDailyAdCost(cost);
+            const { id, ...newCostData } = cost as DailyAdCost;
+            addDailyAdCost(newCostData);
         }
         setIsModalOpen(false);
         setEditingCost(undefined);
@@ -576,9 +577,6 @@ const AdDepositsContent = () => {
         if ('id' in deposit && deposit.id) {
             updateAdDeposit(deposit as AdDeposit);
         } else {
-            // FIX: The `deposit` object could be of type `AdDeposit` with a falsy `id`,
-            // which is not assignable to `addAdDeposit`'s parameter type `Omit<AdDeposit, 'id'>`.
-            // Destructure `id` out to pass the correct object shape.
             const { id, ...newDepositData } = deposit as AdDeposit;
             addAdDeposit(newDepositData);
         }
