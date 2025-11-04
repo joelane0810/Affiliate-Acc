@@ -576,7 +576,11 @@ const AdDepositsContent = () => {
         if ('id' in deposit && deposit.id) {
             updateAdDeposit(deposit as AdDeposit);
         } else {
-            addAdDeposit(deposit);
+            // FIX: The `deposit` object could be of type `AdDeposit` with a falsy `id`,
+            // which is not assignable to `addAdDeposit`'s parameter type `Omit<AdDeposit, 'id'>`.
+            // Destructure `id` out to pass the correct object shape.
+            const { id, ...newDepositData } = deposit as AdDeposit;
+            addAdDeposit(newDepositData);
         }
         setIsModalOpen(false);
         setEditingDeposit(undefined);

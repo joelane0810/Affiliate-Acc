@@ -1,4 +1,3 @@
-
 import React, { useState, useMemo, useEffect } from 'react';
 import { useData } from '../context/DataContext';
 import type { Asset, Liability, DebtPayment, Withdrawal, Partner, AssetType, TaxPayment, CapitalInflow, Receivable, ReceivablePayment } from '../types';
@@ -1104,10 +1103,12 @@ function AssetBalanceContent() {
                 <CardContent>
                     <Table>
                         <TableHead><TableRow>
-                            <TableHeader></TableHeader>
+                            <TableHeader className="w-12"></TableHeader>
                             <TableHeader>Tên tài sản</TableHeader>
                             <TableHeader>Loại</TableHeader>
                             <TableHeader>Tiền tệ</TableHeader>
+                            <TableHeader>Tiền vào</TableHeader>
+                            <TableHeader>Tiền ra</TableHeader>
                             <TableHeader>Số dư</TableHeader>
                             {!isReadOnly && <TableHeader>Hành động</TableHeader>}
                         </TableRow></TableHead>
@@ -1125,6 +1126,8 @@ function AssetBalanceContent() {
                                         <TableCell className="font-medium text-white">{asset.name}</TableCell>
                                         <TableCell>{assetTypeMap.get(asset.typeId) || 'N/A'}</TableCell>
                                         <TableCell>{asset.currency}</TableCell>
+                                        <TableCell className="font-semibold text-green-400">{formatCurrency(asset.totalReceived, asset.currency)}</TableCell>
+                                        <TableCell className="font-semibold text-red-400">{formatCurrency(asset.totalWithdrawn, asset.currency)}</TableCell>
                                         <TableCell className="font-semibold text-primary-400">{formatCurrency(asset.balance, asset.currency)}</TableCell>
                                         {!isReadOnly && (
                                             <TableCell><div className="flex items-center space-x-3 justify-center">
@@ -1134,22 +1137,26 @@ function AssetBalanceContent() {
                                         )}
                                     </TableRow>
                                     {asset.isExpandable && expandedRows.has(asset.id) && (
-                                        <TableRow className="bg-gray-900/50">
-                                            <TableCell colSpan={!isReadOnly ? 6 : 5}>
-                                                <div className="p-4">
-                                                    <h4 className="font-semibold text-white mb-2">Phân bổ theo đối tác</h4>
-                                                    <ul className="space-y-1 text-sm text-gray-300">
-                                                        {asset.owners.map(owner => (
-                                                            <li key={owner.id} className="grid grid-cols-3 gap-4">
-                                                                <span>{owner.name}</span>
-                                                                <span className="text-green-400 text-right">In: {formatCurrency(owner.received, asset.currency)}</span>
-                                                                <span className="text-red-400 text-right">Out: {formatCurrency(owner.withdrawn, asset.currency)}</span>
-                                                            </li>
-                                                        ))}
-                                                    </ul>
-                                                </div>
-                                            </TableCell>
-                                        </TableRow>
+                                        <>
+                                            <TableRow className="bg-gray-900/50">
+                                                <TableCell></TableCell>
+                                                <TableCell colSpan={!isReadOnly ? 7 : 6} className="!py-2 !px-4 !text-left">
+                                                    <h4 className="font-semibold text-white">Phân bổ theo đối tác</h4>
+                                                </TableCell>
+                                            </TableRow>
+                                            {asset.owners.map(owner => (
+                                                <TableRow key={owner.id} className="bg-gray-900/50 hover:bg-gray-800/70">
+                                                    <TableCell></TableCell>
+                                                    <TableCell className="pl-12 text-gray-300">{owner.name}</TableCell>
+                                                    <TableCell></TableCell>
+                                                    <TableCell></TableCell>
+                                                    <TableCell className="text-green-400">{formatCurrency(owner.received, asset.currency)}</TableCell>
+                                                    <TableCell className="text-red-400">{formatCurrency(owner.withdrawn, asset.currency)}</TableCell>
+                                                    <TableCell></TableCell>
+                                                    {!isReadOnly && <TableCell></TableCell>}
+                                                </TableRow>
+                                            ))}
+                                        </>
                                     )}
                                 </React.Fragment>
                             ))}

@@ -196,6 +196,9 @@ export default function Settings() {
             let operationCount = 0;
             
             snapshot.docs.forEach(doc => {
+                if (collectionName === 'partners' && doc.id === 'default-me') {
+                    return; // Skip deleting the default partner
+                }
                 currentBatch.delete(doc.ref);
                 operationCount++;
                 if (operationCount >= 499) {

@@ -1,5 +1,7 @@
 
 
+
+
 import React, { createContext, useContext, ReactNode, useMemo, useState, useEffect } from 'react';
 import { useLocalStorage } from '../hooks/useLocalStorage';
 import * as T from '../types';
@@ -52,7 +54,7 @@ interface DataContextType {
   adFundTransfers: T.AdFundTransfer[];
   addAdFundTransfer: (transfer: Omit<T.AdFundTransfer, 'id'>) => Promise<void>;
   updateAdFundTransfer: (transfer: T.AdFundTransfer) => Promise<void>;
-  deleteAdFundTransfer: (id: string) => Promise<void>;
+  deleteAdFundTransfer: (transfer: T.AdFundTransfer) => Promise<void>;
 
   commissions: T.Commission[];
   addCommission: (commission: Omit<T.Commission, 'id'>) => Promise<void>;
@@ -185,6 +187,9 @@ const wipeAllFirestoreData = async (db: Firestore) => {
         let operationCount = 0;
         
         snapshot.docs.forEach(doc => {
+            if (collectionName === 'partners' && doc.id === 'default-me') {
+                return; // Skip deleting the default partner
+            }
             currentBatch.delete(doc.ref);
             operationCount++;
             if (operationCount >= 499) {
@@ -1263,7 +1268,6 @@ export const DataProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
                 });
             } else {
                 const meStat = partnerStatsMap.get(mePartnerId);
-                // FIX: Replace dynamic key iteration with explicit property assignment for type safety.
                 if (meStat) {
                     meStat.revenue += pnl.revenue;
                     meStat.cost += pnl.cost;
@@ -1319,20 +1323,21 @@ export const DataProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
             const partnerTax = calculateTax(stats.revenue, partnerProfit, stats.inputVat);
             return { partnerId: p.id, name: p.name, revenue: stats.revenue, cost: stats.cost, profit: partnerProfit, inputVat: stats.inputVat, taxPayable: partnerTax.taxPayable };
         });
-        // FIX: Explicitly type the accumulator in reduce to ensure correct type inference.
         const revenueDetails = Object.entries(
-            Array.from(projectPnL.entries()).reduce<Record<string, number>>((acc, [projectId, pnl]) => {
+            // FIX: Type the initial value of reduce to avoid type errors with the accumulator.
+            Array.from(projectPnL.entries()).reduce((acc, [projectId, pnl]) => {
                 const name = projectMap.get(projectId) || 'Dự án không xác định';
                 acc[name] = (acc[name] || 0) + pnl.revenue;
                 return acc;
-            }, {})
+            }, {} as Record<string, number>)
         ).map(([name, amount]) => ({ name, amount }));
         const adCostDetails = Object.entries(
-            periodAdCosts.reduce<Record<string, number>>((acc, cost) => {
+            // FIX: Type the initial value of reduce to avoid type errors with the accumulator.
+            periodAdCosts.reduce((acc, cost) => {
                 const name = projectMap.get(cost.projectId) || 'Dự án không xác định';
                 acc[name] = (acc[name] || 0) + cost.vndCost;
                 return acc;
-            }, {})
+            }, {} as Record<string, number>)
         ).map(([name, amount]) => ({ name, amount }));
         const miscCostDetails = periodMiscExpenses.map(exp => ({ name: exp.description, amount: exp.vndAmount }));
         const totalVndReceivedFromSales = periodExchangeLogs.reduce((sum, log) => sum + log.vndAmount, 0);
