@@ -31,6 +31,7 @@ type MasterProject = {
 
 
 interface DataContextType {
+  isLoading: boolean;
   projects: T.Project[];
   addProject: (project: Omit<T.Project, 'id' | 'period'>) => Promise<void>;
   updateProject: (project: T.Project) => Promise<void>;
@@ -288,6 +289,7 @@ const seedInitialData = async (db: Firestore) => {
 export const DataProvider: React.FC<{ children: ReactNode }> = ({ children }) => {
   const [firebaseConfig, setFirebaseConfig] = useLocalStorage<FirebaseConfig | null>('firebaseConfig', defaultFirebaseConfig);
   const [firestoreDb, setFirestoreDb] = useState<Firestore | null>(null);
+  const [isLoading, setIsLoading] = useState(true);
 
   const [projects, setProjects] = useState<T.Project[]>([]);
   const [dailyAdCosts, setDailyAdCosts] = useState<T.DailyAdCost[]>([]);
@@ -319,6 +321,8 @@ export const DataProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
     if (firebaseConfig) {
       const dbInstance = initializeFirebase(firebaseConfig);
       setFirestoreDb(dbInstance);
+    } else {
+        setIsLoading(false);
     }
   }, [firebaseConfig]);
   
@@ -397,6 +401,8 @@ export const DataProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
         } catch (error) {
             console.error("Error during data initialization and fetch:", error);
             alert("Đã xảy ra lỗi khi tải dữ liệu từ Firebase. Vui lòng kiểm tra lại kết nối và cấu hình.");
+        } finally {
+            setIsLoading(false);
         }
     };
 
@@ -1345,7 +1351,7 @@ export const DataProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
     }, [projects]);
 
   const value = {
-    projects, addProject, updateProject, deleteProject, dailyAdCosts, addDailyAdCost, updateDailyAdCost, deleteDailyAdCost, adDeposits, addAdDeposit, updateAdDeposit, deleteAdDeposit,
+    isLoading, projects, addProject, updateProject, deleteProject, dailyAdCosts, addDailyAdCost, updateDailyAdCost, deleteDailyAdCost, adDeposits, addAdDeposit, updateAdDeposit, deleteAdDeposit,
     adFundTransfers, addAdFundTransfer, updateAdFundTransfer, deleteAdFundTransfer, commissions, addCommission, updateCommission, deleteCommission, assetTypes, addAssetType, updateAssetType, deleteAssetType,
     assets, addAsset, updateAsset, deleteAsset, liabilities, addLiability, updateLiability, deleteLiability, receivables, addReceivable, updateReceivable, deleteReceivable, receivablePayments, addReceivablePayment, updateReceivablePayment, deleteReceivablePayment,
     exchangeLogs, addExchangeLog, updateExchangeLog, deleteExchangeLog, miscellaneousExpenses, addMiscellaneousExpense, updateMiscellaneousExpense, deleteMiscellaneousExpense, partners, addPartner, updatePartner, deletePartner,
