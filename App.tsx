@@ -3,6 +3,8 @@ import { Sidebar } from './components/Sidebar';
 import { DataProvider, useData } from './context/DataContext';
 import { Card, CardContent } from './components/ui/Card';
 import { Page } from './types';
+// FIX: Import the 'Button' component.
+import { Button } from './components/ui/Button';
 
 // Dynamically import pages
 import Dashboard from './pages/Dashboard';
@@ -59,6 +61,31 @@ const DisabledPagePlaceholder = () => (
     </div>
 );
 
+const EmptyStatePlaceholder = () => {
+    const { setCurrentPage } = useData();
+    return (
+        <div className="flex flex-col items-center justify-center h-full pt-20">
+            <Card className="max-w-lg text-center">
+                <CardContent>
+                    <h2 className="text-2xl font-bold mb-3 text-white">Chào mừng đến với Affiliate Accountant Pro!</h2>
+                    <p className="text-gray-400 mb-6">
+                        Cơ sở dữ liệu của bạn hiện đang trống. Để bắt đầu, vui lòng thực hiện một trong các thao tác sau:
+                    </p>
+                    <div className="flex justify-center">
+                         <Button onClick={() => setCurrentPage('Settings')}>
+                            Đi đến trang Cài đặt
+                        </Button>
+                    </div>
+                    <ul className="text-left text-gray-400 mt-6 space-y-2 list-disc list-inside">
+                        <li><b>Khôi phục dữ liệu mẫu:</b> Để làm quen với các tính năng của ứng dụng.</li>
+                        <li><b>Nhập dữ liệu:</b> Nếu bạn có tệp sao lưu từ trước.</li>
+                    </ul>
+                </CardContent>
+            </Card>
+        </div>
+    );
+}
+
 const ViewingModeIndicator = () => {
     const { viewingPeriod, clearViewingPeriod } = useData();
     if (!viewingPeriod) return null;
@@ -85,12 +112,14 @@ const ViewingModeIndicator = () => {
 
 const AppContent = () => {
   const [isSidebarExpanded, setIsSidebarExpanded] = useState(true);
-  const { isLoading, activePeriod, viewingPeriod, currentPage, setCurrentPage } = useData();
+  const { isLoading, activePeriod, viewingPeriod, currentPage, setCurrentPage, firebaseConfig, closedPeriods } = useData();
 
   if (isLoading) {
     return <LoadingSpinner />;
   }
   
+  const isAppEmpty = !activePeriod && closedPeriods.length === 0;
+
   const disabledWithoutPeriod: Page[] = [
     'Dashboard', 'Projects', 'DailyAdCosts', 'Commissions',
     'ExchangeLog', 'MiscellaneousExpenses', 'DebtsReceivables', 'Partners', 'Tax'
@@ -98,6 +127,16 @@ const AppContent = () => {
   
   const isPageDisabled = !activePeriod && !viewingPeriod && disabledWithoutPeriod.includes(currentPage);
   const CurrentPageComponent = pages[currentPage];
+
+  let mainContent;
+  if (isAppEmpty && currentPage !== 'Settings' && currentPage !== 'LongReport' && currentPage !== 'Reports') {
+      mainContent = <EmptyStatePlaceholder />;
+  } else if (isPageDisabled) {
+      mainContent = <DisabledPagePlaceholder />;
+  } else {
+      mainContent = <CurrentPageComponent />;
+  }
+
 
   return (
     <div className="flex h-screen bg-gray-900 text-gray-200">
@@ -108,7 +147,7 @@ const AppContent = () => {
       />
       <main className={`flex-1 flex flex-col transition-all duration-300 ${isSidebarExpanded ? 'ml-64' : 'ml-20'}`}>
         <div className="flex-1 p-4 sm:p-6 lg:p-8 overflow-y-auto">
-          {isPageDisabled ? <DisabledPagePlaceholder /> : <CurrentPageComponent />}
+          {mainContent}
         </div>
       </main>
     </div>

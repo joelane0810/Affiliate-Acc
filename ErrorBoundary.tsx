@@ -1,5 +1,3 @@
-
-
 import React, { ErrorInfo, ReactNode } from 'react';
 
 interface Props {
@@ -12,7 +10,7 @@ interface State {
   errorInfo?: ErrorInfo;
 }
 
-// FIX: Explicitly extend React.Component to avoid potential naming conflicts with a local 'Component' variable.
+// FIX: Change to extend React.Component to fix errors related to missing 'setState' and 'props'.
 class ErrorBoundary extends React.Component<Props, State> {
   public state: State = {
     hasError: false,

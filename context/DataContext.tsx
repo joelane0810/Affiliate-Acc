@@ -1,5 +1,3 @@
-
-
 import React, { createContext, useContext, ReactNode, useMemo, useState, useEffect } from 'react';
 import { useLocalStorage } from '../hooks/useLocalStorage';
 import * as T from '../types';
@@ -127,6 +125,7 @@ interface DataContextType {
   closedPeriods: T.ClosedPeriod[];
   setViewingPeriod: (period: string) => void;
   clearViewingPeriod: () => void;
+  seedData: () => Promise<void>;
 
   currentPage: Page;
   setCurrentPage: (page: Page) => void;
@@ -162,6 +161,45 @@ const defaultTaxSettings: T.TaxSettings = {
     manualInputVat: 0, incomeTaxBase: 'personal', vatOutputBase: 'personal', vatInputBase: 'total',
     taxSeparationAmount: 0, periodClosingDay: 1,
 };
+
+const COLLECTION_NAMES_FOR_SEED = [
+    'projects', 'dailyAdCosts', 'adDeposits', 'adFundTransfers', 'commissions', 
+    'assetTypes', 'assets', 'liabilities', 'receivables', 'receivablePayments', 
+    'exchangeLogs', 'miscellaneousExpenses', 'partners', 'withdrawals', 
+    'debtPayments', 'taxPayments', 'capitalInflows', 'categories', 'niches'
+];
+
+const wipeAllFirestoreData = async (db: Firestore) => {
+    if (!db) {
+        throw new Error("DB not connected");
+    }
+    
+    for (const collectionName of COLLECTION_NAMES_FOR_SEED) {
+        const snapshot = await getDocs(collection(db, collectionName));
+        if(snapshot.empty) continue;
+        
+        const batches = [];
+        let currentBatch = writeBatch(db);
+        let operationCount = 0;
+        
+        snapshot.docs.forEach(doc => {
+            currentBatch.delete(doc.ref);
+            operationCount++;
+            if (operationCount >= 499) {
+                batches.push(currentBatch);
+                currentBatch = writeBatch(db);
+                operationCount = 0;
+            }
+        });
+        if(operationCount > 0) batches.push(currentBatch);
+        
+        await Promise.all(batches.map(batch => batch.commit()));
+    }
+
+    await deleteDoc(doc(db, 'settings', 'tax')).catch(()=>{});
+    await deleteDoc(doc(db, 'settings', 'periods')).catch(()=>{});
+};
+
 
 const seedInitialData = async (db: Firestore) => {
     const batch = writeBatch(db);
@@ -322,52 +360,44 @@ export const DataProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
   useEffect(() => {
     if (!firestoreDb) return;
 
-    const fetchCollection = async <T,>(collectionName: string, setter: React.Dispatch<React.SetStateAction<T[]>>) => {
-        try {
-            const dataCollection = collection(firestoreDb, collectionName);
-            const dataSnapshot = await getDocs(dataCollection);
-            const dataList = dataSnapshot.docs.map(doc => ({ ...doc.data(), id: doc.id })) as T[];
-            setter(dataList);
-        } catch (error) { console.error(`Error fetching ${collectionName}:`, error); }
-    };
-    
-    const fetchSettings = async () => {
-        try {
-            const taxDocRef = doc(firestoreDb, 'settings', 'tax');
-            const taxDocSnap = await getDoc(taxDocRef);
-            if (taxDocSnap.exists()) {
-                setTaxSettings(taxDocSnap.data() as T.TaxSettings);
-            } else {
-                console.log("No tax settings found, using default.");
-                setTaxSettings(defaultTaxSettings);
+    const fetchAllData = async () => {
+        const fetchCollection = async <T,>(collectionName: string, setter: React.Dispatch<React.SetStateAction<T[]>>) => {
+            try {
+                const dataCollection = collection(firestoreDb, collectionName);
+                const dataSnapshot = await getDocs(dataCollection);
+                const dataList = dataSnapshot.docs.map(doc => ({ ...doc.data(), id: doc.id })) as T[];
+                setter(dataList);
+            } catch (error) { console.error(`Error fetching ${collectionName}:`, error); }
+        };
+        
+        const fetchSettings = async () => {
+            try {
+                const taxDocRef = doc(firestoreDb, 'settings', 'tax');
+                const taxDocSnap = await getDoc(taxDocRef);
+                if (taxDocSnap.exists()) {
+                    setTaxSettings(taxDocSnap.data() as T.TaxSettings);
+                } else {
+                    console.log("No tax settings found, using default.");
+                    setTaxSettings(defaultTaxSettings);
+                }
+
+                const periodsDocRef = doc(firestoreDb, 'settings', 'periods');
+                const periodsDocSnap = await getDoc(periodsDocRef);
+                if (periodsDocSnap.exists()) {
+                    const data = periodsDocSnap.data();
+                    setActivePeriod(data.activePeriod || null);
+                    setClosedPeriods(data.closedPeriods || []);
+                } else {
+                    console.log("No period settings found, using default.");
+                    setActivePeriod(null);
+                    setClosedPeriods([]);
+                }
+            } catch (error) {
+                console.error("Error fetching settings:", error);
             }
+        };
 
-            const periodsDocRef = doc(firestoreDb, 'settings', 'periods');
-            const periodsDocSnap = await getDoc(periodsDocRef);
-            if (periodsDocSnap.exists()) {
-                const data = periodsDocSnap.data();
-                setActivePeriod(data.activePeriod || null);
-                setClosedPeriods(data.closedPeriods || []);
-            } else {
-                console.log("No period settings found, using default.");
-            }
-        } catch (error) {
-            console.error("Error fetching settings:", error);
-        }
-    };
-
-
-    const initializeAndFetchData = async () => {
         try {
-            const projectsCollection = collection(firestoreDb, 'projects');
-            const projectsSnapshot = await getDocs(projectsCollection);
-
-            if (projectsSnapshot.empty) {
-                console.log("Projects collection is empty. Seeding initial data.");
-                await seedInitialData(firestoreDb);
-            }
-
-            // Fetch all data including settings
             await Promise.all([
                 fetchSettings(),
                 fetchCollection<T.Project>('projects', setProjects),
@@ -392,15 +422,30 @@ export const DataProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
             ]);
             console.log("All data fetched successfully.");
         } catch (error) {
-            console.error("Error during data initialization and fetch:", error);
+            console.error("Error during data fetch:", error);
             alert("Đã xảy ra lỗi khi tải dữ liệu từ Firebase. Vui lòng kiểm tra lại kết nối và cấu hình.");
         } finally {
             setIsLoading(false);
         }
     };
 
-    initializeAndFetchData();
+    fetchAllData();
   }, [firestoreDb]);
+
+  const seedData = async () => {
+    if (!firestoreDb) return;
+    setIsLoading(true);
+    try {
+        await wipeAllFirestoreData(firestoreDb); // Ensure clean state before seeding
+        await seedInitialData(firestoreDb);
+        alert("Đã khôi phục dữ liệu mẫu thành công. Ứng dụng sẽ được tải lại.");
+        window.location.reload();
+    } catch (error) {
+        console.error("Error seeding data:", error);
+        alert("Đã xảy ra lỗi khi khôi phục dữ liệu mẫu.");
+        setIsLoading(false);
+    }
+  };
 
 
   const addProject = async (project: Omit<T.Project, 'id' | 'period'>) => {
@@ -1272,12 +1317,21 @@ export const DataProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
             const partnerTax = calculateTax(stats.revenue, partnerProfit, stats.inputVat);
             return { partnerId: p.id, name: p.name, revenue: stats.revenue, cost: stats.cost, profit: partnerProfit, inputVat: stats.inputVat, taxPayable: partnerTax.taxPayable };
         });
-        const revenueDetails = Object.entries(Array.from(projectPnL.entries()).reduce((acc: Record<string, number>, [projectId, pnl]) => {
-            const name = projectMap.get(projectId) || 'Dự án không xác định'; acc[name] = (acc[name] || 0) + pnl.revenue; return acc;
-        }, {})).map(([name, amount]) => ({ name, amount }));
-        const adCostDetails = Object.entries(periodAdCosts.reduce((acc: Record<string, number>, cost) => {
-            const name = projectMap.get(cost.projectId) || 'Dự án không xác định'; acc[name] = (acc[name] || 0) + cost.vndCost; return acc;
-        }, {})).map(([name, amount]) => ({ name, amount }));
+        // FIX: Explicitly type the accumulator and initial value in reduce to ensure correct type inference.
+        const revenueDetails = Object.entries(
+            Array.from(projectPnL.entries()).reduce((acc: Record<string, number>, [projectId, pnl]) => {
+                const name = projectMap.get(projectId) || 'Dự án không xác định';
+                acc[name] = (acc[name] || 0) + pnl.revenue;
+                return acc;
+            }, {} as Record<string, number>)
+        ).map(([name, amount]) => ({ name, amount }));
+        const adCostDetails = Object.entries(
+            periodAdCosts.reduce((acc: Record<string, number>, cost) => {
+                const name = projectMap.get(cost.projectId) || 'Dự án không xác định';
+                acc[name] = (acc[name] || 0) + cost.vndCost;
+                return acc;
+            }, {} as Record<string, number>)
+        ).map(([name, amount]) => ({ name, amount }));
         const miscCostDetails = periodMiscExpenses.map(exp => ({ name: exp.description, amount: exp.vndAmount }));
         const totalVndReceivedFromSales = periodExchangeLogs.reduce((sum, log) => sum + log.vndAmount, 0);
         const totalCapitalInflow = periodCapitalInflows.reduce((sum, i) => sum + i.amount, 0);
@@ -1356,7 +1410,7 @@ export const DataProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
     withdrawals, addWithdrawal, updateWithdrawal, deleteWithdrawal, debtPayments, addDebtPayment, updateDebtPayment, deleteDebtPayment, taxPayments, addTaxPayment, capitalInflows, addCapitalInflow, updateCapitalInflow, deleteCapitalInflow,
     taxSettings, updateTaxSettings, activePeriod, openPeriod, closePeriod, closedPeriods, viewingPeriod, setViewingPeriod, clearViewingPeriod, currentPage, setCurrentPage,
     currentPeriod, isReadOnly, enrichedAssets, enrichedDailyAdCosts, periodFinancials, periodAssetDetails, categories, addCategory, updateCategory, deleteCategory,
-    niches, addNiche, updateNiche, deleteNiche, masterProjects, firebaseConfig, setFirebaseConfig,
+    niches, addNiche, updateNiche, deleteNiche, masterProjects, firebaseConfig, setFirebaseConfig, seedData,
   };
 
   return <DataContext.Provider value={value}>{children}</DataContext.Provider>;

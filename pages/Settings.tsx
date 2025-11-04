@@ -94,10 +94,11 @@ const COLLECTION_NAMES = [
 
 
 export default function Settings() {
-    const { taxSettings, updateTaxSettings, setFirebaseConfig } = useData();
+    const { taxSettings, updateTaxSettings, setFirebaseConfig, seedData } = useData();
     const fileInputRef = useRef<HTMLInputElement>(null);
     const [isConfirmDeleteOpen, setIsConfirmDeleteOpen] = useState(false);
     const [isConfirmImportOpen, setIsConfirmImportOpen] = useState(false);
+    const [isConfirmSeedOpen, setIsConfirmSeedOpen] = useState(false);
     const [importData, setImportData] = useState<string | null>(null);
     const [isImporting, setIsImporting] = useState(false);
     const [isDeleting, setIsDeleting] = useState(false);
@@ -190,8 +191,6 @@ export default function Settings() {
             const snapshot = await getDocs(collection(db, collectionName));
             if(snapshot.empty) continue;
             
-            // Firestore allows up to 500 operations in a single batch.
-            // We'll delete in chunks of 499 to be safe.
             const batches = [];
             let currentBatch = writeBatch(db);
             let operationCount = 0;
@@ -219,7 +218,7 @@ export default function Settings() {
         setIsDeleting(true);
         try {
             await wipeAllFirestoreData();
-            alert("Đã xóa toàn bộ dữ liệu. Ứng dụng sẽ được tải lại và tạo dữ liệu mẫu mới.");
+            alert("Đã xóa toàn bộ dữ liệu. Ứng dụng sẽ được tải lại.");
             window.location.reload();
         } catch (error) {
             alert("Đã xảy ra lỗi khi xóa dữ liệu Firestore.");
@@ -278,6 +277,12 @@ export default function Settings() {
             setIsImporting(false);
         }
     };
+    
+    const handleConfirmSeed = async () => {
+        setIsConfirmSeedOpen(false);
+        // seedData function already handles loading state and reload.
+        await seedData();
+    };
 
     return (
         <div>
@@ -312,11 +317,12 @@ export default function Settings() {
                     <CardHeader>Quản lý dữ liệu</CardHeader>
                      <CardContent className="space-y-4">
                         <p className="text-sm text-gray-400">
-                            Tạo bản sao lưu toàn bộ dữ liệu trên Firestore hoặc khôi phục từ một tệp sao lưu.
+                            Tạo bản sao lưu toàn bộ dữ liệu trên Firestore hoặc khôi phục từ một tệp sao lưu. Bạn cũng có thể khôi phục lại bộ dữ liệu mẫu ban đầu.
                         </p>
-                        <div className="flex space-x-4">
+                        <div className="flex flex-wrap gap-4">
                             <Button onClick={handleExport}>Xuất dữ liệu (Export)</Button>
                             <Button onClick={handleImportClick} variant="secondary">Nhập dữ liệu (Import)</Button>
+                            <Button onClick={() => setIsConfirmSeedOpen(true)} variant="secondary">Khôi phục dữ liệu mẫu</Button>
                             <input
                                 type="file"
                                 ref={fileInputRef}
@@ -368,7 +374,7 @@ export default function Settings() {
                 onClose={() => setIsConfirmDeleteOpen(false)}
                 onConfirm={handleConfirmDeleteAllData}
                 title="Xác nhận xóa toàn bộ dữ liệu"
-                message="CẢNH BÁO: Hành động này sẽ xóa TOÀN BỘ dữ liệu của bạn trên Firestore và không thể hoàn tác. Sau khi xóa, dữ liệu mẫu sẽ được tạo lại. Bạn có chắc chắn muốn tiếp tục không?"
+                message="CẢNH BÁO: Hành động này sẽ xóa TOÀN BỘ dữ liệu của bạn trên Firestore và không thể hoàn tác. Ứng dụng sẽ trở về trạng thái trống. Bạn có chắc chắn muốn tiếp tục không?"
             />
              <ConfirmationModal
                 isOpen={isConfirmImportOpen}
@@ -378,6 +384,15 @@ export default function Settings() {
                 message="Bạn có chắc muốn nhập dữ liệu từ tệp này không? Tất cả dữ liệu hiện tại trên Firestore sẽ bị GHI ĐÈ vĩnh viễn. Hành động này không thể hoàn tác."
                 confirmButtonText="Nhập và Ghi đè"
                 confirmButtonVariant="danger"
+            />
+             <ConfirmationModal
+                isOpen={isConfirmSeedOpen}
+                onClose={() => setIsConfirmSeedOpen(false)}
+                onConfirm={handleConfirmSeed}
+                title="Xác nhận khôi phục dữ liệu mẫu"
+                message="Bạn có chắc chắn muốn khôi phục dữ liệu mẫu không? Thao tác này sẽ XÓA TẤT CẢ dữ liệu hiện tại và thay thế bằng dữ liệu mẫu ban đầu."
+                confirmButtonText="Khôi phục"
+                confirmButtonVariant="primary"
             />
             <ConfirmationModal
                 isOpen={isLogoutConfirmOpen}
