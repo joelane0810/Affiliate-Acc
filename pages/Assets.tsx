@@ -747,6 +747,63 @@ const WithdrawalForm: React.FC<{
     );
 };
 
+const CapitalInflowForm: React.FC<{
+    inflow?: CapitalInflow;
+    assets: Asset[];
+    onSave: (inflow: Omit<CapitalInflow, 'id'> | CapitalInflow) => void;
+    onCancel: () => void;
+}> = ({ inflow, assets, onSave, onCancel }) => {
+    const [date, setDate] = useState(inflow?.date || new Date().toISOString().split('T')[0]);
+    const [description, setDescription] = useState(inflow?.description || '');
+    const [assetId, setAssetId] = useState(inflow?.assetId || assets[0]?.id || '');
+    const [amount, setAmount] = useState(inflow?.amount || 0);
+
+    const selectedAsset = useMemo(() => assets.find(a => a.id === assetId), [assets, assetId]);
+
+    const handleSubmit = (e: React.FormEvent) => {
+        e.preventDefault();
+        onSave({ 
+            ...inflow, 
+            id: inflow?.id || '', 
+            date, 
+            description,
+            assetId, 
+            amount,
+        });
+    };
+
+    const selectClassName = "w-full px-3 py-2 bg-gray-900 border border-gray-600 rounded-md focus:outline-none focus:ring-2 focus:ring-primary-500";
+
+    return (
+        <form onSubmit={handleSubmit} className="space-y-4">
+             <div>
+                <Label htmlFor="inflowDate">Ngày</Label>
+                <Input id="inflowDate" type="date" value={date} onChange={e => setDate(e.target.value)} required />
+            </div>
+            <div>
+                <Label htmlFor="inflowDesc">Mô tả</Label>
+                <Input id="inflowDesc" value={description} onChange={e => setDescription(e.target.value)} placeholder="VD: Vốn góp ban đầu, Nhận đầu tư..." required />
+            </div>
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                <div>
+                    <Label htmlFor="inflowAsset">Tài sản nhận</Label>
+                    <select id="inflowAsset" value={assetId} onChange={e => setAssetId(e.target.value)} className={selectClassName} required>
+                        {assets.map(a => <option key={a.id} value={a.id}>{a.name} ({a.currency})</option>)}
+                    </select>
+                </div>
+                 <div>
+                    <Label htmlFor="inflowAmount">Số tiền ({selectedAsset?.currency})</Label>
+                    <NumberInput id="inflowAmount" value={amount} onValueChange={setAmount} required />
+                </div>
+            </div>
+            <div className="mt-6 flex justify-end space-x-3">
+                <Button type="button" variant="secondary" onClick={onCancel}>Hủy</Button>
+                <Button type="submit">Lưu</Button>
+            </div>
+        </form>
+    );
+};
+
 type EnrichedLiability = Liability & { paidAmount: number; remainingAmount: number };
 type EnrichedReceivable = Receivable & { paidAmount: number; remainingAmount: number };
 
@@ -872,7 +929,8 @@ function AssetBalanceContent() {
         debtPayments, addDebtPayment, isReadOnly,
         enrichedAssets,
         receivables, addReceivable, updateReceivable, deleteReceivable,
-        receivablePayments, addReceivablePayment
+        receivablePayments, addReceivablePayment,
+        capitalInflows, addCapitalInflow, updateCapitalInflow, deleteCapitalInflow
     } = useData();
     
     const [isAssetModalOpen, setIsAssetModalOpen] = useState(false);
@@ -892,6 +950,10 @@ function AssetBalanceContent() {
     const [isWithdrawalModalOpen, setIsWithdrawalModalOpen] = useState(false);
     const [editingWithdrawal, setEditingWithdrawal] = useState<Withdrawal | undefined>(undefined);
     const [withdrawalToDelete, setWithdrawalToDelete] = useState<Withdrawal | null>(null);
+    
+    const [isCapitalInflowModalOpen, setIsCapitalInflowModalOpen] = useState(false);
+    const [editingCapitalInflow, setEditingCapitalInflow] = useState<CapitalInflow | undefined>(undefined);
+    const [capitalInflowToDelete, setCapitalInflowToDelete] = useState<CapitalInflow | null>(null);
 
     const [expandedRows, setExpandedRows] = useState<Set<string>>(new Set());
 
@@ -961,6 +1023,14 @@ function AssetBalanceContent() {
     };
     const handleDeleteWithdrawalClick = (withdrawal: any) => { setWithdrawalToDelete(withdrawal); };
     const handleConfirmDeleteWithdrawal = () => { if (withdrawalToDelete) { deleteWithdrawal(withdrawalToDelete.id); setWithdrawalToDelete(null); } };
+
+    // Capital Inflow handlers
+    const handleSaveCapitalInflow = (inflow: Omit<CapitalInflow, 'id'> | CapitalInflow) => {
+        if ('id' in inflow && inflow.id) { updateCapitalInflow(inflow as CapitalInflow); } else { addCapitalInflow(inflow); }
+        setIsCapitalInflowModalOpen(false); setEditingCapitalInflow(undefined);
+    };
+    const handleDeleteCapitalInflowClick = (inflow: any) => { setCapitalInflowToDelete(inflow); };
+    const handleConfirmDeleteCapitalInflow = () => { if (capitalInflowToDelete) { deleteCapitalInflow(capitalInflowToDelete.id); setCapitalInflowToDelete(null); } };
     
     const enrichedLiabilities: EnrichedLiability[] = useMemo(() => {
         const paymentsByLiability = debtPayments.reduce((acc: Record<string, number>, p: DebtPayment) => {
@@ -994,6 +1064,20 @@ function AssetBalanceContent() {
             })
             .sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime());
     }, [withdrawals, assets, partners]);
+
+    const enrichedCapitalInflows = useMemo(() => {
+        const assetMap = new Map<string, Asset>(assets.map(a => [a.id, a]));
+        return capitalInflows
+            .map(i => {
+                const asset = assetMap.get(i.assetId);
+                return {
+                    ...i,
+                    assetName: asset?.name || 'N/A',
+                    currency: asset?.currency || 'VND'
+                };
+            })
+            .sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime());
+    }, [capitalInflows, assets]);
 
 
     const shortTermLiabilities = useMemo(() => enrichedLiabilities.filter(l => l.type === 'short-term'), [enrichedLiabilities]);
@@ -1165,6 +1249,42 @@ function AssetBalanceContent() {
                 </CardContent>
             </Card>
 
+             {/* Capital Inflows Table */}
+            <Card>
+                <CardHeader className="flex justify-between items-center">
+                    <span>Vốn góp & Đầu tư</span>
+                    {!isReadOnly && <Button onClick={() => { setEditingCapitalInflow(undefined); setIsCapitalInflowModalOpen(true); }}><span className="flex items-center gap-2"><Plus /> Thêm Vốn góp/Đầu tư</span></Button>}
+                </CardHeader>
+                <CardContent>
+                    <Table>
+                        <TableHead><TableRow>
+                            <TableHeader>Ngày</TableHeader>
+                            <TableHeader>Mô tả</TableHeader>
+                            <TableHeader>Tài sản</TableHeader>
+                            <TableHeader>Số tiền</TableHeader>
+                            {!isReadOnly && <TableHeader>Hành động</TableHeader>}
+                        </TableRow></TableHead>
+                        <TableBody>
+                            {enrichedCapitalInflows.map(i => (
+                                <TableRow key={i.id}>
+                                    <TableCell>{formatDate(i.date)}</TableCell>
+                                    <TableCell className="font-medium text-white">{i.description}</TableCell>
+                                    <TableCell>{i.assetName}</TableCell>
+                                    <TableCell className="font-semibold text-green-400">{formatCurrency(i.amount, i.currency)}</TableCell>
+                                    {!isReadOnly && (
+                                        <TableCell><div className="flex items-center space-x-3 justify-center">
+                                            <button onClick={() => { setEditingCapitalInflow(i); setIsCapitalInflowModalOpen(true); }} className="text-gray-400 hover:text-primary-400"><Edit /></button>
+                                            <button onClick={() => handleDeleteCapitalInflowClick(i)} className="text-gray-400 hover:text-red-400"><Trash2 /></button>
+                                        </div></TableCell>
+                                    )}
+                                </TableRow>
+                            ))}
+                        </TableBody>
+                    </Table>
+                </CardContent>
+            </Card>
+
+
             {/* Withdrawals Table */}
             <Card>
                 <CardHeader className="flex justify-between items-center">
@@ -1251,6 +1371,11 @@ function AssetBalanceContent() {
                         <WithdrawalForm withdrawal={editingWithdrawal} assets={assets} partners={partners} enrichedAssets={enrichedAssets} onSave={handleSaveWithdrawal} onCancel={() => setIsWithdrawalModalOpen(false)} />
                     </Modal>
                     <ConfirmationModal isOpen={!!withdrawalToDelete} onClose={() => setWithdrawalToDelete(null)} onConfirm={handleConfirmDeleteWithdrawal} title="Xác nhận xóa giao dịch rút" message={`Bạn có chắc muốn xóa giao dịch rút tiền "${withdrawalToDelete?.description}" không?`} />
+                
+                    <Modal isOpen={isCapitalInflowModalOpen} onClose={() => setIsCapitalInflowModalOpen(false)} title={editingCapitalInflow ? 'Sửa Vốn góp/Đầu tư' : 'Thêm Vốn góp/Đầu tư'}>
+                        <CapitalInflowForm inflow={editingCapitalInflow} assets={assets} onSave={handleSaveCapitalInflow} onCancel={() => setIsCapitalInflowModalOpen(false)} />
+                    </Modal>
+                    <ConfirmationModal isOpen={!!capitalInflowToDelete} onClose={() => setCapitalInflowToDelete(null)} onConfirm={handleConfirmDeleteCapitalInflow} title="Xác nhận xóa giao dịch" message={`Bạn có chắc muốn xóa giao dịch vốn góp "${capitalInflowToDelete?.description}" không?`} />
                 </>
             )}
         </div>

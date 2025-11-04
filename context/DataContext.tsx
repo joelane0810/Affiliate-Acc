@@ -1383,22 +1383,20 @@ export const DataProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
             return { partnerId: p.id, name: p.name, revenue: stats.revenue, cost: stats.cost, profit: partnerProfit, inputVat: stats.inputVat, taxPayable: partnerTax.taxPayable };
         });
         const revenueDetails = Object.entries(
-            // FIX: Type the initial value of reduce to avoid type errors with the accumulator.
-            Array.from(projectPnL.entries()).reduce((acc, [projectId, pnl]) => {
+            // FIX: Type the accumulator in the reduce function to resolve type errors.
+            Array.from(projectPnL.entries()).reduce((acc: Record<string, number>, [projectId, pnl]) => {
                 const name = projectMap.get(projectId) || 'Dự án không xác định';
                 acc[name] = (acc[name] || 0) + pnl.revenue;
                 return acc;
-// FIX: Type the initial value of reduce to avoid type errors with the accumulator.
-            }, {} as Record<string, number>)
+            }, {})
         ).map(([name, amount]) => ({ name, amount }));
         const adCostDetails = Object.entries(
-            // FIX: Type the initial value of reduce to avoid type errors with the accumulator.
-            periodAdCosts.reduce((acc, cost) => {
+            // FIX: Type the accumulator in the reduce function to resolve type errors.
+            periodAdCosts.reduce((acc: Record<string, number>, cost) => {
                 const name = projectMap.get(cost.projectId) || 'Dự án không xác định';
                 acc[name] = (acc[name] || 0) + cost.vndCost;
                 return acc;
-// FIX: Type the initial value of reduce to avoid type errors with the accumulator.
-            }, {} as Record<string, number>)
+            }, {})
         ).map(([name, amount]) => ({ name, amount }));
         const miscCostDetails = periodMiscExpenses.map(exp => ({ name: exp.description, amount: exp.vndAmount }));
         const totalVndReceivedFromSales = periodExchangeLogs.reduce((sum, log) => sum + log.vndAmount, 0);
