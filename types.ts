@@ -7,6 +7,15 @@ export type Page =
   'ExchangeLog' | 'MiscellaneousExpenses' | 'DebtsReceivables' | 'Partners' | 
   'Assets' | 'Tax' | 'Reports' | 'LongReport' | 'Settings';
 
+export interface FirebaseConfig {
+  apiKey: string;
+  authDomain: string;
+  projectId: string;
+  storageBucket: string;
+  messagingSenderId: string;
+  appId: string;
+}
+
 export interface PartnerShare {
   partnerId: string;
   sharePercentage: number;

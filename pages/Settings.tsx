@@ -3,9 +3,95 @@ import { Header } from '../components/Header';
 import { Card, CardHeader, CardContent } from '../components/ui/Card';
 import { Button } from '../components/ui/Button';
 import { useData } from '../context/DataContext';
-import { Label } from '../components/ui/Input';
+import { Input, Label } from '../components/ui/Input';
 import { NumberInput } from '../components/ui/NumberInput';
 import { ConfirmationModal } from '../components/ui/ConfirmationModal';
+import { FirebaseConfig } from '../types';
+import { db } from '../lib/firebase';
+import { collection, getDocs, writeBatch, doc, getDoc, setDoc, deleteDoc } from 'firebase/firestore';
+
+
+const FirebaseSettings: React.FC = () => {
+    const { firebaseConfig, setFirebaseConfig } = useData();
+    const [localConfig, setLocalConfig] = useState<Partial<FirebaseConfig>>(firebaseConfig || {});
+    const [connectionStatus, setConnectionStatus] = useState<'unknown' | 'connected' | 'not_configured'>('unknown');
+
+    useEffect(() => {
+        setLocalConfig(firebaseConfig || {});
+        if (firebaseConfig && firebaseConfig.apiKey && firebaseConfig.projectId) {
+            setConnectionStatus('connected');
+        } else {
+            setConnectionStatus('not_configured');
+        }
+    }, [firebaseConfig]);
+
+    const handleConfigChange = (key: keyof FirebaseConfig, value: string) => {
+        setLocalConfig(prev => ({ ...prev, [key]: value }));
+    };
+
+    const handleSave = () => {
+        const fullConfig = localConfig as FirebaseConfig;
+        if (Object.values(fullConfig).length < 6 || Object.values(fullConfig).some(v => !v)) {
+            alert('Vui lòng điền đầy đủ tất cả các trường cấu hình Firebase.');
+            return;
+        }
+        setFirebaseConfig(fullConfig);
+        alert('Đã lưu cấu hình Firebase. Trang sẽ được tải lại để áp dụng thay đổi.');
+        window.location.reload();
+    };
+
+    const configFields: { key: keyof FirebaseConfig, label: string }[] = [
+        { key: 'apiKey', label: 'API Key' },
+        { key: 'authDomain', label: 'Auth Domain' },
+        { key: 'projectId', label: 'Project ID' },
+        { key: 'storageBucket', label: 'Storage Bucket' },
+        { key: 'messagingSenderId', label: 'Messaging Sender ID' },
+        { key: 'appId', label: 'App ID' },
+    ];
+    
+    return (
+        <Card>
+            <CardHeader className="flex justify-between items-center">
+                <span>Cấu hình Firebase</span>
+                 <span className={`px-3 py-1 text-xs font-semibold rounded-full ${
+                    connectionStatus === 'connected' ? 'bg-green-500/20 text-green-300' : 'bg-yellow-500/20 text-yellow-300'
+                 }`}>
+                     {connectionStatus === 'connected' ? 'Đã kết nối' : 'Chưa kết nối'}
+                 </span>
+            </CardHeader>
+            <CardContent className="space-y-4">
+                <p className="text-sm text-gray-400">
+                    Dán thông tin cấu hình từ dự án Firebase của bạn vào đây. Dữ liệu sẽ được lưu cục bộ trên trình duyệt của bạn.
+                </p>
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                    {configFields.map(field => (
+                        <div key={field.key}>
+                            <Label htmlFor={`firebase-${field.key}`}>{field.label}</Label>
+                            <Input
+                                id={`firebase-${field.key}`}
+                                type="text"
+                                placeholder={field.label}
+                                value={localConfig[field.key] || ''}
+                                onChange={e => handleConfigChange(field.key, e.target.value)}
+                            />
+                        </div>
+                    ))}
+                </div>
+                 <div className="flex justify-end pt-4 border-t border-gray-700">
+                    <Button onClick={handleSave}>Lưu cấu hình & Tải lại</Button>
+                </div>
+            </CardContent>
+        </Card>
+    );
+};
+
+const COLLECTION_NAMES = [
+    'projects', 'dailyAdCosts', 'adDeposits', 'adFundTransfers', 'commissions', 
+    'assetTypes', 'assets', 'liabilities', 'receivables', 'receivablePayments', 
+    'exchangeLogs', 'miscellaneousExpenses', 'partners', 'withdrawals', 
+    'debtPayments', 'taxPayments', 'capitalInflows', 'categories', 'niches'
+];
+
 
 export default function Settings() {
     const { taxSettings, updateTaxSettings } = useData();
@@ -16,52 +102,11 @@ export default function Settings() {
     const [isImporting, setIsImporting] = useState(false);
     const [isDeleting, setIsDeleting] = useState(false);
 
-    // Local state for the period closing day setting
     const [localClosingDay, setLocalClosingDay] = useState(taxSettings.periodClosingDay);
 
-    // Sync local state if the global context changes
     useEffect(() => {
         setLocalClosingDay(taxSettings.periodClosingDay);
     }, [taxSettings.periodClosingDay]);
-
-    useEffect(() => {
-        if (isImporting && importData) {
-            const timer = setTimeout(() => {
-                try {
-                    const data = JSON.parse(importData);
-                    localStorage.clear();
-                    Object.keys(data).forEach(key => {
-                        const value = data[key];
-                        localStorage.setItem(key, value);
-                    });
-                    window.location.reload();
-                } catch (error) {
-                    alert("Lỗi khi phân tích cú pháp tệp. Vui lòng kiểm tra tệp JSON có hợp lệ không.");
-                    console.error("Import error:", error);
-                    setImportData(null);
-                    setIsImporting(false);
-                }
-            }, 100);
-
-            return () => clearTimeout(timer);
-        }
-    }, [isImporting, importData]);
-    
-    useEffect(() => {
-        if (isDeleting) {
-            const timer = setTimeout(() => {
-                try {
-                    localStorage.clear();
-                    window.location.reload();
-                } catch (error) {
-                    alert("Đã xảy ra lỗi khi xóa dữ liệu.");
-                    console.error("Delete error:", error);
-                    setIsDeleting(false); // Reset on error
-                }
-            }, 100);
-            return () => clearTimeout(timer);
-        }
-    }, [isDeleting]);
 
     const isClosingDayChanged = localClosingDay !== taxSettings.periodClosingDay;
 
@@ -69,25 +114,43 @@ export default function Settings() {
         const clampedValue = Math.max(1, Math.min(28, Math.floor(localClosingDay)));
         updateTaxSettings({ ...taxSettings, periodClosingDay: clampedValue });
     };
-
-    const handleExport = () => {
-        const data: { [key: string]: string } = {};
-        for (let i = 0; i < localStorage.length; i++) {
-            const key = localStorage.key(i);
-            if (key) {
-                data[key] = localStorage.getItem(key)!;
-            }
-        }
-        const jsonString = `data:text/json;charset=utf-8,${encodeURIComponent(JSON.stringify(data, null, 2))}`;
-        const link = document.createElement("a");
-        link.href = jsonString;
-        link.download = `affiliate-accountant-backup-${new Date().toISOString().split('T')[0]}.json`;
-        link.click();
-    };
     
+    const handleExport = async () => {
+        if (!db) {
+            alert("Kết nối Firebase không khả dụng.");
+            return;
+        }
+
+        const backupData: { [key: string]: any } = {};
+        
+        try {
+            for (const collectionName of COLLECTION_NAMES) {
+                const snapshot = await getDocs(collection(db, collectionName));
+                backupData[collectionName] = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
+            }
+            
+            const taxDoc = await getDoc(doc(db, 'settings', 'tax'));
+            const periodsDoc = await getDoc(doc(db, 'settings', 'periods'));
+            backupData.settings = {
+                tax: taxDoc.exists() ? taxDoc.data() : null,
+                periods: periodsDoc.exists() ? periodsDoc.data() : null
+            };
+
+            const jsonString = `data:text/json;charset=utf-8,${encodeURIComponent(JSON.stringify(backupData, null, 2))}`;
+            const link = document.createElement("a");
+            link.href = jsonString;
+            link.download = `affiliate-acc-firestore-backup-${new Date().toISOString().split('T')[0]}.json`;
+            link.click();
+
+        } catch (error) {
+            console.error("Export error:", error);
+            alert("Đã xảy ra lỗi khi xuất dữ liệu từ Firestore.");
+        }
+    };
+
     const handleImportClick = () => {
         fileInputRef.current?.click();
-    }
+    };
 
     const handleFileChange = (event: React.ChangeEvent<HTMLInputElement>) => {
         const file = event.target.files?.[0];
@@ -104,45 +167,105 @@ export default function Settings() {
             }
         };
         reader.readAsText(file);
-        event.target.value = ''; // Reset file input to allow re-selection of the same file
-    };
-    
-    const handleConfirmImport = () => {
-        if (!importData) return;
-        setIsConfirmImportOpen(false);
-        setIsImporting(true);
+        event.target.value = '';
     };
 
+    const wipeAllFirestoreData = async () => {
+        if (!db) {
+            alert("Kết nối Firebase không khả dụng.");
+            throw new Error("DB not connected");
+        }
+        
+        for (const collectionName of COLLECTION_NAMES) {
+            const snapshot = await getDocs(collection(db, collectionName));
+            if(snapshot.empty) continue;
+            
+            // Firestore allows up to 500 operations in a single batch.
+            // We'll delete in chunks of 499 to be safe.
+            const batches = [];
+            let currentBatch = writeBatch(db);
+            let operationCount = 0;
+            
+            snapshot.docs.forEach(doc => {
+                currentBatch.delete(doc.ref);
+                operationCount++;
+                if (operationCount >= 499) {
+                    batches.push(currentBatch);
+                    currentBatch = writeBatch(db);
+                    operationCount = 0;
+                }
+            });
+            if(operationCount > 0) batches.push(currentBatch);
+            
+            await Promise.all(batches.map(batch => batch.commit()));
+        }
 
-    const handleConfirmDeleteAllData = () => {
+        await deleteDoc(doc(db, 'settings', 'tax')).catch(()=>{});
+        await deleteDoc(doc(db, 'settings', 'periods')).catch(()=>{});
+    };
+
+    const handleConfirmDeleteAllData = async () => {
         setIsConfirmDeleteOpen(false);
         setIsDeleting(true);
+        try {
+            await wipeAllFirestoreData();
+            alert("Đã xóa toàn bộ dữ liệu. Ứng dụng sẽ được tải lại và tạo dữ liệu mẫu mới.");
+            window.location.reload();
+        } catch (error) {
+            alert("Đã xảy ra lỗi khi xóa dữ liệu Firestore.");
+            console.error("Delete error:", error);
+            setIsDeleting(false);
+        }
     };
     
-    const handleTestImportExport = () => {
-        if (window.confirm("Hành động này sẽ mô phỏng quá trình export và import dữ liệu để kiểm tra tính toàn vẹn. Dữ liệu hiện tại sẽ được tải lại từ bản sao lưu trong bộ nhớ. Bạn có muốn tiếp tục không?")) {
-            try {
-                // 1. Simulate Export: Copy all localStorage items as raw strings
-                const data: { [key: string]: string } = {};
-                for (let i = 0; i < localStorage.length; i++) {
-                    const key = localStorage.key(i);
-                    if (key) {
-                        data[key] = localStorage.getItem(key)!;
+    const handleConfirmImport = async () => {
+        if (!importData || !db) return;
+        
+        setIsConfirmImportOpen(false);
+        setIsImporting(true);
+
+        try {
+            await wipeAllFirestoreData();
+
+            const dataToImport = JSON.parse(importData);
+            let batch = writeBatch(db);
+            let operationCount = 0;
+
+            for (const collectionName of COLLECTION_NAMES) {
+                if (dataToImport[collectionName] && Array.isArray(dataToImport[collectionName])) {
+                    for (const docData of dataToImport[collectionName]) {
+                        if (docData.id) {
+                            const { id, ...data } = docData;
+                            batch.set(doc(db, collectionName, id), data);
+                            operationCount++;
+                            if (operationCount >= 499) {
+                                await batch.commit();
+                                batch = writeBatch(db);
+                                operationCount = 0;
+                            }
+                        }
                     }
                 }
-                
-                // 2. Simulate Import: Clear and write the raw strings back
-                localStorage.clear();
-                Object.keys(data).forEach(key => {
-                    localStorage.setItem(key, data[key]);
-                });
-
-                alert("Kiểm tra thành công! Dữ liệu đã được sao lưu và phục hồi lại. Trang sẽ được tải lại.");
-                window.location.reload();
-            } catch (error) {
-                alert("Đã xảy ra lỗi trong quá trình kiểm tra. Vui lòng kiểm tra console để biết thêm chi tiết.");
-                console.error("Test Import/Export error:", error);
             }
+            
+            if (dataToImport.settings) {
+                if (dataToImport.settings.tax) {
+                    batch.set(doc(db, 'settings', 'tax'), dataToImport.settings.tax);
+                }
+                if (dataToImport.settings.periods) {
+                    batch.set(doc(db, 'settings', 'periods'), dataToImport.settings.periods);
+                }
+            }
+            
+            if(operationCount > 0) await batch.commit();
+
+            alert("Nhập dữ liệu thành công. Ứng dụng sẽ được tải lại.");
+            window.location.reload();
+
+        } catch (error) {
+            alert("Lỗi khi nhập dữ liệu. Vui lòng kiểm tra tệp JSON và thử lại.");
+            console.error("Import error:", error);
+            setIsImporting(false);
         }
     };
 
@@ -160,19 +283,24 @@ export default function Settings() {
             )}
             <Header title="Cài đặt" />
             <div className="space-y-8">
+                <FirebaseSettings />
                  <Card>
-                    <CardHeader>Quản lý dữ liệu thủ công</CardHeader>
-                    <CardContent className="flex space-x-4">
-                        <Button onClick={handleExport}>Xuất dữ liệu (Export)</Button>
-                        <Button onClick={handleImportClick} variant="secondary">Nhập dữ liệu (Import)</Button>
-                        <Button onClick={handleTestImportExport} variant="secondary">Kiểm tra tính toàn vẹn</Button>
-                        <input
-                            type="file"
-                            ref={fileInputRef}
-                            onChange={handleFileChange}
-                            accept=".json"
-                            className="hidden"
-                        />
+                    <CardHeader>Quản lý dữ liệu</CardHeader>
+                     <CardContent className="space-y-4">
+                        <p className="text-sm text-gray-400">
+                            Tạo bản sao lưu toàn bộ dữ liệu trên Firestore hoặc khôi phục từ một tệp sao lưu.
+                        </p>
+                        <div className="flex space-x-4">
+                            <Button onClick={handleExport}>Xuất dữ liệu (Export)</Button>
+                            <Button onClick={handleImportClick} variant="secondary">Nhập dữ liệu (Import)</Button>
+                            <input
+                                type="file"
+                                ref={fileInputRef}
+                                onChange={handleFileChange}
+                                accept=".json"
+                                className="hidden"
+                            />
+                        </div>
                     </CardContent>
                 </Card>
 
@@ -206,7 +334,7 @@ export default function Settings() {
                 <Card className="border-red-500">
                     <CardHeader className="text-red-400">Khu vực nguy hiểm</CardHeader>
                     <CardContent>
-                        <p className="mb-4">Hành động này không thể được hoàn tác. Điều này sẽ xóa vĩnh viễn tất cả các dự án, chi phí, hoa hồng và các cài đặt khác của bạn.</p>
+                        <p className="mb-4">Hành động này không thể được hoàn tác. Điều này sẽ xóa vĩnh viễn tất cả các dự án, chi phí, hoa hồng và các cài đặt khác của bạn trên Firestore.</p>
                         <Button variant="danger" onClick={() => setIsConfirmDeleteOpen(true)}>Xóa tất cả dữ liệu</Button>
                     </CardContent>
                 </Card>
@@ -216,14 +344,14 @@ export default function Settings() {
                 onClose={() => setIsConfirmDeleteOpen(false)}
                 onConfirm={handleConfirmDeleteAllData}
                 title="Xác nhận xóa toàn bộ dữ liệu"
-                message="CẢNH BÁO: Hành động này sẽ xóa TOÀN BỘ dữ liệu của bạn và không thể hoàn tác. Bạn có chắc chắn muốn tiếp tục không?"
+                message="CẢNH BÁO: Hành động này sẽ xóa TOÀN BỘ dữ liệu của bạn trên Firestore và không thể hoàn tác. Sau khi xóa, dữ liệu mẫu sẽ được tạo lại. Bạn có chắc chắn muốn tiếp tục không?"
             />
              <ConfirmationModal
                 isOpen={isConfirmImportOpen}
                 onClose={() => setIsConfirmImportOpen(false)}
                 onConfirm={handleConfirmImport}
                 title="Xác nhận nhập dữ liệu"
-                message="Bạn có chắc muốn nhập dữ liệu từ tệp này không? Tất cả dữ liệu hiện tại sẽ bị ghi đè vĩnh viễn. Hành động này không thể hoàn tác."
+                message="Bạn có chắc muốn nhập dữ liệu từ tệp này không? Tất cả dữ liệu hiện tại trên Firestore sẽ bị GHI ĐÈ vĩnh viễn. Hành động này không thể hoàn tác."
                 confirmButtonText="Nhập và Ghi đè"
                 confirmButtonVariant="danger"
             />
