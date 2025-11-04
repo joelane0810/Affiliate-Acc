@@ -186,8 +186,7 @@ const AdCostsContent = () => {
         if ('id' in cost && cost.id) {
             updateDailyAdCost(cost as DailyAdCost);
         } else {
-            const { id, ...newCostData } = cost as DailyAdCost;
-            addDailyAdCost(newCostData);
+            addDailyAdCost(cost);
         }
         setIsModalOpen(false);
         setEditingCost(undefined);
@@ -293,7 +292,8 @@ const AdDepositForm: React.FC<{
     projectsForPeriod: Project[];
     onSave: (deposit: Omit<AdDeposit, 'id'> | AdDeposit) => void;
     onCancel: () => void;
-}> = ({ deposit, assets, assetTypes, projectsForPeriod, onSave, onCancel }) => {
+    uniqueAdAccountNumbers: string[];
+}> = ({ deposit, assets, assetTypes, projectsForPeriod, onSave, onCancel, uniqueAdAccountNumbers }) => {
     const { currentPeriod } = useData();
     const defaultDate = currentPeriod ? `${currentPeriod}-01` : new Date().toISOString().split('T')[0];
     const [date, setDate] = useState(deposit?.date || defaultDate);
@@ -357,7 +357,18 @@ const AdDepositForm: React.FC<{
             <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                 <div>
                     <Label htmlFor="adAccountNumber">Số tài khoản Ads</Label>
-                    <Input id="adAccountNumber" value={adAccountNumber} onChange={e => setAdAccountNumber(e.target.value)} required />
+                    <Input 
+                        id="adAccountNumber" 
+                        value={adAccountNumber} 
+                        onChange={e => setAdAccountNumber(e.target.value)} 
+                        required 
+                        list="ad-account-numbers"
+                        autoComplete="off"
+                        placeholder="Chọn hoặc nhập mới..."
+                    />
+                    <datalist id="ad-account-numbers">
+                        {uniqueAdAccountNumbers.map(acc => <option key={acc} value={acc} />)}
+                    </datalist>
                 </div>
                 <div>
                     <Label htmlFor="adsPlatform">Nền tảng Ads</Label>
@@ -560,6 +571,10 @@ const AdDepositsContent = () => {
     
     const projectsForPeriod = useMemo(() => projects.filter(p => p.period === currentPeriod), [projects, currentPeriod]);
 
+    const uniqueAdAccountNumbers = useMemo(() => 
+        [...new Set(adDeposits.map(d => d.adAccountNumber))].sort()
+    , [adDeposits]);
+
     const enrichedDeposits = useMemo(() => {
         const projectMap = new Map(projects.map(p => [p.id, p.name]));
         const assetMap = new Map(assets.map(a => [a.id, a.name]));
@@ -577,8 +592,7 @@ const AdDepositsContent = () => {
         if ('id' in deposit && deposit.id) {
             updateAdDeposit(deposit as AdDeposit);
         } else {
-            const { id, ...newDepositData } = deposit as AdDeposit;
-            addAdDeposit(newDepositData);
+            addAdDeposit(deposit);
         }
         setIsModalOpen(false);
         setEditingDeposit(undefined);
@@ -679,6 +693,7 @@ const AdDepositsContent = () => {
                             projectsForPeriod={projectsForPeriod}
                             onSave={handleSave}
                             onCancel={() => { setIsModalOpen(false); setEditingDeposit(undefined); }}
+                            uniqueAdAccountNumbers={uniqueAdAccountNumbers}
                         />
                     </Modal>
                     <Modal isOpen={isTransferModalOpen} onClose={() => setIsTransferModalOpen(false)} title="Chuyển tiền giữa các tài khoản Ads">
