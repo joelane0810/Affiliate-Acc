@@ -306,3 +306,27 @@ export interface PeriodAssetDetail {
   change: number;
   closingBalance: number;
 }
+
+export interface PeriodLiability {
+  id: string;
+  period: string; // "YYYY-MM"
+  date: string; // "YYYY-MM-DD"
+  description: string;
+  amount: number;
+  currency: 'USD' | 'VND';
+  isPaid: boolean;
+  paymentDate?: string; // "YYYY-MM-DD"
+  paymentAssetId?: string;
+}
+
+export interface PeriodReceivable {
+  id: string;
+  period: string; // "YYYY-MM"
+  date: string; // "YYYY-MM-DD"
+  description: string;
+  amount: number;
+  currency: 'USD' | 'VND';
+  isReceived: boolean;
+  receiptDate?: string; // "YYYY-MM-DD"
+  receiptAssetId?: string;
+}

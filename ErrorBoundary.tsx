@@ -1,7 +1,3 @@
-
-
-
-
 import React, { ErrorInfo, ReactNode } from 'react';
 
 interface Props {
@@ -26,6 +22,7 @@ class ErrorBoundary extends React.Component<Props, State> {
 
   public componentDidCatch(error: Error, errorInfo: ErrorInfo) {
     console.error("Uncaught error:", error, errorInfo);
+    // FIX: 'setState' is available because the class now extends React.Component.
     this.setState({ errorInfo });
   }
 
@@ -56,6 +53,7 @@ class ErrorBoundary extends React.Component<Props, State> {
       );
     }
 
+    // FIX: 'props' is available because the class now extends React.Component.
     return this.props.children;
   }
 }

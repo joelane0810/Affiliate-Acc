@@ -1,7 +1,3 @@
-
-
-
-
 import React, { createContext, useContext, ReactNode, useMemo, useState, useEffect } from 'react';
 import { useLocalStorage } from '../hooks/useLocalStorage';
 import * as T from '../types';
@@ -122,6 +118,16 @@ interface DataContextType {
   taxSettings: T.TaxSettings;
   updateTaxSettings: (settings: T.TaxSettings) => Promise<void>;
 
+  periodLiabilities: T.PeriodLiability[];
+  addPeriodLiability: (liability: Omit<T.PeriodLiability, 'id' | 'period'>) => Promise<void>;
+  updatePeriodLiability: (liability: T.PeriodLiability) => Promise<void>;
+  deletePeriodLiability: (id: string) => Promise<void>;
+
+  periodReceivables: T.PeriodReceivable[];
+  addPeriodReceivable: (receivable: Omit<T.PeriodReceivable, 'id' | 'period'>) => Promise<void>;
+  updatePeriodReceivable: (receivable: T.PeriodReceivable) => Promise<void>;
+  deletePeriodReceivable: (id: string) => Promise<void>;
+
   activePeriod: string | null;
   viewingPeriod: string | null;
   openPeriod: (period: string) => Promise<void>;
@@ -170,7 +176,8 @@ const COLLECTION_NAMES_FOR_SEED = [
     'projects', 'dailyAdCosts', 'adDeposits', 'adFundTransfers', 'commissions', 
     'assetTypes', 'assets', 'liabilities', 'receivables', 'receivablePayments', 
     'exchangeLogs', 'miscellaneousExpenses', 'partners', 'withdrawals', 
-    'debtPayments', 'taxPayments', 'capitalInflows', 'categories', 'niches'
+    'debtPayments', 'taxPayments', 'capitalInflows', 'categories', 'niches',
+    'periodLiabilities', 'periodReceivables'
 ];
 
 const wipeAllFirestoreData = async (db: Firestore) => {
@@ -348,6 +355,8 @@ export const DataProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
   const [capitalInflows, setCapitalInflows] = useState<T.CapitalInflow[]>([]);
   const [categories, setCategories] = useState<T.Category[]>([]);
   const [niches, setNiches] = useState<T.Niche[]>([]);
+  const [periodLiabilities, setPeriodLiabilities] = useState<T.PeriodLiability[]>([]);
+  const [periodReceivables, setPeriodReceivables] = useState<T.PeriodReceivable[]>([]);
   
   const [taxSettings, setTaxSettings] = useState<T.TaxSettings>(defaultTaxSettings);
   const [activePeriod, setActivePeriod] = useState<string | null>(null);
@@ -426,6 +435,8 @@ export const DataProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
                 fetchCollection<T.AssetType>('assetTypes', setAssetTypes),
                 fetchCollection<T.Category>('categories', setCategories),
                 fetchCollection<T.Niche>('niches', setNiches),
+                fetchCollection<T.PeriodLiability>('periodLiabilities', setPeriodLiabilities),
+                fetchCollection<T.PeriodReceivable>('periodReceivables', setPeriodReceivables),
             ]);
             console.log("All data fetched successfully.");
         } catch (error) {
@@ -993,6 +1004,54 @@ export const DataProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
     }
   };
 
+  const addPeriodLiability = async (liability: Omit<T.PeriodLiability, 'id' | 'period'>) => {
+    if (!activePeriod || !firestoreDb) return;
+    const newLiability = { ...liability, period: activePeriod };
+    try {
+      const docRef = await addDoc(collection(firestoreDb, 'periodLiabilities'), newLiability);
+      setPeriodLiabilities(prev => [...prev, { ...newLiability, id: docRef.id }]);
+    } catch (e) { console.error("Error adding period liability: ", e); }
+  };
+  const updatePeriodLiability = async (updatedLiability: T.PeriodLiability) => {
+    if (!firestoreDb) return;
+    const { id, ...data } = updatedLiability;
+    try {
+      await updateDoc(doc(firestoreDb, 'periodLiabilities', id), data);
+      setPeriodLiabilities(prev => prev.map(l => l.id === id ? updatedLiability : l));
+    } catch (e) { console.error("Error updating period liability: ", e); }
+  };
+  const deletePeriodLiability = async (id: string) => {
+    if (!firestoreDb) return;
+    try {
+      await deleteDoc(doc(firestoreDb, 'periodLiabilities', id));
+      setPeriodLiabilities(prev => prev.filter(l => l.id !== id));
+    } catch (e) { console.error("Error deleting period liability: ", e); }
+  };
+
+  const addPeriodReceivable = async (receivable: Omit<T.PeriodReceivable, 'id' | 'period'>) => {
+    if (!activePeriod || !firestoreDb) return;
+    const newReceivable = { ...receivable, period: activePeriod };
+    try {
+      const docRef = await addDoc(collection(firestoreDb, 'periodReceivables'), newReceivable);
+      setPeriodReceivables(prev => [...prev, { ...newReceivable, id: docRef.id }]);
+    } catch (e) { console.error("Error adding period receivable: ", e); }
+  };
+  const updatePeriodReceivable = async (updatedReceivable: T.PeriodReceivable) => {
+    if (!firestoreDb) return;
+    const { id, ...data } = updatedReceivable;
+    try {
+      await updateDoc(doc(firestoreDb, 'periodReceivables', id), data);
+      setPeriodReceivables(prev => prev.map(r => r.id === id ? updatedReceivable : r));
+    } catch (e) { console.error("Error updating period receivable: ", e); }
+  };
+  const deletePeriodReceivable = async (id: string) => {
+    if (!firestoreDb) return;
+    try {
+      await deleteDoc(doc(firestoreDb, 'periodReceivables', id));
+      setPeriodReceivables(prev => prev.filter(r => r.id !== id));
+    } catch (e) { console.error("Error deleting period receivable: ", e); }
+  };
+
     const updatePeriodsInFirestore = async (newActivePeriod: string | null, newClosedPeriods: T.ClosedPeriod[]) => {
         if (!firestoreDb) return;
         try {
@@ -1329,6 +1388,7 @@ export const DataProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
                 const name = projectMap.get(projectId) || 'Dự án không xác định';
                 acc[name] = (acc[name] || 0) + pnl.revenue;
                 return acc;
+// FIX: Type the initial value of reduce to avoid type errors with the accumulator.
             }, {} as Record<string, number>)
         ).map(([name, amount]) => ({ name, amount }));
         const adCostDetails = Object.entries(
@@ -1337,6 +1397,7 @@ export const DataProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
                 const name = projectMap.get(cost.projectId) || 'Dự án không xác định';
                 acc[name] = (acc[name] || 0) + cost.vndCost;
                 return acc;
+// FIX: Type the initial value of reduce to avoid type errors with the accumulator.
             }, {} as Record<string, number>)
         ).map(([name, amount]) => ({ name, amount }));
         const miscCostDetails = periodMiscExpenses.map(exp => ({ name: exp.description, amount: exp.vndAmount }));
@@ -1416,6 +1477,7 @@ export const DataProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
     exchangeLogs, addExchangeLog, updateExchangeLog, deleteExchangeLog, miscellaneousExpenses, addMiscellaneousExpense, updateMiscellaneousExpense, deleteMiscellaneousExpense, partners, addPartner, updatePartner, deletePartner,
     withdrawals, addWithdrawal, updateWithdrawal, deleteWithdrawal, debtPayments, addDebtPayment, updateDebtPayment, deleteDebtPayment, taxPayments, addTaxPayment, capitalInflows, addCapitalInflow, updateCapitalInflow, deleteCapitalInflow,
     taxSettings, updateTaxSettings, activePeriod, openPeriod, closePeriod, closedPeriods, viewingPeriod, setViewingPeriod, clearViewingPeriod, currentPage, setCurrentPage,
+    periodLiabilities, addPeriodLiability, updatePeriodLiability, deletePeriodLiability, periodReceivables, addPeriodReceivable, updatePeriodReceivable, deletePeriodReceivable,
     currentPeriod, isReadOnly, enrichedAssets, enrichedDailyAdCosts, periodFinancials, periodAssetDetails, categories, addCategory, updateCategory, deleteCategory,
     niches, addNiche, updateNiche, deleteNiche, masterProjects, firebaseConfig, setFirebaseConfig, seedData,
   };
