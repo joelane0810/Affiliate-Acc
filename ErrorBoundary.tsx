@@ -10,8 +10,7 @@ interface State {
   errorInfo?: ErrorInfo;
 }
 
-// FIX: To resolve errors related to missing 'setState' and 'props', the class must extend React.Component.
-// FIX: Extended React.Component to provide component lifecycle methods, state, and props.
+// Fix: To resolve errors related to missing 'setState' and 'props', the class must extend React.Component.
 class ErrorBoundary extends React.Component<Props, State> {
   public state: State = {
     hasError: false,
@@ -23,7 +22,6 @@ class ErrorBoundary extends React.Component<Props, State> {
 
   public componentDidCatch(error: Error, errorInfo: ErrorInfo) {
     console.error("Uncaught error:", error, errorInfo);
-    // FIX: 'setState' is available because the class now extends React.Component.
     this.setState({ errorInfo });
   }
 
@@ -54,7 +52,6 @@ class ErrorBoundary extends React.Component<Props, State> {
       );
     }
 
-    // FIX: 'props' is available because the class now extends React.Component.
     return this.props.children;
   }
 }

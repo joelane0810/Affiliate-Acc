@@ -37,6 +37,11 @@ interface DataContextType {
   updateProject: (project: T.Project) => Promise<void>;
   deleteProject: (id: string) => Promise<void>;
 
+  adAccounts: T.AdAccount[];
+  addAdAccount: (account: Omit<T.AdAccount, 'id'>) => Promise<void>;
+  updateAdAccount: (account: T.AdAccount) => Promise<void>;
+  deleteAdAccount: (id: string) => Promise<void>;
+
   dailyAdCosts: T.DailyAdCost[];
   addDailyAdCost: (cost: Omit<T.DailyAdCost, 'id'>) => Promise<void>;
   updateDailyAdCost: (cost: T.DailyAdCost) => Promise<void>;
@@ -176,6 +181,15 @@ interface DataContextType {
 
 const DataContext = createContext<DataContextType | undefined>(undefined);
 
+// Fix: Export a 'useData' hook to allow components to consume the context.
+export const useData = (): DataContextType => {
+  const context = useContext(DataContext);
+  if (context === undefined) {
+    throw new Error('useData must be used within a DataProvider');
+  }
+  return context;
+};
+
 const defaultTaxSettings: T.TaxSettings = {
     method: 'revenue', revenueRate: 1.5, vatRate: 10, incomeRate: 20, vatInputMethod: 'auto_sum',
     manualInputVat: 0, incomeTaxBase: 'personal', vatOutputBase: 'personal', vatInputBase: 'total',
@@ -187,7 +201,8 @@ const COLLECTION_NAMES_FOR_SEED = [
     'assetTypes', 'assets', 'liabilities', 'receivables', 'receivablePayments', 
     'exchangeLogs', 'miscellaneousExpenses', 'partners', 'withdrawals', 
     'debtPayments', 'taxPayments', 'capitalInflows', 'categories', 'niches',
-    'periodLiabilities', 'periodReceivables', 'periodDebtPayments', 'periodReceivablePayments'
+    'periodLiabilities', 'periodReceivables', 'periodDebtPayments', 'periodReceivablePayments',
+    'adAccounts'
 ];
 
 const wipeAllFirestoreData = async (db: Firestore) => {
@@ -279,60 +294,64 @@ const seedInitialData = async (db: Firestore) => {
         contributedByPartnerId: 'default-me',
     });
 
-    // 8. Ad Deposit
+    // 8. Ad Account
+    const adAccount1Ref = doc(collection(db, 'adAccounts'));
+    batch.set(adAccount1Ref, { accountNumber: 'GG-ACC-001', adsPlatform: 'google', status: 'running' });
+
+    // 9. Ad Deposit
     batch.set(doc(collection(db, 'adDeposits')), {
         date: todayStr, adsPlatform: 'google', adAccountNumber: 'GG-ACC-001', projectId: project1Ref.id,
         assetId: vcbAssetRef.id, usdAmount: 500, rate: 25500, vndAmount: 500 * 25500, status: 'running'
     });
 
-    // 9. Daily Ad Cost
+    // 10. Daily Ad Cost
     batch.set(doc(collection(db, 'dailyAdCosts')), {
         projectId: project1Ref.id, adAccountNumber: 'GG-ACC-001', date: todayStr, amount: 50.75, vatRate: 8
     });
 
-    // 10. Commission
+    // 11. Commission
     batch.set(doc(collection(db, 'commissions')), {
         projectId: project1Ref.id, date: todayStr, assetId: clickbankAssetRef.id,
         usdAmount: 350, predictedRate: 25400, vndAmount: 350 * 25400
     });
     
-    // 11. Exchange Log
+    // 12. Exchange Log
     batch.set(doc(collection(db, 'exchangeLogs')), {
         date: todayStr, sellingAssetId: clickbankAssetRef.id, receivingAssetId: vcbAssetRef.id,
         usdAmount: 300, rate: 25600, vndAmount: 300 * 25600
     });
     
-    // 12. Miscellaneous Expense
+    // 13. Miscellaneous Expense
     batch.set(doc(collection(db, 'miscellaneousExpenses')), {
         date: todayStr, description: 'Thuê VPS tháng này', assetId: vcbAssetRef.id,
         amount: 500000, vndAmount: 500000
     });
     
-    // 13. Liability
+    // 14. Liability
     const liabilityRef = doc(collection(db, 'liabilities'));
     batch.set(liabilityRef, {
         description: 'Vay nóng bạn bè', totalAmount: 10000000, currency: 'VND',
         type: 'short-term', creationDate: todayStr
     });
 
-    // 14. Debt Payment
+    // 15. Debt Payment
     batch.set(doc(collection(db, 'debtPayments')), {
         liabilityId: liabilityRef.id, date: todayStr, amount: 1000000, assetId: vcbAssetRef.id
     });
 
-    // 15. Receivable
+    // 16. Receivable
     const receivableRef = doc(collection(db, 'receivables'));
     batch.set(receivableRef, {
         description: 'Tạm ứng cho Agency', totalAmount: 5000000, currency: 'VND', type: 'short-term',
         creationDate: todayStr, outflowAssetId: vcbAssetRef.id
     });
 
-    // 16. Receivable Payment
+    // 17. Receivable Payment
     batch.set(doc(collection(db, 'receivablePayments')), {
         receivableId: receivableRef.id, date: todayStr, amount: 500000, assetId: vcbAssetRef.id
     });
 
-    // 17. Withdrawal
+    // 18. Withdrawal
     batch.set(doc(collection(db, 'withdrawals')), {
         date: todayStr, assetId: vcbAssetRef.id, amount: 2000000, vndAmount: 2000000,
         withdrawnBy: mePartnerRef.id, description: 'Rút tiền cá nhân'
@@ -348,6 +367,7 @@ export const DataProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
   const [isLoading, setIsLoading] = useState(true);
 
   const [projects, setProjects] = useState<T.Project[]>([]);
+  const [adAccounts, setAdAccounts] = useState<T.AdAccount[]>([]);
   const [dailyAdCosts, setDailyAdCosts] = useState<T.DailyAdCost[]>([]);
   const [partners, setPartners] = useState<T.Partner[]>([]);
   const [assetTypes, setAssetTypes] = useState<T.AssetType[]>([]);
@@ -430,6 +450,7 @@ export const DataProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
             await Promise.all([
                 fetchSettings(),
                 fetchCollection<T.Project>('projects', setProjects),
+                fetchCollection<T.AdAccount>('adAccounts', setAdAccounts),
                 fetchCollection<T.DailyAdCost>('dailyAdCosts', setDailyAdCosts),
                 fetchCollection<T.Asset>('assets', setAssets),
                 fetchCollection<T.Commission>('commissions', setCommissions),
@@ -538,6 +559,52 @@ export const DataProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
           console.error("Error deleting project and related data: ", e);
           alert("Đã xảy ra lỗi khi xóa dự án. Vui lòng thử lại.");
       }
+  };
+
+  const addAdAccount = async (account: Omit<T.AdAccount, 'id'>) => {
+    if (!firestoreDb) return;
+    if (adAccounts.some(acc => acc.accountNumber.trim().toLowerCase() === account.accountNumber.trim().toLowerCase())) {
+        alert('Số tài khoản Ads đã tồn tại.');
+        return;
+    }
+    try {
+        const docRef = await addDoc(collection(firestoreDb, 'adAccounts'), account);
+        setAdAccounts(prev => [...prev, { ...account, id: docRef.id }]);
+    } catch (e) { console.error("Error adding ad account: ", e); }
+  };
+  const updateAdAccount = async (updatedAccount: T.AdAccount) => {
+    if (!firestoreDb) return;
+    if (adAccounts.some(acc => acc.id !== updatedAccount.id && acc.accountNumber.trim().toLowerCase() === updatedAccount.accountNumber.trim().toLowerCase())) {
+        alert('Số tài khoản Ads đã tồn tại.');
+        return;
+    }
+    const { id, ...accountData } = updatedAccount;
+    try {
+        await updateDoc(doc(firestoreDb, 'adAccounts', id), accountData);
+        setAdAccounts(prev => prev.map(acc => acc.id === id ? updatedAccount : acc));
+    } catch (e) { console.error("Error updating ad account: ", e); }
+  };
+  const deleteAdAccount = async (id: string) => {
+    if (!firestoreDb) return;
+    const accountToDelete = adAccounts.find(acc => acc.id === id);
+    if (!accountToDelete) return;
+
+    const { accountNumber } = accountToDelete;
+
+    const isUsed = 
+        adDeposits.some(d => d.adAccountNumber === accountNumber) ||
+        adFundTransfers.some(t => t.fromAdAccountNumber === accountNumber || t.toAdAccountNumber === accountNumber) ||
+        dailyAdCosts.some(c => c.adAccountNumber === accountNumber);
+
+    if (isUsed) {
+        alert('Không thể xóa tài khoản Ads này vì nó đã được sử dụng trong các giao dịch. Vui lòng xóa các giao dịch liên quan trước.');
+        return;
+    }
+
+    try {
+        await deleteDoc(doc(firestoreDb, 'adAccounts', id));
+        setAdAccounts(prev => prev.filter(acc => acc.id !== id));
+    } catch (e) { console.error("Error deleting ad account: ", e); }
   };
 
   const addDailyAdCost = async (cost: Omit<T.DailyAdCost, 'id'>) => {
@@ -1339,235 +1406,4 @@ export const DataProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
         const periodReceivablePayments = receivablePayments.filter(p => isDateInPeriod(p.date, currentPeriod));
         const periodLiabilities = liabilities.filter(l => isDateInPeriod(l.creationDate, currentPeriod));
         const projectPnL = new Map<string, { revenue: number, cost: number, inputVat: number }>();
-        type CommissionLedgerItem = { projectId: string; amount: number; predictedRate: number; };
-        const usdCommissionLedgers = new Map<string, CommissionLedgerItem[]>();
-        [...commissions].sort((a, b) => new Date(a.date).getTime() - new Date(b.date).getTime()).forEach(comm => {
-            const asset = assetMap.get(comm.assetId);
-            if (asset?.currency === 'USD') {
-                if (!usdCommissionLedgers.has(comm.assetId)) usdCommissionLedgers.set(comm.assetId, []);
-                usdCommissionLedgers.get(comm.assetId)!.push({ projectId: comm.projectId, amount: comm.usdAmount, predictedRate: comm.predictedRate });
-            }
-        });
-        projectPnL.clear();
-        let exchangeRateGainLoss = 0;
-        periodCommissions.forEach(c => {
-            const pnl = projectPnL.get(c.projectId) || { revenue: 0, cost: 0, inputVat: 0 };
-            pnl.revenue += c.vndAmount;
-            projectPnL.set(c.projectId, pnl);
-        });
-        periodAdCosts.forEach(c => {
-            const pnl = projectPnL.get(c.projectId) || { revenue: 0, cost: 0, inputVat: 0 };
-            pnl.cost += c.vndCost;
-            pnl.inputVat += c.vndCost * (c.vatRate || 0) / 100;
-            projectPnL.set(c.projectId, pnl);
-        });
-        periodMiscExpenses.filter(e => e.projectId).forEach(e => {
-            const pnl = projectPnL.get(e.projectId!) || { revenue: 0, cost: 0, inputVat: 0 };
-            pnl.cost += e.vndAmount;
-            pnl.inputVat += e.vndAmount * (e.vatRate || 0) / 100;
-            projectPnL.set(e.projectId!, pnl);
-        });
-        const gainLossByProject = new Map<string, number>();
-        const fifoLedgerForGainLoss = new Map(Array.from(usdCommissionLedgers.entries()).map(([key, items]) => [key, items.map(item => ({...item}))]));
-        periodExchangeLogs.forEach(log => {
-            const ledger = fifoLedgerForGainLoss.get(log.sellingAssetId);
-            if (!ledger) return;
-            let amountToSell = log.usdAmount;
-            while(amountToSell > 0 && ledger.length > 0) {
-                const chunk = ledger[0];
-                const amountToConsume = Math.min(amountToSell, chunk.amount);
-                const realizedVnd = amountToConsume * log.rate;
-                const costBasisVnd = amountToConsume * chunk.predictedRate;
-                const gainLoss = realizedVnd - costBasisVnd;
-                gainLossByProject.set(chunk.projectId, (gainLossByProject.get(chunk.projectId) || 0) + gainLoss);
-                chunk.amount -= amountToConsume;
-                amountToSell -= amountToConsume;
-                if(chunk.amount < 0.001) ledger.shift();
-            }
-        });
-        gainLossByProject.forEach((gainLoss, projectId) => {
-             const pnl = projectPnL.get(projectId) || { revenue: 0, cost: 0, inputVat: 0 };
-             pnl.revenue += gainLoss;
-             projectPnL.set(projectId, pnl);
-        });
-        exchangeRateGainLoss = Array.from(gainLossByProject.values()).reduce((sum, val) => sum + val, 0);
-        const partnerStatsMap = new Map<string, { revenue: number, cost: number, inputVat: number }>();
-        partners.forEach(p => partnerStatsMap.set(p.id, { revenue: 0, cost: 0, inputVat: 0 }));
-        periodProjects.forEach(project => {
-            const pnl = projectPnL.get(project.id) || { revenue: 0, cost: 0, inputVat: 0 };
-            if (project.isPartnership && project.partnerShares?.length) {
-                project.partnerShares.forEach(share => {
-                    const partnerStat = partnerStatsMap.get(share.partnerId);
-                    if (partnerStat) {
-                        const percentage = share.sharePercentage / 100;
-                        partnerStat.revenue += pnl.revenue * percentage;
-                        partnerStat.cost += pnl.cost * percentage;
-                        partnerStat.inputVat += pnl.inputVat * percentage;
-                    }
-                });
-            } else {
-                const meStat = partnerStatsMap.get(mePartnerId);
-                if (meStat) {
-                    meStat.revenue += pnl.revenue;
-                    meStat.cost += pnl.cost;
-                    meStat.inputVat += pnl.inputVat;
-                }
-            }
-        });
-        periodMiscExpenses.filter(e => !e.projectId).forEach(exp => {
-            const costVat = exp.vndAmount * (exp.vatRate || 0) / 100;
-            if (exp.isPartnership && exp.partnerShares?.length) {
-                exp.partnerShares.forEach(share => {
-                    const partnerStat = partnerStatsMap.get(share.partnerId);
-                    if (partnerStat) {
-                        const percentage = share.sharePercentage / 100;
-                        partnerStat.cost += exp.vndAmount * percentage;
-                        partnerStat.inputVat += costVat * percentage;
-                    }
-                });
-            } else {
-                const meStat = partnerStatsMap.get(mePartnerId);
-                if (meStat) { meStat.cost += exp.vndAmount; meStat.inputVat += costVat; }
-            }
-        });
-        let totalRevenue = 0, totalCost = 0, totalInputVat = 0;
-        partnerStatsMap.forEach(stat => { totalRevenue += stat.revenue; totalCost += stat.cost; totalInputVat += stat.inputVat; });
-        const totalProfit = totalRevenue - totalCost;
-        const myStats = partnerStatsMap.get(mePartnerId) || { revenue: 0, cost: 0, inputVat: 0 };
-        const calculateTax = (revenue: number, profit: number, inputVatSource: number): T.TaxCalculationResult => {
-            if (taxSettings.method === 'revenue') { const tax = revenue * (taxSettings.revenueRate / 100); return { taxPayable: tax, incomeTax: tax, netVat: 0, outputVat: 0 }; }
-            if (taxSettings.method === 'profit_vat') {
-                const outputVat = revenue * (taxSettings.vatRate / 100);
-                let inputVat = inputVatSource;
-                if (taxSettings.vatInputMethod === 'manual') { if (taxSettings.vatInputBase === 'total' || (taxSettings.vatInputBase === 'personal' && revenue === myStats.revenue)) inputVat = taxSettings.manualInputVat; }
-                const netVat = Math.max(0, outputVat - inputVat);
-                const incomeTax = Math.max(0, profit) * (taxSettings.incomeRate / 100);
-                return { taxPayable: netVat + incomeTax, incomeTax, netVat, outputVat };
-            }
-            return { taxPayable: 0, incomeTax: 0, netVat: 0, outputVat: 0 };
-        };
-        const taxSeparationAmount = taxSettings.taxSeparationAmount ?? 0;
-        const initialRevenueBase = (taxSettings.incomeTaxBase ?? 'personal') === 'total' ? totalRevenue : myStats.revenue;
-        const costBase = (taxSettings.incomeTaxBase ?? 'personal') === 'total' ? totalCost : myStats.cost;
-        const initialVatOutputBase = (taxSettings.vatOutputBase ?? 'personal') === 'total' ? totalRevenue : myStats.revenue;
-        const vatInputBase = (taxSettings.vatInputBase ?? 'total') === 'total' ? totalInputVat : myStats.inputVat;
-        const revenueBase = Math.max(0, initialRevenueBase - taxSeparationAmount);
-        const profitBase = revenueBase - costBase;
-        const vatOutputBase = Math.max(0, initialVatOutputBase - taxSeparationAmount);
-        const tax = calculateTax(taxSettings.method === 'revenue' ? revenueBase : vatOutputBase, profitBase, vatInputBase);
-        const taxBases = { initialRevenueBase, taxSeparationAmount, revenueBase, costBase, profitBase, vatOutputBase, vatInputBase };
-        const partnerPnlDetails: T.PartnerPnl[] = partners.map(p => {
-            const stats = partnerStatsMap.get(p.id) || { revenue: 0, cost: 0, inputVat: 0 };
-            const partnerProfit = stats.revenue - stats.cost;
-            const partnerTax = calculateTax(stats.revenue, partnerProfit, stats.inputVat);
-            return { partnerId: p.id, name: p.name, revenue: stats.revenue, cost: stats.cost, profit: partnerProfit, inputVat: stats.inputVat, taxPayable: partnerTax.taxPayable };
-        });
-        const revenueDetails = Object.entries(
-            // FIX: Typed the initial value of the reduce accumulator to Record<string, number> to resolve index type errors.
-            Array.from(projectPnL.entries()).reduce((acc: Record<string, number>, [projectId, pnl]) => {
-                const name = projectMap.get(projectId) || 'Dự án không xác định';
-                acc[name] = (acc[name] || 0) + pnl.revenue;
-                return acc;
-            }, {} as Record<string, number>)
-        ).map(([name, amount]) => ({ name, amount }));
-        const adCostDetails = Object.entries(
-            // FIX: Typed the initial value of the reduce accumulator to Record<string, number> to resolve index type errors.
-            periodAdCosts.reduce((acc: Record<string, number>, cost) => {
-                const name = projectMap.get(cost.projectId) || 'Dự án không xác định';
-                acc[name] = (acc[name] || 0) + cost.vndCost;
-                return acc;
-            }, {} as Record<string, number>)
-        ).map(([name, amount]) => ({ name, amount }));
-        const miscCostDetails = periodMiscExpenses.map(exp => ({ name: exp.description, amount: exp.vndAmount }));
-        const totalVndReceivedFromSales = periodExchangeLogs.reduce((sum, log) => sum + log.vndAmount, 0);
-        const totalCapitalInflow = periodCapitalInflows.reduce((sum, i) => sum + i.amount, 0);
-        const vndCommissionInflow = periodCommissions.filter(c => assetMap.get(c.assetId)?.currency === 'VND').reduce((sum, c) => sum + c.vndAmount, 0);
-        const receivablePaymentsReceived = periodReceivablePayments.reduce((sum, p) => sum + p.amount, 0);
-        const adDepositsPaid = periodAdDeposits.reduce((sum, d) => sum + d.vndAmount, 0);
-        const debtPaidThisPeriod = periodDebtPayments.reduce((sum, p) => sum + p.amount, 0);
-        const withdrawalsPaid = periodWithdrawals.reduce((sum, w) => sum + w.vndAmount, 0);
-        const taxPaidThisPeriod = periodTaxPayments.reduce((sum, p) => sum + p.amount, 0);
-        const totalAdCost = periodAdCosts.reduce((sum, c) => sum + c.vndCost, 0);
-        const totalMiscCost = periodMiscExpenses.reduce((sum, e) => sum + e.vndAmount, 0);
-        const receivablesCreated = periodReceivables.reduce((sum, r) => sum + r.totalAmount, 0);
-        const newDebtInflow = periodLiabilities.reduce((sum, l) => sum + l.totalAmount, 0);
-        const cfOperatingInflows = [{ label: "Tiền thu từ bán USD", amount: totalVndReceivedFromSales }, { label: "Tiền thu từ hoa hồng (VND)", amount: vndCommissionInflow }, { label: "Tiền thu hồi các khoản phải thu", amount: receivablePaymentsReceived }].filter(item => item.amount > 0);
-        const totalCfOperatingInflows = cfOperatingInflows.reduce((sum, item) => sum + item.amount, 0);
-        const cfOperatingOutflows = [{ label: "Chi phí phát sinh", amount: totalMiscCost }, { label: "Chi nạp tiền quảng cáo", amount: adDepositsPaid }, { label: "Chi nộp thuế", amount: taxPaidThisPeriod }].filter(item => item.amount > 0);
-        const totalCfOperatingOutflows = cfOperatingOutflows.reduce((sum, item) => sum + item.amount, 0);
-        const netCfOperating = totalCfOperatingInflows - totalCfOperatingOutflows;
-        const cfInvestingInflows: { label: string; amount: number }[] = [];
-        const totalCfInvestingInflows = 0;
-        const cfInvestingOutflows = [ { label: "Chi cho vay, tạo khoản phải thu", amount: receivablesCreated } ].filter(item => item.amount > 0);
-        const totalCfInvestingOutflows = cfInvestingOutflows.reduce((sum, item) => sum + item.amount, 0);
-        const netCfInvesting = totalCfInvestingInflows - totalCfInvestingOutflows;
-        const cfFinancingInflows = [{ label: "Vốn góp của chủ sở hữu", amount: totalCapitalInflow }, { label: "Tiền thu từ đi vay", amount: newDebtInflow }].filter(item => item.amount > 0);
-        const totalCfFinancingInflows = cfFinancingInflows.reduce((sum, item) => sum + item.amount, 0);
-        const cfFinancingOutflows = [{ label: "Chi trả nợ gốc", amount: debtPaidThisPeriod }, { label: "Chủ sở hữu/Đối tác rút vốn", amount: withdrawalsPaid }].filter(item => item.amount > 0);
-        const totalCfFinancingOutflows = cfFinancingOutflows.reduce((sum, item) => sum + item.amount, 0);
-        const netCfFinancing = totalCfFinancingInflows - totalCfFinancingOutflows;
-        const netChangeInCash = netCfOperating + netCfInvesting + netCfFinancing;
-        const endBalanceVND = enrichedAssets.filter(a => a.currency === 'VND').reduce((sum, a) => sum + a.balance, 0);
-        const beginningBalanceVND = endBalanceVND - netChangeInCash;
-        const cashFlow = {
-            operating: { inflows: cfOperatingInflows, outflows: cfOperatingOutflows, net: netCfOperating },
-            investing: { inflows: cfInvestingInflows, outflows: cfInvestingOutflows, net: netCfInvesting },
-            financing: { inflows: cfFinancingInflows, outflows: cfFinancingOutflows, net: netCfFinancing },
-            netChange: netChangeInCash, beginningBalance: beginningBalanceVND, endBalance: endBalanceVND
-        };
-        const profitBeforeTax = totalRevenue - totalCost;
-        const netProfit = profitBeforeTax - tax.taxPayable;
-        return { totalRevenue, totalAdCost, totalMiscCost, totalCost, totalProfit, totalInputVat,
-          myRevenue: myStats.revenue, myCost: myStats.cost, myProfit: myStats.revenue - myStats.cost, myInputVat: myStats.inputVat,
-          exchangeRateGainLoss, profitBeforeTax, netProfit, tax, taxBases, partnerPnlDetails,
-          revenueDetails, adCostDetails, miscCostDetails, cashFlow };
-    }, [ currentPeriod, commissions, enrichedDailyAdCosts, miscellaneousExpenses, projects, partners, exchangeLogs, debtPayments, withdrawals, adDeposits, taxPayments, capitalInflows, receivables, receivablePayments, liabilities, taxSettings, assets, enrichedAssets ]);
-    
-  const periodAssetDetails = useMemo<PeriodAssetDetail[]>(() => {
-        if (!currentPeriod) return [];
-        return enrichedAssets.map(asset => {
-            const isUsd = asset.currency === 'USD';
-            const periodInflows = [ ...commissions.filter(t => t.assetId === asset.id && isDateInPeriod(t.date, currentPeriod)).map(t => isUsd ? t.usdAmount : t.vndAmount), ...exchangeLogs.filter(t => t.receivingAssetId === asset.id && isDateInPeriod(t.date, currentPeriod)).map(t => t.vndAmount), ...capitalInflows.filter(t => t.assetId === asset.id && isDateInPeriod(t.date, currentPeriod)).map(t => t.amount), ...receivablePayments.filter(t => t.assetId === asset.id && isDateInPeriod(t.date, currentPeriod)).map(t => t.amount), ...liabilities.filter(l => l.inflowAssetId === asset.id && isDateInPeriod(l.creationDate, currentPeriod)).map(l => l.totalAmount) ].reduce((s, v) => s + v, 0);
-            const periodOutflows = [ ...adDeposits.filter(t => t.assetId === asset.id && isDateInPeriod(t.date, currentPeriod)).map(t => t.vndAmount), ...miscellaneousExpenses.filter(t => t.assetId === asset.id && isDateInPeriod(t.date, currentPeriod)).map(t => t.amount), ...exchangeLogs.filter(t => t.sellingAssetId === asset.id && isDateInPeriod(t.date, currentPeriod)).map(t => t.usdAmount), ...debtPayments.filter(t => t.assetId === asset.id && isDateInPeriod(t.date, currentPeriod)).map(t => t.amount), ...withdrawals.filter(t => t.assetId === asset.id && isDateInPeriod(t.date, currentPeriod)).map(t => t.amount), ...taxPayments.filter(t => t.assetId === asset.id && t.period === currentPeriod).map(t => t.amount), ...receivables.filter(t => t.outflowAssetId === asset.id && isDateInPeriod(t.creationDate, currentPeriod)).map(t => t.totalAmount) ].reduce((s, v) => s + v, 0);
-            const periodChange = periodInflows - periodOutflows;
-            const closingBalance = asset.balance;
-            const openingBalance = closingBalance - periodChange;
-            return { id: asset.id, name: asset.name, currency: asset.currency, openingBalance, change: periodChange, closingBalance };
-        });
-    }, [currentPeriod, enrichedAssets, commissions, exchangeLogs, capitalInflows, adDeposits, miscellaneousExpenses, debtPayments, withdrawals, taxPayments, receivables, receivablePayments, liabilities]);
-
-  const masterProjects = useMemo(() => {
-        const masterProjectMap = new Map<string, { name: string; categoryId?: string; nicheId?: string }>();
-        const sortedProjects = [...projects].sort((a, b) => b.period.localeCompare(a.period));
-        sortedProjects.forEach(project => {
-            const normalizedName = project.name.trim().toLowerCase();
-            if (!masterProjectMap.has(normalizedName)) {
-                masterProjectMap.set(normalizedName, { name: project.name, categoryId: project.categoryId, nicheId: project.nicheId });
-            }
-        });
-        return Array.from(masterProjectMap.values());
-    }, [projects]);
-
-  const value = {
-    isLoading, projects, addProject, updateProject, deleteProject, dailyAdCosts, addDailyAdCost, updateDailyAdCost, deleteDailyAdCost, adDeposits, addAdDeposit, updateAdDeposit, deleteAdDeposit,
-    adFundTransfers, addAdFundTransfer, updateAdFundTransfer, deleteAdFundTransfer, commissions, addCommission, updateCommission, deleteCommission, assetTypes, addAssetType, updateAssetType, deleteAssetType,
-    assets, addAsset, updateAsset, deleteAsset, liabilities, addLiability, updateLiability, deleteLiability, receivables, addReceivable, updateReceivable, deleteReceivable, receivablePayments, addReceivablePayment, updateReceivablePayment, deleteReceivablePayment,
-    exchangeLogs, addExchangeLog, updateExchangeLog, deleteExchangeLog, miscellaneousExpenses, addMiscellaneousExpense, updateMiscellaneousExpense, deleteMiscellaneousExpense, partners, addPartner, updatePartner, deletePartner,
-    withdrawals, addWithdrawal, updateWithdrawal, deleteWithdrawal, debtPayments, addDebtPayment, updateDebtPayment, deleteDebtPayment, taxPayments, addTaxPayment, capitalInflows, addCapitalInflow, updateCapitalInflow, deleteCapitalInflow,
-    taxSettings, updateTaxSettings, activePeriod, openPeriod, closePeriod, closedPeriods, viewingPeriod, setViewingPeriod, clearViewingPeriod, currentPage, setCurrentPage,
-    periodLiabilities, addPeriodLiability, updatePeriodLiability, deletePeriodLiability, periodDebtPayments, addPeriodDebtPayment, updatePeriodDebtPayment, deletePeriodDebtPayment,
-    periodReceivables, addPeriodReceivable, updatePeriodReceivable, deletePeriodReceivable, periodReceivablePayments, addPeriodReceivablePayment, updatePeriodReceivablePayment, deletePeriodReceivablePayment,
-    currentPeriod, isReadOnly, enrichedAssets, enrichedDailyAdCosts, periodFinancials, periodAssetDetails, categories, addCategory, updateCategory, deleteCategory,
-    niches, addNiche, updateNiche, deleteNiche, masterProjects, firebaseConfig, setFirebaseConfig, seedData,
-  };
-
-  return <DataContext.Provider value={value}>{children}</DataContext.Provider>;
-};
-
-export const useData = () => {
-  const context = useContext(DataContext);
-  if (context === undefined) {
-    throw new Error('useData must be used within a DataProvider');
-  }
-  return context;
-};
+        type CommissionLedgerItem = { projectId: string; amount: number; predictedRate: number

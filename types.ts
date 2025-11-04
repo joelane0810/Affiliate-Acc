@@ -37,6 +37,13 @@ export interface Project {
     nicheId?: string;
 }
 
+export interface AdAccount {
+    id: string;
+    accountNumber: string;
+    adsPlatform: AdsPlatform;
+    status: 'running' | 'stopped' | 'cancelled';
+}
+
 export interface DailyAdCost {
     id: string;
     projectId: string;

@@ -376,7 +376,7 @@ const LiabilitiesContent = () => {
     }, [periodLiabilities, periodDebtPayments, currentPeriod]);
 
     const handleSavePeriodPayment = (payment: Omit<T.PeriodDebtPayment, 'id'>) => {
-        // FIX: The function was incorrectly calling addDebtPayment instead of addPeriodDebtPayment.
+        // Fix: Call addPeriodDebtPayment to save a payment for a period-specific liability.
         addPeriodDebtPayment(payment);
         setPayingPeriodLiability(null);
     };
