@@ -1,0 +1,1508 @@
+import React, { useState, useMemo, useEffect } from 'react';
+import { useData } from '../context/DataContext';
+import type { Asset, Liability, DebtPayment, Withdrawal, Partner, AssetType, TaxPayment, CapitalInflow, Receivable, ReceivablePayment } from '../types';
+import { Header } from '../components/Header';
+import { Button } from '../components/ui/Button';
+import { Card, CardContent, CardHeader } from '../components/ui/Card';
+import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '../components/ui/Table';
+import { Modal } from '../components/ui/Modal';
+import { Input, Label } from '../components/ui/Input';
+import { NumberInput } from '../components/ui/NumberInput';
+import { Plus, Edit, Trash2, ChevronDown, ChevronRight, Book } from '../components/icons/IconComponents';
+import { formatCurrency, formatDate, isDateInPeriod } from '../lib/utils';
+import { ConfirmationModal } from '../components/ui/ConfirmationModal';
+
+
+// #region --- Shared Components ---
+const TabButton: React.FC<{ active: boolean; onClick: () => void; children: React.ReactNode }> = ({ active, onClick, children }) => (
+  <button
+    onClick={onClick}
+    className={`px-6 py-3 text-sm font-semibold transition-colors focus:outline-none ${
+      active
+        ? 'border-b-2 border-primary-500 text-white'
+        : 'text-gray-400 hover:text-white'
+    }`}
+    role="tab"
+    aria-selected={active}
+  >
+    {children}
+  </button>
+);
+
+const ProgressBar: React.FC<{ value: number, max: number }> = ({ value, max }) => {
+    const percentage = max > 0 ? (value / max) * 100 : 0;
+    return (
+        <div className="w-full bg-gray-700 rounded-full h-5 relative flex items-center justify-center">
+            <div className="bg-primary-600 h-5 rounded-full absolute left-0 top-0" style={{ width: `${percentage}%` }}></div>
+            <span className="relative text-xs font-bold text-white z-10">
+                {percentage.toFixed(1).replace('.', ',')}%
+            </span>
+        </div>
+    );
+};
+// #endregion
+
+// #region --- Transaction History ---
+const TransactionHistoryContent = () => {
+    const { 
+        assets, projects, liabilities, partners, adDeposits,
+        commissions, exchangeLogs, miscellaneousExpenses, debtPayments, withdrawals,
+        taxPayments, capitalInflows, activePeriod, closedPeriods, receivables, receivablePayments
+    } = useData();
+
+    // Create maps for quick lookups
+    const assetMap = useMemo(() => new Map(assets.map(a => [a.id, a])), [assets]);
+    const projectMap = useMemo(() => new Map(projects.map(p => [p.id, p.name])), [projects]);
+    const liabilityMap = useMemo(() => new Map(liabilities.map(l => [l.id, l.description])), [liabilities]);
+    const receivableMap = useMemo(() => new Map(receivables.map(r => [r.id, r.description])), [receivables]);
+    const partnerMap = useMemo(() => new Map(partners.map(p => [p.id, p.name])), [partners]);
+
+    type UnifiedTransaction = {
+        id: string;
+        date: string;
+        description: string;
+        assetName: string;
+        inflow: number;
+        outflow: number;
+        currency: 'USD' | 'VND';
+        period: string;
+    };
+
+    const allTransactions = useMemo(() => {
+        const transactions: UnifiedTransaction[] = [];
+
+        adDeposits.forEach(deposit => {
+            const asset = assetMap.get(deposit.assetId);
+            if (!asset) return;
+             transactions.push({
+                id: `ad-deposit-${deposit.id}`,
+                date: deposit.date,
+                description: `Nạp tiền Ads (${deposit.adAccountNumber})`,
+                assetName: asset.name,
+                inflow: 0,
+                outflow: deposit.vndAmount,
+                currency: 'VND',
+                period: deposit.date.substring(0, 7),
+            });
+        });
+
+        commissions.forEach(comm => {
+            const asset = assetMap.get(comm.assetId);
+            if (!asset) return;
+            const isUsd = asset.currency === 'USD';
+            transactions.push({
+                id: `comm-${comm.id}`,
+                date: comm.date,
+                description: `Hoa hồng: ${projectMap.get(comm.projectId) || 'N/A'}`,
+                assetName: asset.name,
+                inflow: isUsd ? comm.usdAmount : comm.vndAmount,
+                outflow: 0,
+                currency: asset.currency,
+                period: comm.date.substring(0, 7),
+            });
+        });
+
+        exchangeLogs.forEach(log => {
+            const sellingAsset = assetMap.get(log.sellingAssetId);
+            const receivingAsset = assetMap.get(log.receivingAssetId);
+            if (sellingAsset) {
+                transactions.push({
+                    id: `ex-sell-${log.id}`,
+                    date: log.date,
+                    description: `Bán USD cho ${receivingAsset?.name || 'N/A'}`,
+                    assetName: sellingAsset.name,
+                    inflow: 0,
+                    outflow: log.usdAmount,
+                    currency: 'USD',
+                    period: log.date.substring(0, 7),
+                });
+            }
+            if (receivingAsset) {
+                 transactions.push({
+                    id: `ex-receive-${log.id}`,
+                    date: log.date,
+                    description: `Nhận VND từ ${sellingAsset?.name || 'N/A'}`,
+                    assetName: receivingAsset.name,
+                    inflow: log.vndAmount,
+                    outflow: 0,
+                    currency: 'VND',
+                    period: log.date.substring(0, 7),
+                });
+            }
+        });
+
+        miscellaneousExpenses.forEach(exp => {
+            const asset = assetMap.get(exp.assetId);
+            if (!asset) return;
+            transactions.push({
+                id: `misc-${exp.id}`,
+                date: exp.date,
+                description: exp.description,
+                assetName: asset.name,
+                inflow: 0,
+                outflow: exp.amount,
+                currency: asset.currency,
+                period: exp.date.substring(0, 7),
+            });
+        });
+
+        debtPayments.forEach(payment => {
+            const asset = assetMap.get(payment.assetId);
+            if (!asset) return;
+            transactions.push({
+                id: `debt-${payment.id}`,
+                date: payment.date,
+                description: `Trả nợ: ${liabilityMap.get(payment.liabilityId) || 'N/A'}`,
+                assetName: asset.name,
+                inflow: 0,
+                outflow: payment.amount,
+                currency: 'VND',
+                period: payment.date.substring(0, 7),
+            });
+        });
+        
+        receivables.forEach(receivable => {
+            const asset = assetMap.get(receivable.outflowAssetId);
+            if (!asset) return;
+            transactions.push({
+                id: `receivable-create-${receivable.id}`,
+                date: receivable.creationDate,
+                description: `Tạo khoản phải thu: ${receivable.description}`,
+                assetName: asset.name,
+                inflow: 0,
+                outflow: receivable.totalAmount,
+                currency: asset.currency,
+                period: receivable.creationDate.substring(0, 7),
+            });
+        });
+
+        receivablePayments.forEach(payment => {
+            const asset = assetMap.get(payment.assetId);
+            if (!asset) return;
+            transactions.push({
+                id: `receivable-pay-${payment.id}`,
+                date: payment.date,
+                description: `Nhận tiền thu nợ: ${receivableMap.get(payment.receivableId) || 'N/A'}`,
+                assetName: asset.name,
+                inflow: payment.amount,
+                outflow: 0,
+                currency: asset.currency,
+                period: payment.date.substring(0, 7),
+            });
+        });
+
+        withdrawals.forEach(w => {
+            const asset = assetMap.get(w.assetId);
+            if (!asset) return;
+            transactions.push({
+                id: `withdraw-${w.id}`,
+                date: w.date,
+                description: `Rút tiền (${partnerMap.get(w.withdrawnBy) || 'N/A'}): ${w.description}`,
+                assetName: asset.name,
+                inflow: 0,
+                outflow: w.amount,
+                currency: asset.currency,
+                period: w.date.substring(0, 7),
+            });
+        });
+        
+        taxPayments.forEach(payment => {
+            const asset = assetMap.get(payment.assetId);
+            if (!asset) return;
+            transactions.push({
+                id: `tax-payment-${payment.id}`,
+                date: payment.date,
+                description: `Thanh toán thuế kỳ ${payment.period}`,
+                assetName: asset.name,
+                inflow: 0,
+                outflow: payment.amount,
+                currency: 'VND',
+                period: payment.date.substring(0, 7),
+            });
+        });
+
+        capitalInflows.forEach(inflow => {
+            const asset = assetMap.get(inflow.assetId);
+            if (!asset) return;
+            transactions.push({
+                id: `capital-inflow-${inflow.id}`,
+                date: inflow.date,
+                description: inflow.description || 'Vốn góp',
+                assetName: asset.name,
+                inflow: inflow.amount,
+                outflow: 0,
+                currency: asset.currency,
+                period: inflow.date.substring(0, 7),
+            });
+        });
+
+        return transactions.sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime() || a.id.localeCompare(b.id));
+    }, [assetMap, projectMap, liabilityMap, partnerMap, adDeposits, commissions, exchangeLogs, miscellaneousExpenses, debtPayments, withdrawals, taxPayments, capitalInflows, receivables, receivablePayments, receivableMap]);
+
+    return (
+        <Card>
+            <CardHeader>Lịch sử tất cả giao dịch</CardHeader>
+            <CardContent>
+                <Table>
+                    <TableHead>
+                        <TableRow>
+                            <TableHeader className="w-48">Kỳ báo cáo</TableHeader>
+                            <TableHeader className="w-32">Ngày</TableHeader>
+                            <TableHeader className="w-1/3 min-w-[250px]">Mô tả</TableHeader>
+                            <TableHeader className="w-48">Tài sản</TableHeader>
+                            <TableHeader className="w-48">Tiền ra</TableHeader>
+                            <TableHeader className="w-48">Tiền vào</TableHeader>
+                        </TableRow>
+                    </TableHead>
+                    <TableBody>
+                        {allTransactions.length > 0 ? allTransactions.map(tx => {
+                            const [year, month] = tx.period.split('-');
+                            const periodLabel = new Date(parseInt(year), parseInt(month) - 1).toLocaleString('vi-VN', { month: 'long', year: 'numeric' });
+                            
+                            let status: 'active' | 'closed' | null = null;
+                            let statusLabel = '';
+                            let statusColor = '';
+
+                            if (tx.period === activePeriod) {
+                                status = 'active';
+                                statusLabel = 'Đang hoạt động';
+                                statusColor = 'text-green-400';
+                            } else if (closedPeriods.some(p => p.period === tx.period)) {
+                                status = 'closed';
+                                statusLabel = 'Đã đóng';
+                                statusColor = 'text-gray-400';
+                            }
+
+                            return (
+                                <TableRow key={tx.id}>
+                                    <TableCell>
+                                        <div className="flex items-center space-x-2">
+                                            <Book className={status === 'active' ? 'text-primary-400' : 'text-gray-500'} />
+                                            <div>
+                                                <div className="text-sm font-medium text-white">{periodLabel}</div>
+                                                {status && <div className={`text-xs ${statusColor}`}>{statusLabel}</div>}
+                                            </div>
+                                        </div>
+                                    </TableCell>
+                                    <TableCell>{formatDate(tx.date)}</TableCell>
+                                    <TableCell className="text-left">{tx.description}</TableCell>
+                                    <TableCell className="font-medium text-white">{tx.assetName}</TableCell>
+                                    <TableCell className="font-semibold text-red-400">
+                                        {tx.outflow > 0 ? formatCurrency(tx.outflow, tx.currency) : '—'}
+                                    </TableCell>
+                                    <TableCell className="font-semibold text-green-400">
+                                        {tx.inflow > 0 ? formatCurrency(tx.inflow, tx.currency) : '—'}
+                                    </TableCell>
+                                </TableRow>
+                            );
+                        }) : (
+                             <TableRow>
+                                <TableCell colSpan={6} className="text-center text-gray-500 py-8">
+                                    Chưa có giao dịch nào.
+                                </TableCell>
+                            </TableRow>
+                        )}
+                    </TableBody>
+                </Table>
+            </CardContent>
+        </Card>
+    );
+};
+// #endregion
+
+// #region --- Asset Management ---
+const AssetTypeFormModal: React.FC<{
+    isOpen: boolean;
+    onClose: () => void;
+    onSave: (assetType: Omit<AssetType, 'id'> | AssetType) => void;
+    existingAssetType?: AssetType;
+}> = ({ isOpen, onClose, onSave, existingAssetType }) => {
+    const [name, setName] = useState('');
+
+    useEffect(() => {
+        if (existingAssetType) {
+            setName(existingAssetType.name);
+        } else {
+            setName('');
+        }
+    }, [existingAssetType, isOpen]);
+
+    const handleSubmit = (e: React.FormEvent) => {
+        e.preventDefault();
+        if (name.trim()) {
+            onSave({
+                ...existingAssetType,
+                id: existingAssetType?.id || '',
+                name: name.trim()
+            });
+            onClose();
+        }
+    };
+    
+    const title = existingAssetType ? 'Sửa loại tài sản' : 'Thêm loại tài sản mới';
+
+    return (
+        <Modal isOpen={isOpen} onClose={onClose} title={title}>
+            <form onSubmit={handleSubmit} className="space-y-4">
+                <div>
+                    <Label htmlFor="assetTypeName">Tên loại tài sản</Label>
+                    <Input id="assetTypeName" value={name} onChange={e => setName(e.target.value)} required autoFocus />
+                </div>
+                <div className="mt-6 flex justify-end space-x-3">
+                    <Button type="button" variant="secondary" onClick={onClose}>Hủy</Button>
+                    <Button type="submit">Lưu</Button>
+                </div>
+            </form>
+        </Modal>
+    );
+};
+
+const AssetForm: React.FC<{
+    asset?: Asset;
+    assetTypes: AssetType[];
+    onSave: (asset: Omit<Asset, 'id'> | Asset) => void;
+    onCancel: () => void;
+    onAddAssetType: (assetType: Omit<AssetType, 'id'>) => void;
+}> = ({ asset, assetTypes, onSave, onCancel, onAddAssetType }) => {
+    const [name, setName] = useState(asset?.name || '');
+    const [typeId, setTypeId] = useState<string>(asset?.typeId || (assetTypes[0]?.id || ''));
+    const [balance, setBalance] = useState(asset?.balance || 0);
+    const [currency, setCurrency] = useState<Asset['currency']>(asset?.currency || 'VND');
+    const [isAddTypeModalOpen, setIsAddTypeModalOpen] = useState(false);
+
+    useEffect(() => {
+        if (!typeId && assetTypes.length > 0) {
+            setTypeId(assetTypes[0].id);
+        }
+    }, [assetTypes, typeId]);
+
+    const handleSubmit = (e: React.FormEvent) => {
+        e.preventDefault();
+        onSave({ ...asset, id: asset?.id || '', name, typeId, balance, currency });
+    };
+
+    const handleSaveAssetType = (assetType: Omit<AssetType, 'id'> | AssetType) => {
+        onAddAssetType(assetType);
+    };
+
+    const selectClassName = "w-full px-3 py-2 bg-gray-900 border border-gray-600 rounded-md focus:outline-none focus:ring-2 focus:ring-primary-500";
+
+    return (
+        <>
+            <form onSubmit={handleSubmit} className="space-y-4">
+                <div>
+                    <Label htmlFor="assetName">Tên tài sản</Label>
+                    <Input id="assetName" value={name} onChange={e => setName(e.target.value)} required />
+                </div>
+                <div className="grid grid-cols-2 gap-4">
+                     <div>
+                        <Label htmlFor="assetType">Loại tài sản</Label>
+                        <div className="flex items-center gap-2">
+                             <select id="assetType" value={typeId} onChange={e => setTypeId(e.target.value)} className={selectClassName}>
+                                {assetTypes.map(at => <option key={at.id} value={at.id}>{at.name}</option>)}
+                            </select>
+                            <Button type="button" variant="secondary" size="sm" onClick={() => setIsAddTypeModalOpen(true)} className="!p-2">
+                                <Plus />
+                            </Button>
+                        </div>
+                    </div>
+                    <div>
+                        <Label htmlFor="assetCurrency">Tiền tệ</Label>
+                        <select id="assetCurrency" value={currency} onChange={e => setCurrency(e.target.value as Asset['currency'])} className={selectClassName}>
+                            <option value="VND">VND</option>
+                            <option value="USD">USD</option>
+                        </select>
+                    </div>
+                </div>
+                <div>
+                    <Label htmlFor="assetBalance">Số dư ban đầu</Label>
+                    <NumberInput id="assetBalance" value={balance} onValueChange={setBalance} disabled={!!asset} />
+                     {asset && (
+                        <p className="text-xs text-gray-400 mt-1">
+                            Không thể thay đổi số dư ban đầu sau khi tạo để đảm bảo tính toàn vẹn dữ liệu.
+                        </p>
+                    )}
+                </div>
+                <div className="mt-6 flex justify-end space-x-3">
+                    <Button type="button" variant="secondary" onClick={onCancel}>Hủy</Button>
+                    <Button type="submit">Lưu</Button>
+                </div>
+            </form>
+            <AssetTypeFormModal
+                isOpen={isAddTypeModalOpen}
+                onClose={() => setIsAddTypeModalOpen(false)}
+                onSave={handleSaveAssetType}
+            />
+        </>
+    );
+};
+
+const LiabilityForm: React.FC<{
+    liability?: Liability;
+    onSave: (liability: Omit<Liability, 'id'> | Liability) => void;
+    onCancel: () => void;
+}> = ({ liability, onSave, onCancel }) => {
+    const [description, setDescription] = useState(liability?.description || '');
+    const [totalAmount, setTotalAmount] = useState(liability?.totalAmount || 0);
+    const [type, setType] = useState<Liability['type']>(liability?.type || 'short-term');
+    const [isInstallment, setIsInstallment] = useState(liability?.isInstallment || false);
+    const [startDate, setStartDate] = useState(liability?.startDate || new Date().toISOString().split('T')[0]);
+    const [numberOfInstallments, setNumberOfInstallments] = useState(liability?.numberOfInstallments || 1);
+
+    const handleSubmit = (e: React.FormEvent) => {
+        e.preventDefault();
+        const finalLiability: Omit<Liability, 'id'> | Liability = {
+            ...liability,
+            id: liability?.id || '',
+            description,
+            totalAmount,
+            currency: 'VND', // Currently only supports VND liabilities without direct inflow.
+            type,
+            creationDate: liability?.creationDate || new Date().toISOString().split('T')[0],
+            isInstallment,
+            startDate: isInstallment ? startDate : undefined,
+            numberOfInstallments: isInstallment ? numberOfInstallments : undefined,
+        };
+        onSave(finalLiability);
+    };
+    
+    const monthlyPayment = useMemo(() => {
+        if (isInstallment && numberOfInstallments > 0) {
+            return totalAmount / numberOfInstallments;
+        }
+        return 0;
+    }, [isInstallment, totalAmount, numberOfInstallments]);
+
+    const selectClassName = "w-full px-3 py-2 bg-gray-900 border border-gray-600 rounded-md focus:outline-none focus:ring-2 focus:ring-primary-500";
+
+    return (
+        <form onSubmit={handleSubmit} className="space-y-4">
+            <div>
+                <Label htmlFor="liabilityDescription">Mô tả</Label>
+                <Input id="liabilityDescription" value={description} onChange={e => setDescription(e.target.value)} placeholder="VD: Vay mua xe, Trả góp Macbook..." required />
+            </div>
+            <div className="grid grid-cols-2 gap-4">
+                <div>
+                    <Label htmlFor="liabilityType">Loại công nợ</Label>
+                    <select id="liabilityType" value={type} onChange={e => setType(e.target.value as Liability['type'])} className={selectClassName}>
+                        <option value="short-term">Ngắn hạn</option>
+                        <option value="long-term">Dài hạn</option>
+                    </select>
+                </div>
+                 <div>
+                    <Label htmlFor="liabilityTotalAmount">Tổng số tiền (VND)</Label>
+                    <NumberInput id="liabilityTotalAmount" value={totalAmount} onValueChange={setTotalAmount} disabled={!!liability} />
+                </div>
+            </div>
+            
+             <div className="flex items-center space-x-3 pt-4 border-t border-gray-700">
+                <input
+                    type="checkbox"
+                    id="isInstallment"
+                    checked={isInstallment}
+                    onChange={e => setIsInstallment(e.target.checked)}
+                    className="h-4 w-4 rounded border-gray-600 bg-gray-900 text-primary-600 focus:ring-primary-500"
+                    disabled={!!liability}
+                />
+                <Label htmlFor="isInstallment" className="mb-0">Thanh toán trả góp</Label>
+            </div>
+            
+            {isInstallment && (
+                <div className="grid grid-cols-2 gap-4 p-4 bg-gray-900/50 rounded-lg">
+                    <div>
+                        <Label htmlFor="liabilityStartDate">Ngày bắt đầu trả</Label>
+                        <Input id="liabilityStartDate" type="date" value={startDate} onChange={e => setStartDate(e.target.value)} disabled={!!liability}/>
+                    </div>
+                     <div>
+                        <Label htmlFor="numberOfInstallments">Số kỳ trả góp (tháng)</Label>
+                        <NumberInput id="numberOfInstallments" value={numberOfInstallments} onValueChange={(val) => setNumberOfInstallments(Math.max(1, val))} disabled={!!liability}/>
+                    </div>
+                     <div className="col-span-2">
+                        <Label>Số tiền mỗi kỳ</Label>
+                        <Input value={formatCurrency(monthlyPayment)} readOnly className="bg-gray-800" />
+                    </div>
+                </div>
+            )}
+
+            <div className="mt-6 flex justify-end space-x-3">
+                <Button type="button" variant="secondary" onClick={onCancel}>Hủy</Button>
+                <Button type="submit">Lưu</Button>
+            </div>
+        </form>
+    );
+};
+
+const ReceivableForm: React.FC<{
+    receivable?: Receivable;
+    assets: Asset[];
+    onSave: (receivable: Omit<Receivable, 'id'> | Receivable) => void;
+    onCancel: () => void;
+}> = ({ receivable, assets, onSave, onCancel }) => {
+    const [description, setDescription] = useState(receivable?.description || '');
+    const [totalAmount, setTotalAmount] = useState(receivable?.totalAmount || 0);
+    const [creationDate, setCreationDate] = useState(receivable?.creationDate || new Date().toISOString().split('T')[0]);
+    const [outflowAssetId, setOutflowAssetId] = useState(receivable?.outflowAssetId || '');
+    const [type, setType] = useState<Receivable['type']>(receivable?.type || 'short-term');
+    const [isInstallment, setIsInstallment] = useState(receivable?.isInstallment || false);
+    const [startDate, setStartDate] = useState(receivable?.startDate || new Date().toISOString().split('T')[0]);
+    const [numberOfInstallments, setNumberOfInstallments] = useState(receivable?.numberOfInstallments || 1);
+    
+    const selectedAsset = useMemo(() => assets.find(a => a.id === outflowAssetId), [assets, outflowAssetId]);
+    const currency = selectedAsset?.currency || 'VND';
+
+    const handleSubmit = (e: React.FormEvent) => {
+        e.preventDefault();
+        if (!outflowAssetId && !receivable) {
+            alert("Vui lòng chọn tài sản đã chi ra.");
+            return;
+        }
+        
+        const finalReceivable: Omit<Receivable, 'id'> | Receivable = {
+            ...receivable,
+            id: receivable?.id || '',
+            description,
+            totalAmount,
+            currency,
+            type,
+            creationDate,
+            outflowAssetId,
+            isInstallment,
+            startDate: isInstallment ? startDate : undefined,
+            numberOfInstallments: isInstallment ? numberOfInstallments : undefined,
+        };
+
+        onSave(finalReceivable);
+    };
+
+    const monthlyReceivable = useMemo(() => {
+        if (isInstallment && numberOfInstallments > 0) {
+            return totalAmount / numberOfInstallments;
+        }
+        return 0;
+    }, [isInstallment, totalAmount, numberOfInstallments]);
+
+    const selectClassName = "w-full px-3 py-2 bg-gray-900 border border-gray-600 rounded-md focus:outline-none focus:ring-2 focus:ring-primary-500";
+    
+    return (
+        <form onSubmit={handleSubmit} className="space-y-4">
+            <div>
+                <Label htmlFor="rec-date">Ngày tạo</Label>
+                <Input id="rec-date" type="date" value={creationDate} onChange={e => setCreationDate(e.target.value)} required disabled={!!receivable} />
+            </div>
+            <div>
+                <Label htmlFor="rec-desc">Mô tả</Label>
+                <Input id="rec-desc" value={description} onChange={e => setDescription(e.target.value)} placeholder="VD: Cho mượn, Tạm ứng cho đối tác..." required />
+            </div>
+            <div className="grid grid-cols-2 gap-4">
+                <div>
+                    <Label htmlFor="rec-type">Loại phải thu</Label>
+                    <select id="rec-type" value={type} onChange={e => setType(e.target.value as Receivable['type'])} className={selectClassName}>
+                        <option value="short-term">Ngắn hạn</option>
+                        <option value="long-term">Dài hạn</option>
+                    </select>
+                </div>
+                <div>
+                    <Label htmlFor="rec-asset">Tài sản chi ra</Label>
+                    <select id="rec-asset" value={outflowAssetId} onChange={e => setOutflowAssetId(e.target.value)} className={selectClassName} required disabled={!!receivable}>
+                        <option value="" disabled>-- Chọn tài sản --</option>
+                        {assets.map(a => <option key={a.id} value={a.id}>{a.name} ({a.currency})</option>)}
+                    </select>
+                </div>
+                 <div>
+                    <Label htmlFor="rec-amount">Số tiền ({currency})</Label>
+                    <NumberInput id="rec-amount" value={totalAmount} onValueChange={setTotalAmount} required disabled={!!receivable} />
+                </div>
+            </div>
+
+            <div className="flex items-center space-x-3 pt-4 border-t border-gray-700">
+                <input
+                    type="checkbox"
+                    id="rec-isInstallment"
+                    checked={isInstallment}
+                    onChange={e => setIsInstallment(e.target.checked)}
+                    className="h-4 w-4 rounded border-gray-600 bg-gray-900 text-primary-600 focus:ring-primary-500"
+                    disabled={!!receivable}
+                />
+                <Label htmlFor="rec-isInstallment" className="mb-0">Thu hồi nhiều kỳ (trả góp)</Label>
+            </div>
+            
+            {isInstallment && (
+                <div className="grid grid-cols-2 gap-4 p-4 bg-gray-900/50 rounded-lg">
+                    <div>
+                        <Label htmlFor="rec-startDate">Ngày bắt đầu thu</Label>
+                        <Input id="rec-startDate" type="date" value={startDate} onChange={e => setStartDate(e.target.value)} disabled={!!receivable} />
+                    </div>
+                     <div>
+                        <Label htmlFor="rec-numInstallments">Số kỳ thu (tháng)</Label>
+                        <NumberInput id="rec-numInstallments" value={numberOfInstallments} onValueChange={(val) => setNumberOfInstallments(Math.max(1, val))} disabled={!!receivable} />
+                    </div>
+                     <div className="col-span-2">
+                        <Label>Số tiền mỗi kỳ</Label>
+                        <Input value={formatCurrency(monthlyReceivable, currency)} readOnly className="bg-gray-800" />
+                    </div>
+                </div>
+            )}
+
+            <div className="mt-6 flex justify-end space-x-3">
+                <Button type="button" variant="secondary" onClick={onCancel}>Hủy</Button>
+                <Button type="submit">Lưu</Button>
+            </div>
+        </form>
+    );
+};
+
+type EnrichedAssetForWithdrawal = ReturnType<typeof useData>['enrichedAssets'][0];
+
+const WithdrawalForm: React.FC<{
+    withdrawal?: Withdrawal;
+    assets: Asset[];
+    partners: Partner[];
+    enrichedAssets: EnrichedAssetForWithdrawal[];
+    onSave: (withdrawal: Omit<Withdrawal, 'id'> | Withdrawal) => void;
+    onCancel: () => void;
+}> = ({ withdrawal, assets, partners, enrichedAssets, onSave, onCancel }) => {
+    const [date, setDate] = useState(withdrawal?.date || new Date().toISOString().split('T')[0]);
+    const [description, setDescription] = useState(withdrawal?.description || '');
+    const [withdrawnBy, setWithdrawnBy] = useState(withdrawal?.withdrawnBy || partners[0]?.id || '');
+    const [assetId, setAssetId] = useState(withdrawal?.assetId || assets[0]?.id || '');
+    const [amount, setAmount] = useState(withdrawal?.amount || 0);
+
+    const selectedAsset = useMemo(() => assets.find(a => a.id === assetId), [assets, assetId]);
+    const isUsdAsset = selectedAsset?.currency === 'USD';
+
+    const partnerAssetBalance = useMemo(() => {
+        if (!withdrawnBy || !assetId) return Infinity;
+        const assetData = enrichedAssets.find(a => a.id === assetId);
+        if (!assetData || !assetData.owners) return Infinity;
+        const partnerData = assetData.owners.find(o => o.id === withdrawnBy);
+        if (!partnerData) return 0;
+        return partnerData.received - partnerData.withdrawn;
+    }, [withdrawnBy, assetId, enrichedAssets]);
+    
+    const handleSubmit = (e: React.FormEvent) => {
+        e.preventDefault();
+
+        if (amount > partnerAssetBalance) {
+            alert(`Số tiền rút (${formatCurrency(amount, isUsdAsset ? 'USD' : 'VND')}) không thể lớn hơn số dư khả dụng của đối tác (${formatCurrency(partnerAssetBalance, isUsdAsset ? 'USD' : 'VND')}).`);
+            return;
+        }
+
+        const vndAmount = isUsdAsset ? 0 : amount;
+        onSave({ 
+            ...withdrawal, 
+            id: withdrawal?.id || '', 
+            date, 
+            description,
+            withdrawnBy,
+            assetId, 
+            amount,
+            vndAmount
+        });
+    };
+
+    const partnerName = partners.find(p => p.id === withdrawnBy)?.name || '';
+    const selectClassName = "w-full px-3 py-2 bg-gray-900 border border-gray-600 rounded-md focus:outline-none focus:ring-2 focus:ring-primary-500";
+
+    return (
+        <form onSubmit={handleSubmit} className="space-y-4">
+             <div>
+                <Label htmlFor="withdrawalDate">Ngày rút</Label>
+                <Input id="withdrawalDate" type="date" value={date} onChange={e => setDate(e.target.value)} required />
+            </div>
+            <div>
+                <Label htmlFor="withdrawalDesc">Mô tả</Label>
+                <Input id="withdrawalDesc" value={description} onChange={e => setDescription(e.target.value)} placeholder="VD: Rút tiền mặt, chuyển khoản cho đối tác..." required />
+            </div>
+            <div className="grid grid-cols-2 gap-4">
+                <div>
+                    <Label htmlFor="withdrawalPartner">Đối tác rút</Label>
+                    <select id="withdrawalPartner" value={withdrawnBy} onChange={e => setWithdrawnBy(e.target.value)} className={selectClassName} required>
+                        {partners.map(p => <option key={p.id} value={p.id}>{p.name}</option>)}
+                    </select>
+                </div>
+                <div>
+                    <Label htmlFor="withdrawalAsset">Nguồn tiền</Label>
+                    <select id="withdrawalAsset" value={assetId} onChange={e => setAssetId(e.target.value)} className={selectClassName} required>
+                        {assets.map(a => <option key={a.id} value={a.id}>{a.name} ({a.currency})</option>)}
+                    </select>
+                </div>
+            </div>
+
+            {assetId && withdrawnBy && partnerAssetBalance !== Infinity && (
+                <div className="text-sm text-gray-400 bg-gray-900/50 p-2 rounded-md text-center">
+                    Số dư khả dụng của <span className="font-semibold text-white">{partnerName}</span>: <span className="font-bold text-green-400">{formatCurrency(partnerAssetBalance, isUsdAsset ? 'USD' : 'VND')}</span>
+                </div>
+            )}
+            
+            <div className="border-t border-gray-700 pt-4">
+                <Label htmlFor="amount">Số tiền ({selectedAsset?.currency})</Label>
+                <NumberInput id="amount" value={amount} onValueChange={setAmount} required />
+            </div>
+
+            <div className="mt-6 flex justify-end space-x-3">
+                <Button type="button" variant="secondary" onClick={onCancel}>Hủy</Button>
+                <Button type="submit">Lưu</Button>
+            </div>
+        </form>
+    );
+};
+
+type EnrichedLiability = Liability & { paidAmount: number; remainingAmount: number };
+type EnrichedReceivable = Receivable & { paidAmount: number; remainingAmount: number };
+
+const AssetDebtPaymentModal: React.FC<{
+    liability: EnrichedLiability;
+    vndAssets: (Asset & { balance: number; } )[];
+    onClose: () => void;
+    onSave: (payment: { liabilityId: string; amount: number; assetId: string; date: string }) => void;
+}> = ({ liability, vndAssets, onClose, onSave }) => {
+    const { currentPeriod } = useData();
+    const [amount, setAmount] = useState(liability.remainingAmount);
+    const [assetId, setAssetId] = useState(vndAssets[0]?.id || '');
+    const [date, setDate] = useState(currentPeriod ? `${currentPeriod}-01` : new Date().toISOString().split('T')[0]);
+
+    const handleSubmit = (e: React.FormEvent) => {
+        e.preventDefault();
+        if (!assetId || amount <= 0) {
+            alert("Vui lòng chọn tài sản và nhập số tiền hợp lệ.");
+            return;
+        }
+        if (amount > liability.remainingAmount) {
+            alert(`Số tiền trả không thể lớn hơn nợ còn lại (${formatCurrency(liability.remainingAmount)}).`);
+            return;
+        }
+        onSave({ liabilityId: liability.id, amount, assetId, date });
+    };
+
+    const selectClassName = "w-full px-3 py-2 bg-gray-900 border border-gray-600 rounded-md focus:outline-none focus:ring-2 focus:ring-primary-500";
+    
+    return (
+        <Modal isOpen={true} onClose={onClose} title={`Trả nợ: ${liability.description}`}>
+            <form onSubmit={handleSubmit} className="space-y-4">
+                <div>
+                    <Label htmlFor="paymentDate">Ngày trả</Label>
+                    <Input id="paymentDate" type="date" value={date} onChange={e => setDate(e.target.value)} required />
+                </div>
+                <div>
+                    <Label htmlFor="paymentAmount">Số tiền trả (VND)</Label>
+                    <NumberInput id="paymentAmount" value={amount} onValueChange={setAmount} />
+                    <p className="text-xs text-gray-400 mt-1">
+                        Tổng còn lại: {formatCurrency(liability.remainingAmount)}
+                    </p>
+                </div>
+                <div>
+                    <Label htmlFor="paymentAsset">Nguồn tiền</Label>
+                    <select id="paymentAsset" value={assetId} onChange={e => setAssetId(e.target.value)} className={selectClassName} required>
+                        <option value="" disabled>-- Chọn tài sản --</option>
+                        {vndAssets.map(a => <option key={a.id} value={a.id}>{a.name} ({formatCurrency(a.balance)})</option>)}
+                    </select>
+                </div>
+                <div className="mt-6 flex justify-end space-x-3">
+                    <Button type="button" variant="secondary" onClick={onClose}>Hủy</Button>
+                    <Button type="submit">Xác nhận trả</Button>
+                </div>
+            </form>
+        </Modal>
+    );
+};
+
+const ReceivablePaymentModal: React.FC<{
+    receivable: EnrichedReceivable;
+    assets: Asset[];
+    onClose: () => void;
+    onSave: (payment: Omit<ReceivablePayment, 'id'>) => void;
+}> = ({ receivable, assets, onClose, onSave }) => {
+    const { currentPeriod } = useData();
+    const [amount, setAmount] = useState(receivable.remainingAmount);
+    const [assetId, setAssetId] = useState(assets.find(a => a.currency === receivable.currency)?.id || '');
+    const [date, setDate] = useState(currentPeriod ? `${currentPeriod}-01` : new Date().toISOString().split('T')[0]);
+
+    const handleSubmit = (e: React.FormEvent) => {
+        e.preventDefault();
+        if (!assetId || amount <= 0) {
+            alert("Vui lòng chọn tài sản và nhập số tiền hợp lệ.");
+            return;
+        }
+        if (amount > receivable.remainingAmount) {
+            alert(`Số tiền nhận không thể lớn hơn số tiền còn lại (${formatCurrency(receivable.remainingAmount, receivable.currency)}).`);
+            return;
+        }
+        onSave({ receivableId: receivable.id, amount, assetId, date });
+    };
+
+    const selectClassName = "w-full px-3 py-2 bg-gray-900 border border-gray-600 rounded-md focus:outline-none focus:ring-2 focus:ring-primary-500";
+    
+    return (
+        <Modal isOpen={true} onClose={onClose} title={`Thu nợ: ${receivable.description}`}>
+            <form onSubmit={handleSubmit} className="space-y-4">
+                <div>
+                    <Label htmlFor="paymentDate">Ngày nhận</Label>
+                    <Input id="paymentDate" type="date" value={date} onChange={e => setDate(e.target.value)} required />
+                </div>
+                <div>
+                    <Label htmlFor="paymentAmount">Số tiền nhận ({receivable.currency})</Label>
+                    <NumberInput id="paymentAmount" value={amount} onValueChange={setAmount} />
+                    <p className="text-xs text-gray-400 mt-1">
+                        Tổng còn lại: {formatCurrency(receivable.remainingAmount, receivable.currency)}
+                    </p>
+                </div>
+                <div>
+                    <Label htmlFor="paymentAsset">Tài sản nhận</Label>
+                    <select id="paymentAsset" value={assetId} onChange={e => setAssetId(e.target.value)} className={selectClassName} required>
+                        <option value="" disabled>-- Chọn tài sản --</option>
+                        {assets.filter(a => a.currency === receivable.currency).map(a => <option key={a.id} value={a.id}>{a.name}</option>)}
+                    </select>
+                </div>
+                <div className="mt-6 flex justify-end space-x-3">
+                    <Button type="button" variant="secondary" onClick={onClose}>Hủy</Button>
+                    <Button type="submit">Xác nhận</Button>
+                </div>
+            </form>
+        </Modal>
+    );
+};
+
+function AssetBalanceContent() {
+    const { 
+        assets, addAsset, updateAsset, deleteAsset,
+        assetTypes, addAssetType,
+        liabilities, addLiability, updateLiability, deleteLiability,
+        partners, 
+        withdrawals, addWithdrawal, updateWithdrawal, deleteWithdrawal,
+        debtPayments, addDebtPayment, isReadOnly,
+        enrichedAssets,
+        receivables, addReceivable, updateReceivable, deleteReceivable,
+        receivablePayments, addReceivablePayment
+    } = useData();
+    
+    const [isAssetModalOpen, setIsAssetModalOpen] = useState(false);
+    const [editingAsset, setEditingAsset] = useState<Asset | undefined>(undefined);
+    const [assetToDelete, setAssetToDelete] = useState<Asset | null>(null);
+
+    const [isLiabilityModalOpen, setIsLiabilityModalOpen] = useState(false);
+    const [editingLiability, setEditingLiability] = useState<Liability | undefined>(undefined);
+    const [liabilityToDelete, setLiabilityToDelete] = useState<Liability | null>(null);
+    const [payingLiability, setPayingLiability] = useState<EnrichedLiability | null>(null);
+
+    const [isReceivableModalOpen, setIsReceivableModalOpen] = useState(false);
+    const [editingReceivable, setEditingReceivable] = useState<Receivable | undefined>(undefined);
+    const [receivableToDelete, setReceivableToDelete] = useState<Receivable | null>(null);
+    const [collectingReceivable, setCollectingReceivable] = useState<EnrichedReceivable | null>(null);
+    
+    const [isWithdrawalModalOpen, setIsWithdrawalModalOpen] = useState(false);
+    const [editingWithdrawal, setEditingWithdrawal] = useState<Withdrawal | undefined>(undefined);
+    const [withdrawalToDelete, setWithdrawalToDelete] = useState<Withdrawal | null>(null);
+
+    const [expandedRows, setExpandedRows] = useState<Set<string>>(new Set());
+
+    const assetTypeMap = useMemo(() => new Map(assetTypes.map(at => [at.id, at.name])), [assetTypes]);
+
+    const toggleRow = (id: string) => {
+        const newSet = new Set(expandedRows);
+        if (newSet.has(id)) {
+            newSet.delete(id);
+        } else {
+            newSet.add(id);
+        }
+        setExpandedRows(newSet);
+    };
+
+    // Asset handlers
+    const handleSaveAsset = (asset: Omit<Asset, 'id'> | Asset) => {
+        if ('id' in asset && asset.id) { updateAsset(asset as Asset); } else { addAsset(asset as Omit<Asset, 'id'>); }
+        setIsAssetModalOpen(false); setEditingAsset(undefined);
+    };
+    const handleAddAssetType = (assetType: Omit<AssetType, 'id'>) => { addAssetType(assetType); };
+    const handleDeleteAssetClick = (asset: Asset) => { setAssetToDelete(asset); };
+    const handleConfirmDeleteAsset = () => { if (assetToDelete) { deleteAsset(assetToDelete.id); setAssetToDelete(null); } };
+
+    // Liability handlers
+    const handleSaveLiability = (liability: Omit<Liability, 'id'> | Liability) => {
+        if ('id' in liability && liability.id) { updateLiability(liability as Liability); } else { addLiability(liability); }
+        setIsLiabilityModalOpen(false); setEditingLiability(undefined);
+    };
+    const handleDeleteLiabilityClick = (liability: Liability) => { setLiabilityToDelete(liability); };
+    const handleConfirmDeleteLiability = () => { if (liabilityToDelete) { deleteLiability(liabilityToDelete.id); setLiabilityToDelete(null); } };
+    const handleSaveDebtPayment = (payment: { liabilityId: string; amount: number; assetId: string; date: string; }) => {
+        addDebtPayment(payment);
+        const liability = liabilities.find(l => l.id === payment.liabilityId);
+        if (liability) {
+            const totalPaid = debtPayments.filter(p => p.liabilityId === liability.id).reduce((sum, p) => sum + p.amount, 0) + payment.amount;
+            if (totalPaid >= liability.totalAmount) {
+                updateLiability({ ...liability, completionDate: payment.date });
+            }
+        }
+        setPayingLiability(null);
+    };
+    
+    // Receivable handlers
+    const handleSaveReceivable = (receivable: Omit<Receivable, 'id'> | Receivable) => {
+        if ('id' in receivable && receivable.id) { updateReceivable(receivable as Receivable); } else { addReceivable(receivable); }
+        setIsReceivableModalOpen(false); setEditingReceivable(undefined);
+    };
+    const handleDeleteReceivableClick = (receivable: Receivable) => { setReceivableToDelete(receivable); };
+    const handleConfirmDeleteReceivable = () => { if (receivableToDelete) { deleteReceivable(receivableToDelete.id); setReceivableToDelete(null); } };
+    const handleSaveReceivablePayment = (payment: Omit<ReceivablePayment, 'id'>) => {
+        addReceivablePayment(payment);
+        const receivable = receivables.find(r => r.id === payment.receivableId);
+        if (receivable) {
+            const totalPaid = receivablePayments.filter(p => p.receivableId === receivable.id).reduce((sum, p) => sum + p.amount, 0) + payment.amount;
+            if (totalPaid >= receivable.totalAmount) {
+                updateReceivable({ ...receivable, completionDate: payment.date });
+            }
+        }
+        setCollectingReceivable(null);
+    };
+
+    // Withdrawal handlers
+    const handleSaveWithdrawal = (withdrawal: Omit<Withdrawal, 'id'> | Withdrawal) => {
+        if ('id' in withdrawal && withdrawal.id) { updateWithdrawal(withdrawal as Withdrawal); } else { addWithdrawal(withdrawal); }
+        setIsWithdrawalModalOpen(false); setEditingWithdrawal(undefined);
+    };
+    const handleDeleteWithdrawalClick = (withdrawal: any) => { setWithdrawalToDelete(withdrawal); };
+    const handleConfirmDeleteWithdrawal = () => { if (withdrawalToDelete) { deleteWithdrawal(withdrawalToDelete.id); setWithdrawalToDelete(null); } };
+    
+    const enrichedLiabilities: EnrichedLiability[] = useMemo(() => {
+        const paymentsByLiability = debtPayments.reduce((acc: Record<string, number>, p: DebtPayment) => {
+            acc[p.liabilityId] = (acc[p.liabilityId] || 0) + p.amount;
+            return acc;
+        }, {});
+        return liabilities.map(l => {
+            const paidAmount = paymentsByLiability[l.id] || 0;
+            return { ...l, paidAmount, remainingAmount: l.totalAmount - paidAmount };
+        });
+    }, [liabilities, debtPayments]);
+
+    const enrichedReceivables: EnrichedReceivable[] = useMemo(() => {
+        const paymentsByReceivable = receivablePayments.reduce((acc: Record<string, number>, p: ReceivablePayment) => {
+            acc[p.receivableId] = (acc[p.receivableId] || 0) + p.amount;
+            return acc;
+        }, {});
+        return receivables.map(r => {
+            const paidAmount = paymentsByReceivable[r.id] || 0;
+            return { ...r, paidAmount, remainingAmount: r.totalAmount - paidAmount };
+        });
+    }, [receivables, receivablePayments]);
+    
+    const enrichedWithdrawals = useMemo(() => {
+        const assetMap = new Map<string, Asset>(assets.map(a => [a.id, a]));
+        const partnerMap = new Map<string, string>(partners.map(p => [p.id, p.name]));
+        return withdrawals
+            .map(w => {
+                const asset = assetMap.get(w.assetId);
+                return { ...w, assetName: asset?.name || 'N/A', partnerName: partnerMap.get(w.withdrawnBy) || 'N/A', isUSD: asset?.currency === 'USD' };
+            })
+            .sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime());
+    }, [withdrawals, assets, partners]);
+
+
+    const shortTermLiabilities = useMemo(() => enrichedLiabilities.filter(l => l.type === 'short-term'), [enrichedLiabilities]);
+    const longTermLiabilities = useMemo(() => enrichedLiabilities.filter(l => l.type === 'long-term'), [enrichedLiabilities]);
+    const shortTermReceivables = useMemo(() => enrichedReceivables.filter(r => r.type === 'short-term'), [enrichedReceivables]);
+    const longTermReceivables = useMemo(() => enrichedReceivables.filter(r => r.type === 'long-term'), [enrichedReceivables]);
+    const enrichedVndAssets = useMemo(() => enrichedAssets.filter(asset => asset.currency === 'VND'), [enrichedAssets]);
+
+    const renderLiabilityTable = (liabilities: EnrichedLiability[], title: string) => (
+        <div>
+            <h3 className="text-lg font-semibold text-gray-200 mb-4">{title}</h3>
+            <Table>
+                <TableHead><TableRow>
+                    <TableHeader>Mô tả</TableHeader>
+                    <TableHeader>Tổng nợ</TableHeader>
+                    <TableHeader>Đã trả</TableHeader>
+                    <TableHeader>Còn lại</TableHeader>
+                    <TableHeader className="w-40">Tiến độ</TableHeader>
+                    <TableHeader className="w-40">Trạng thái</TableHeader>
+                    {!isReadOnly && <TableHeader className="w-24">Hành động</TableHeader>}
+                </TableRow></TableHead>
+                <TableBody>
+                    {liabilities.length > 0 ? liabilities.map(l => (
+                        <TableRow key={l.id}>
+                            <TableCell className="font-medium text-white">{l.description}</TableCell>
+                            <TableCell>{formatCurrency(l.totalAmount)}</TableCell>
+                            <TableCell className="text-primary-400">{formatCurrency(l.paidAmount)}</TableCell>
+                            <TableCell className="font-semibold text-yellow-400">{formatCurrency(l.remainingAmount)}</TableCell>
+                            <TableCell><ProgressBar value={l.paidAmount} max={l.totalAmount} /></TableCell>
+                            <TableCell>
+                                {l.remainingAmount <= 0 ? (
+                                    <span className="px-2 inline-flex text-xs leading-5 font-semibold rounded-full bg-green-200 text-green-800">Đã thanh toán</span>
+                                ) : (!isReadOnly && <Button size="sm" onClick={() => setPayingLiability(l)}>Thanh toán</Button>)}
+                            </TableCell>
+                            {!isReadOnly && (
+                                <TableCell><div className="flex items-center space-x-3 justify-center">
+                                    <button onClick={() => { setEditingLiability(l); setIsLiabilityModalOpen(true); }} className="text-gray-400 hover:text-primary-400"><Edit /></button>
+                                    <button onClick={() => handleDeleteLiabilityClick(l)} className="text-gray-400 hover:text-red-400"><Trash2 /></button>
+                                </div></TableCell>
+                            )}
+                        </TableRow>
+                    )) : (
+                        <TableRow><TableCell colSpan={isReadOnly ? 6 : 7} className="py-4 text-center text-gray-500">Không có dữ liệu.</TableCell></TableRow>
+                    )}
+                </TableBody>
+            </Table>
+        </div>
+    );
+    
+    const renderReceivableTable = (receivables: EnrichedReceivable[], title: string) => (
+        <div>
+            <h3 className="text-lg font-semibold text-gray-200 mb-4">{title}</h3>
+            <Table>
+                <TableHead><TableRow>
+                    <TableHeader>Mô tả</TableHeader>
+                    <TableHeader>Tổng phải thu</TableHeader>
+                    <TableHeader>Đã thu</TableHeader>
+                    <TableHeader>Còn lại</TableHeader>
+                    <TableHeader className="w-40">Tiến độ</TableHeader>
+                    <TableHeader className="w-40">Trạng thái</TableHeader>
+                    {!isReadOnly && <TableHeader className="w-24">Hành động</TableHeader>}
+                </TableRow></TableHead>
+                <TableBody>
+                    {receivables.length > 0 ? receivables.map(r => (
+                        <TableRow key={r.id}>
+                            <TableCell className="font-medium text-white">{r.description}</TableCell>
+                            <TableCell>{formatCurrency(r.totalAmount, r.currency)}</TableCell>
+                            <TableCell className="text-primary-400">{formatCurrency(r.paidAmount, r.currency)}</TableCell>
+                            <TableCell className="font-semibold text-yellow-400">{formatCurrency(r.remainingAmount, r.currency)}</TableCell>
+                            <TableCell><ProgressBar value={r.paidAmount} max={r.totalAmount} /></TableCell>
+                            <TableCell>
+                                {r.remainingAmount <= 0 ? (
+                                    <span className="px-2 inline-flex text-xs leading-5 font-semibold rounded-full bg-green-200 text-green-800">Đã thu đủ</span>
+                                ) : (!isReadOnly && <Button size="sm" onClick={() => setCollectingReceivable(r)}>Thu nợ</Button>)}
+                            </TableCell>
+                            {!isReadOnly && (
+                                <TableCell><div className="flex items-center space-x-3 justify-center">
+                                    <button onClick={() => { setEditingReceivable(r); setIsReceivableModalOpen(true); }} className="text-gray-400 hover:text-primary-400"><Edit /></button>
+                                    <button onClick={() => handleDeleteReceivableClick(r)} className="text-gray-400 hover:text-red-400"><Trash2 /></button>
+                                </div></TableCell>
+                            )}
+                        </TableRow>
+                    )) : (
+                        <TableRow><TableCell colSpan={isReadOnly ? 6 : 7} className="py-4 text-center text-gray-500">Không có dữ liệu.</TableCell></TableRow>
+                    )}
+                </TableBody>
+            </Table>
+        </div>
+    );
+
+
+    return (
+        <>
+            <div className="space-y-8">
+                <Card>
+                    <CardHeader className="flex justify-between items-center">
+                        <span>Bảng cân đối tài sản</span>
+                        <div className="flex items-center gap-4">
+                            {!isReadOnly && (
+                                <Button onClick={() => { setEditingWithdrawal(undefined); setIsWithdrawalModalOpen(true); }} variant="secondary">
+                                    <span className="flex items-center gap-2"><Plus /> Rút tiền</span>
+                                </Button>
+                            )}
+                             {!isReadOnly && (
+                                <Button onClick={() => { setEditingAsset(undefined); setIsAssetModalOpen(true); }}>
+                                    <span className="flex items-center gap-2"><Plus /> Thêm tài sản</span>
+                                </Button>
+                            )}
+                        </div>
+                    </CardHeader>
+                    <CardContent>
+                        <Table>
+                            <TableHead><TableRow>
+                                <TableHeader className="text-left pl-10">Tài sản</TableHeader>
+                                <TableHeader>Loại</TableHeader>
+                                <TableHeader>Tiền nhận</TableHeader>
+                                <TableHeader>Tiền rút</TableHeader>
+                                <TableHeader>Số dư</TableHeader>
+                                {!isReadOnly && <TableHeader>Hành động</TableHeader>}
+                            </TableRow></TableHead>
+                            <TableBody>
+                                {enrichedAssets.map(asset => (
+                                    <React.Fragment key={asset.id}>
+                                        <TableRow>
+                                            <TableCell className="font-medium text-white text-left px-2"><div className="flex items-center">
+                                                <div className="w-8 flex-shrink-0 flex items-center justify-center">
+                                                    {asset.isExpandable && (<button onClick={() => toggleRow(asset.id)} className="p-1 rounded-full hover:bg-gray-700" aria-label="Toggle details">
+                                                        {expandedRows.has(asset.id) ? <ChevronDown /> : <ChevronRight />}
+                                                    </button>)}
+                                                </div>
+                                                <span>{asset.name}</span>
+                                            </div></TableCell>
+                                            <TableCell>{assetTypeMap.get(asset.typeId) || 'N/A'}</TableCell>
+                                            <TableCell className="text-primary-400">{formatCurrency(asset.totalReceived, asset.currency)}</TableCell>
+                                            <TableCell className="text-yellow-400">-{formatCurrency(asset.totalWithdrawn, asset.currency)}</TableCell>
+                                            <TableCell className={`font-semibold ${asset.balance >= 0 ? 'text-green-500' : 'text-red-500'}`}>{formatCurrency(asset.balance, asset.currency)}</TableCell>
+                                            {!isReadOnly && (<TableCell><div className="flex items-center space-x-3 justify-center">
+                                                <button onClick={() => { setEditingAsset(asset); setIsAssetModalOpen(true); }} className="text-gray-400 hover:text-primary-400"><Edit /></button>
+                                                <button onClick={() => handleDeleteAssetClick(asset)} className="text-gray-400 hover:text-red-400"><Trash2 /></button>
+                                            </div></TableCell>)}
+                                        </TableRow>
+                                        {asset.isExpandable && expandedRows.has(asset.id) && asset.owners.map(owner => (
+                                            <React.Fragment key={`${asset.id}-${owner.id}`}>
+                                                <TableRow className="bg-gray-800/50 hover:bg-gray-800/40">
+                                                    <TableCell className="py-2 pl-12 text-sm text-gray-300 font-semibold text-left">{owner.name}</TableCell>
+                                                    <TableCell className="py-2"></TableCell>
+                                                    <TableCell className="text-primary-300 py-2 text-sm">{formatCurrency(owner.received, asset.currency)}</TableCell>
+                                                    <TableCell className="text-yellow-300 py-2 text-sm">-{formatCurrency(owner.withdrawn, asset.currency)}</TableCell>
+                                                    <TableCell className={`font-semibold text-sm ${owner.received - owner.withdrawn >= 0 ? 'text-green-400' : 'text-red-400'}`}>{formatCurrency(owner.received - owner.withdrawn, asset.currency)}</TableCell>
+                                                    {!isReadOnly && <TableCell className="py-2"></TableCell>}
+                                                </TableRow>
+                                                {enrichedWithdrawals.filter(w => w.assetId === asset.id && w.withdrawnBy === owner.id).map(w => (
+                                                    <TableRow key={w.id} className="bg-gray-800/30 hover:bg-gray-800/20">
+                                                        <TableCell className="py-1.5 pl-16 text-xs text-gray-400 italic text-left">- {w.description} ({formatDate(w.date)})</TableCell>
+                                                        <TableCell className="py-1.5"></TableCell>
+                                                        <TableCell className="py-1.5"></TableCell>
+                                                        <TableCell className="py-1.5 text-xs text-red-400/80 font-mono">-{formatCurrency(w.amount, w.isUSD ? 'USD' : 'VND')}</TableCell>
+                                                        <TableCell className="py-1.5"></TableCell>
+                                                        {!isReadOnly && <TableCell className="py-1.5"><div className="flex items-center space-x-3 justify-center">
+                                                            <button onClick={() => { setEditingWithdrawal(w); setIsWithdrawalModalOpen(true); }} className="text-gray-500 hover:text-primary-400"><Edit /></button>
+                                                            <button onClick={() => handleDeleteWithdrawalClick(w)} className="text-gray-500 hover:text-red-400"><Trash2 /></button>
+                                                        </div></TableCell>}
+                                                    </TableRow>
+                                                ))}
+                                            </React.Fragment>
+                                        ))}
+                                    </React.Fragment>
+                                ))}
+                            </TableBody>
+                        </Table>
+                    </CardContent>
+                </Card>
+
+                <Card>
+                    <CardHeader className="flex justify-between items-center">
+                        <span>Công nợ Phải Trả</span>
+                        {!isReadOnly && (
+                            <Button onClick={() => { setEditingLiability(undefined); setIsLiabilityModalOpen(true); }}>
+                                <span className="flex items-center gap-2"><Plus /> Thêm công nợ</span>
+                            </Button>
+                        )}
+                    </CardHeader>
+                    <CardContent className="space-y-8">
+                        {renderLiabilityTable(shortTermLiabilities, "Nợ ngắn hạn")}
+                        {renderLiabilityTable(longTermLiabilities, "Nợ dài hạn")}
+                    </CardContent>
+                </Card>
+
+                <Card>
+                    <CardHeader className="flex justify-between items-center">
+                        <span>Công nợ Phải Thu</span>
+                        {!isReadOnly && (
+                            <Button onClick={() => { setEditingReceivable(undefined); setIsReceivableModalOpen(true); }}>
+                                <span className="flex items-center gap-2"><Plus /> Thêm khoản phải thu</span>
+                            </Button>
+                        )}
+                    </CardHeader>
+                    <CardContent className="space-y-8">
+                        {renderReceivableTable(shortTermReceivables, "Phải thu ngắn hạn")}
+                        {renderReceivableTable(longTermReceivables, "Phải thu dài hạn")}
+                    </CardContent>
+                </Card>
+            </div>
+            
+            {!isReadOnly && (
+                <>
+                    <Modal isOpen={isAssetModalOpen} onClose={() => setIsAssetModalOpen(false)} title={editingAsset ? 'Sửa tài sản' : 'Thêm tài sản mới'}>
+                        <AssetForm asset={editingAsset} assetTypes={assetTypes} onSave={handleSaveAsset} onCancel={() => { setIsAssetModalOpen(false); setEditingAsset(undefined); }} onAddAssetType={handleAddAssetType} />
+                    </Modal>
+                    <ConfirmationModal isOpen={!!assetToDelete} onClose={() => setAssetToDelete(null)} onConfirm={handleConfirmDeleteAsset} title="Xác nhận xóa tài sản" message={`Bạn có chắc chắn muốn xóa tài sản "${assetToDelete?.name}" không? Hành động này không thể hoàn tác.`} />
+
+                    <Modal isOpen={isLiabilityModalOpen} onClose={() => setIsLiabilityModalOpen(false)} title={editingLiability ? 'Sửa công nợ' : 'Thêm công nợ mới'}>
+                        <LiabilityForm liability={editingLiability} onSave={handleSaveLiability} onCancel={() => { setIsLiabilityModalOpen(false); setEditingLiability(undefined); }} />
+                    </Modal>
+                    {payingLiability && <AssetDebtPaymentModal liability={payingLiability} vndAssets={enrichedVndAssets} onClose={() => setPayingLiability(null)} onSave={handleSaveDebtPayment} />}
+                    <ConfirmationModal isOpen={!!liabilityToDelete} onClose={() => setLiabilityToDelete(null)} onConfirm={handleConfirmDeleteLiability} title="Xác nhận xóa công nợ" message={`Bạn có chắc chắn muốn xóa công nợ "${liabilityToDelete?.description}" không? Hành động này không thể hoàn tác.`} />
+
+                    <Modal isOpen={isReceivableModalOpen} onClose={() => setIsReceivableModalOpen(false)} title={editingReceivable ? 'Sửa khoản phải thu' : 'Thêm khoản phải thu'}>
+                        <ReceivableForm receivable={editingReceivable} assets={assets} onSave={handleSaveReceivable} onCancel={() => { setIsReceivableModalOpen(false); setEditingReceivable(undefined); }} />
+                    </Modal>
+                    {collectingReceivable && <ReceivablePaymentModal receivable={collectingReceivable} assets={assets} onClose={() => setCollectingReceivable(null)} onSave={handleSaveReceivablePayment} />}
+                    <ConfirmationModal isOpen={!!receivableToDelete} onClose={() => setReceivableToDelete(null)} onConfirm={handleConfirmDeleteReceivable} title="Xác nhận xóa khoản phải thu" message={`Bạn có chắc chắn muốn xóa khoản phải thu "${receivableToDelete?.description}" không? Mọi khoản thanh toán liên quan cũng sẽ bị xóa.`} />
+                    
+                    <Modal isOpen={isWithdrawalModalOpen} onClose={() => setIsWithdrawalModalOpen(false)} title={editingWithdrawal ? 'Sửa giao dịch rút tiền' : 'Thêm giao dịch rút tiền'}>
+                        <WithdrawalForm withdrawal={editingWithdrawal} assets={assets} partners={partners} enrichedAssets={enrichedAssets} onSave={handleSaveWithdrawal} onCancel={() => { setIsWithdrawalModalOpen(false); setEditingWithdrawal(undefined); }} />
+                    </Modal>
+                    <ConfirmationModal isOpen={!!withdrawalToDelete} onClose={() => setWithdrawalToDelete(null)} onConfirm={handleConfirmDeleteWithdrawal} title="Xác nhận xóa giao dịch rút tiền" message={`Bạn có chắc chắn muốn xóa giao dịch rút tiền "${withdrawalToDelete?.description}" không? Hành động này sẽ hoàn lại số dư vào tài sản và không thể hoàn tác.`} />
+                </>
+            )}
+        </>
+    );
+}
+// #endregion
+
+const CapitalInflowForm: React.FC<{
+    inflow?: CapitalInflow;
+    assets: Asset[];
+    onSave: (inflow: Omit<CapitalInflow, 'id'> | CapitalInflow) => void;
+    onCancel: () => void;
+}> = ({ inflow, assets, onSave, onCancel }) => {
+    const [date, setDate] = useState(inflow?.date || new Date().toISOString().split('T')[0]);
+    const [description, setDescription] = useState(inflow?.description || '');
+    const [assetId, setAssetId] = useState(inflow?.assetId || assets[0]?.id || '');
+    const [amount, setAmount] = useState(inflow?.amount || 0);
+
+    const selectedAsset = useMemo(() => assets.find(a => a.id === assetId), [assets, assetId]);
+
+    const handleSubmit = (e: React.FormEvent) => {
+        e.preventDefault();
+        onSave({ ...inflow, id: inflow?.id || '', date, description, assetId, amount });
+    };
+
+    const selectClassName = "w-full px-3 py-2 bg-gray-900 border border-gray-600 rounded-md focus:outline-none focus:ring-2 focus:ring-primary-500";
+
+    return (
+        <form onSubmit={handleSubmit} className="space-y-4">
+            <div>
+                <Label htmlFor="inflowDate">Ngày</Label>
+                <Input id="inflowDate" type="date" value={date} onChange={e => setDate(e.target.value)} required />
+            </div>
+            <div>
+                <Label htmlFor="inflowDesc">Mô tả</Label>
+                <Input id="inflowDesc" value={description} onChange={e => setDescription(e.target.value)} placeholder="VD: Chủ sở hữu góp vốn, Vốn đầu tư..." />
+            </div>
+            <div>
+                <Label htmlFor="inflowAsset">Tài sản nhận</Label>
+                <select id="inflowAsset" value={assetId} onChange={e => setAssetId(e.target.value)} className={selectClassName} required>
+                    {assets.map(a => <option key={a.id} value={a.id}>{a.name} ({a.currency})</option>)}
+                </select>
+            </div>
+            <div>
+                <Label htmlFor="inflowAmount">Số tiền ({selectedAsset?.currency})</Label>
+                <NumberInput id="inflowAmount" value={amount} onValueChange={setAmount} required />
+            </div>
+            <div className="mt-6 flex justify-end space-x-3">
+                <Button type="button" variant="secondary" onClick={onCancel}>Hủy</Button>
+                <Button type="submit">Lưu</Button>
+            </div>
+        </form>
+    );
+};
+
+const CapitalInflowsContent = () => {
+    const { assets, capitalInflows, addCapitalInflow, updateCapitalInflow, deleteCapitalInflow, isReadOnly } = useData();
+    const [isModalOpen, setIsModalOpen] = useState(false);
+    const [editingInflow, setEditingInflow] = useState<CapitalInflow | undefined>(undefined);
+    const [inflowToDelete, setInflowToDelete] = useState<CapitalInflow | null>(null);
+
+    const enrichedInflows = useMemo(() => {
+        const assetMap = new Map<string, Asset>(assets.map(a => [a.id, a]));
+        return capitalInflows
+            .map(i => ({
+                ...i,
+                assetName: assetMap.get(i.assetId)?.name || 'N/A',
+                currency: assetMap.get(i.assetId)?.currency || 'VND',
+            }))
+            .sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime());
+    }, [capitalInflows, assets]);
+
+    const handleSave = (inflow: Omit<CapitalInflow, 'id'> | CapitalInflow) => {
+        if ('id' in inflow && inflow.id) {
+            updateCapitalInflow(inflow as CapitalInflow);
+        } else {
+            addCapitalInflow(inflow);
+        }
+        setIsModalOpen(false);
+        setEditingInflow(undefined);
+    };
+
+    return (
+        <>
+            <Card>
+                <CardHeader className="flex justify-between items-center">
+                    <span>Quản lý Vốn & Đầu tư</span>
+                    {!isReadOnly && (
+                        <Button onClick={() => { setEditingInflow(undefined); setIsModalOpen(true); }} disabled={assets.length === 0}>
+                            <span className="flex items-center gap-2"><Plus /> Thêm vốn đầu tư</span>
+                        </Button>
+                    )}
+                </CardHeader>
+                <CardContent>
+                    <Table>
+                        <TableHead>
+                            <TableRow>
+                                <TableHeader>Ngày</TableHeader>
+                                <TableHeader>Mô tả</TableHeader>
+                                <TableHeader>Tài sản nhận</TableHeader>
+                                <TableHeader>Số tiền</TableHeader>
+                                {!isReadOnly && <TableHeader>Hành động</TableHeader>}
+                            </TableRow>
+                        </TableHead>
+                        <TableBody>
+                            {enrichedInflows.map(inflow => (
+                                <TableRow key={inflow.id}>
+                                    <TableCell>{formatDate(inflow.date)}</TableCell>
+                                    <TableCell className="text-white">{inflow.description || 'Vốn góp'}</TableCell>
+                                    <TableCell>{inflow.assetName}</TableCell>
+                                    <TableCell className="font-semibold text-green-400">{formatCurrency(inflow.amount, inflow.currency)}</TableCell>
+                                    {!isReadOnly && (
+                                        <TableCell>
+                                            <div className="flex items-center space-x-3 justify-center">
+                                                <button onClick={() => { setEditingInflow(inflow); setIsModalOpen(true); }} className="text-gray-400 hover:text-primary-400"><Edit /></button>
+                                                <button onClick={() => setInflowToDelete(inflow)} className="text-gray-400 hover:text-red-400"><Trash2 /></button>
+                                            </div>
+                                        </TableCell>
+                                    )}
+                                </TableRow>
+                            ))}
+                        </TableBody>
+                    </Table>
+                </CardContent>
+            </Card>
+
+            {!isReadOnly && (
+                <>
+                    <Modal isOpen={isModalOpen} onClose={() => setIsModalOpen(false)} title={editingInflow ? 'Sửa Vốn đầu tư' : 'Thêm Vốn đầu tư'}>
+                        <CapitalInflowForm
+                            inflow={editingInflow}
+                            assets={assets}
+                            onSave={handleSave}
+                            onCancel={() => { setIsModalOpen(false); setEditingInflow(undefined); }}
+                        />
+                    </Modal>
+                    <ConfirmationModal
+                        isOpen={!!inflowToDelete}
+                        onClose={() => setInflowToDelete(null)}
+                        onConfirm={() => { if(inflowToDelete) { deleteCapitalInflow(inflowToDelete.id); setInflowToDelete(null); } }}
+                        title="Xác nhận xóa Vốn"
+                        message={`Bạn có chắc chắn muốn xóa khoản vốn "${inflowToDelete?.description || 'Vốn góp'}" không?`}
+                    />
+                </>
+            )}
+        </>
+    )
+}
+
+const AssetTypesContent = () => {
+    const { assetTypes, addAssetType, updateAssetType, deleteAssetType, enrichedAssets } = useData();
+    const [isModalOpen, setIsModalOpen] = useState(false);
+    const [editingType, setEditingType] = useState<AssetType | undefined>(undefined);
+    const [typeToDelete, setTypeToDelete] = useState<AssetType | null>(null);
+
+    const handleSave = (assetType: Omit<AssetType, 'id'> | AssetType) => {
+        if ('id' in assetType && assetType.id) {
+            updateAssetType(assetType as AssetType);
+        } else {
+            addAssetType(assetType);
+        }
+        setIsModalOpen(false);
+        setEditingType(undefined);
+    };
+
+    const handleDeleteClick = (assetType: AssetType) => {
+        const assetsOfType = enrichedAssets.filter(asset => asset.typeId === assetType.id);
+        
+        const balanceByCurrency = assetsOfType.reduce((acc, asset) => {
+            acc[asset.currency] = (acc[asset.currency] || 0) + asset.balance;
+            return acc;
+        }, {} as Record<'USD' | 'VND', number>);
+
+        const nonZeroBalances = Object.entries(balanceByCurrency).filter(([, balance]) => Math.abs(balance as number) > 0.001);
+
+        if (nonZeroBalances.length > 0) {
+            const balanceStrings = nonZeroBalances.map(([currency, balance]) => formatCurrency(balance as number, currency as 'USD' | 'VND')).join(' và ');
+            alert(`Không thể xóa loại tài sản "${assetType.name}" vì tổng số dư của các tài sản liên quan khác không: ${balanceStrings}. Vui lòng điều chỉnh số dư về 0 trước khi xóa.`);
+            return;
+        }
+
+        setTypeToDelete(assetType);
+    };
+
+    const handleConfirmDelete = () => {
+        if (typeToDelete) {
+            deleteAssetType(typeToDelete.id);
+            setTypeToDelete(null);
+        }
+    };
+
+    return (
+        <>
+            <Card>
+                <CardHeader className="flex justify-between items-center">
+                    <span>Quản lý Loại tài sản</span>
+                    <Button onClick={() => { setEditingType(undefined); setIsModalOpen(true); }}>
+                        <span className="flex items-center gap-2"><Plus /> Thêm loại tài sản</span>
+                    </Button>
+                </CardHeader>
+                <CardContent>
+                    <Table>
+                        <TableHead>
+                            <TableRow>
+                                <TableHeader className="text-left pl-6">Tên loại tài sản</TableHeader>
+                                <TableHeader>Hành động</TableHeader>
+                            </TableRow>
+                        </TableHead>
+                        <TableBody>
+                            {assetTypes.map(type => (
+                                <TableRow key={type.id}>
+                                    <TableCell className="font-medium text-white text-left pl-6">{type.name}</TableCell>
+                                    <TableCell>
+                                        <div className="flex items-center space-x-3 justify-center">
+                                            <button 
+                                                onClick={() => { setEditingType(type); setIsModalOpen(true); }} 
+                                                className="text-gray-400 hover:text-primary-400"
+                                                aria-label={`Sửa ${type.name}`}
+                                            >
+                                                <Edit />
+                                            </button>
+                                            <button 
+                                                onClick={() => handleDeleteClick(type)} 
+                                                className="text-gray-400 hover:text-red-400"
+                                                aria-label={`Xóa ${type.name}`}
+                                            >
+                                                <Trash2 />
+                                            </button>
+                                        </div>
+                                    </TableCell>
+                                </TableRow>
+                            ))}
+                        </TableBody>
+                    </Table>
+                </CardContent>
+            </Card>
+            
+            <AssetTypeFormModal
+                isOpen={isModalOpen}
+                onClose={() => setIsModalOpen(false)}
+                onSave={handleSave}
+                existingAssetType={editingType}
+            />
+
+            <ConfirmationModal
+                isOpen={!!typeToDelete}
+                onClose={() => setTypeToDelete(null)}
+                onConfirm={handleConfirmDelete}
+                title="Xác nhận xóa loại tài sản"
+                message={`Bạn có chắc chắn muốn xóa loại tài sản "${typeToDelete?.name}" không? Hành động này không thể hoàn tác.`}
+            />
+        </>
+    );
+};
+
+
+export default function Assets() {
+  const [activeTab, setActiveTab] = useState<'balance' | 'capital' | 'history' | 'types'>('balance');
+
+    return (
+        <div>
+            <Header title="Tài sản" />
+            <div className="border-b border-gray-700 mb-6" role="tablist">
+                <TabButton active={activeTab === 'balance'} onClick={() => setActiveTab('balance')}>
+                    Cân đối tài sản
+                </TabButton>
+                 <TabButton active={activeTab === 'capital'} onClick={() => setActiveTab('capital')}>
+                    Vốn & Đầu tư
+                </TabButton>
+                <TabButton active={activeTab === 'history'} onClick={() => setActiveTab('history')}>
+                    Lịch sử giao dịch
+                </TabButton>
+                <TabButton active={activeTab === 'types'} onClick={() => setActiveTab('types')}>
+                    Loại tài sản
+                </TabButton>
+            </div>
+            <div>
+                {activeTab === 'balance' && <AssetBalanceContent />}
+                {activeTab === 'capital' && <CapitalInflowsContent />}
+                {activeTab === 'history' && <TransactionHistoryContent />}
+                {activeTab === 'types' && <AssetTypesContent />}
+            </div>
+        </div>
+    );
+}
