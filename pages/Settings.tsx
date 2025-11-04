@@ -94,13 +94,14 @@ const COLLECTION_NAMES = [
 
 
 export default function Settings() {
-    const { taxSettings, updateTaxSettings } = useData();
+    const { taxSettings, updateTaxSettings, setFirebaseConfig } = useData();
     const fileInputRef = useRef<HTMLInputElement>(null);
     const [isConfirmDeleteOpen, setIsConfirmDeleteOpen] = useState(false);
     const [isConfirmImportOpen, setIsConfirmImportOpen] = useState(false);
     const [importData, setImportData] = useState<string | null>(null);
     const [isImporting, setIsImporting] = useState(false);
     const [isDeleting, setIsDeleting] = useState(false);
+    const [isLogoutConfirmOpen, setIsLogoutConfirmOpen] = useState(false);
 
     const [localClosingDay, setLocalClosingDay] = useState(taxSettings.periodClosingDay);
 
@@ -113,6 +114,15 @@ export default function Settings() {
     const handleSaveClosingDay = () => {
         const clampedValue = Math.max(1, Math.min(28, Math.floor(localClosingDay)));
         updateTaxSettings({ ...taxSettings, periodClosingDay: clampedValue });
+    };
+
+    const handleLogout = () => {
+        if (setFirebaseConfig) {
+            setFirebaseConfig(null);
+        }
+        setIsLogoutConfirmOpen(false);
+        alert('Đã đăng xuất và xóa cấu hình. Ứng dụng sẽ được tải lại.');
+        window.location.reload();
     };
     
     const handleExport = async () => {
@@ -284,6 +294,20 @@ export default function Settings() {
             <Header title="Cài đặt" />
             <div className="space-y-8">
                 <FirebaseSettings />
+                
+                <Card>
+                    <CardHeader>Quản lý Phiên làm việc</CardHeader>
+                    <CardContent>
+                        <p className="text-sm text-gray-400 mb-4">
+                            Đăng xuất khỏi phiên làm việc hiện tại. Hành động này sẽ ngắt kết nối khỏi Firebase và xóa cấu hình API đã lưu khỏi trình duyệt này.
+                            Điều này hữu ích khi bạn muốn chuyển máy tính hoặc tăng cường bảo mật.
+                        </p>
+                        <Button variant="danger" onClick={() => setIsLogoutConfirmOpen(true)}>
+                            Đăng xuất & Xóa Cấu hình
+                        </Button>
+                    </CardContent>
+                </Card>
+
                  <Card>
                     <CardHeader>Quản lý dữ liệu</CardHeader>
                      <CardContent className="space-y-4">
@@ -353,6 +377,15 @@ export default function Settings() {
                 title="Xác nhận nhập dữ liệu"
                 message="Bạn có chắc muốn nhập dữ liệu từ tệp này không? Tất cả dữ liệu hiện tại trên Firestore sẽ bị GHI ĐÈ vĩnh viễn. Hành động này không thể hoàn tác."
                 confirmButtonText="Nhập và Ghi đè"
+                confirmButtonVariant="danger"
+            />
+            <ConfirmationModal
+                isOpen={isLogoutConfirmOpen}
+                onClose={() => setIsLogoutConfirmOpen(false)}
+                onConfirm={handleLogout}
+                title="Xác nhận Đăng xuất"
+                message="Bạn có chắc chắn muốn đăng xuất không? Hành động này sẽ xóa cấu hình Firebase đã lưu trên trình duyệt này. Bạn sẽ cần nhập lại cấu hình để có thể sử dụng lại ứng dụng."
+                confirmButtonText="Đăng xuất"
                 confirmButtonVariant="danger"
             />
         </div>

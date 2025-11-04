@@ -1,3 +1,5 @@
+
+
 import React, { createContext, useContext, ReactNode, useMemo, useState, useEffect } from 'react';
 import { useLocalStorage } from '../hooks/useLocalStorage';
 import * as T from '../types';
@@ -155,15 +157,6 @@ interface DataContextType {
 
 const DataContext = createContext<DataContextType | undefined>(undefined);
 
-const defaultFirebaseConfig: T.FirebaseConfig = {
-  apiKey: "AIzaSyDc3S_acaRpdAHQQQtMu8RZTIReLSqo1jU",
-  authDomain: "affiliate-acc.firebaseapp.com",
-  projectId: "affiliate-acc",
-  storageBucket: "affiliate-acc.firebasestorage.app",
-  messagingSenderId: "609711712985",
-  appId: "1:609711712985:web:1ffabda9b51fe5bc602cc8"
-};
-
 const defaultTaxSettings: T.TaxSettings = {
     method: 'revenue', revenueRate: 1.5, vatRate: 10, incomeRate: 20, vatInputMethod: 'auto_sum',
     manualInputVat: 0, incomeTaxBase: 'personal', vatOutputBase: 'personal', vatInputBase: 'total',
@@ -287,7 +280,7 @@ const seedInitialData = async (db: Firestore) => {
 };
 
 export const DataProvider: React.FC<{ children: ReactNode }> = ({ children }) => {
-  const [firebaseConfig, setFirebaseConfig] = useLocalStorage<FirebaseConfig | null>('firebaseConfig', defaultFirebaseConfig);
+  const [firebaseConfig, setFirebaseConfig] = useLocalStorage<FirebaseConfig | null>('firebaseConfig', null);
   const [firestoreDb, setFirestoreDb] = useState<Firestore | null>(null);
   const [isLoading, setIsLoading] = useState(true);
 
@@ -1139,7 +1132,7 @@ export const DataProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
   const periodFinancials = useMemo<T.PeriodFinancials | null>(() => {
         if (!currentPeriod) return null;
         const mePartnerId = 'default-me';
-        const assetMap = new Map(assets.map(a => [a.id, a]));
+        const assetMap = new Map<string, T.Asset>(assets.map(a => [a.id, a]));
         const projectMap = new Map(projects.map(p => [p.id, p.name]));
         const periodCommissions = commissions.filter(c => isDateInPeriod(c.date, currentPeriod));
         const periodAdCosts = enrichedDailyAdCosts.filter(c => isDateInPeriod(c.date, currentPeriod));
@@ -1223,7 +1216,12 @@ export const DataProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
                 });
             } else {
                 const meStat = partnerStatsMap.get(mePartnerId);
-                if (meStat) Object.keys(meStat).forEach(key => (meStat as any)[key] += (pnl as any)[key]);
+                // FIX: Replace dynamic key iteration with explicit property assignment for type safety.
+                if (meStat) {
+                    meStat.revenue += pnl.revenue;
+                    meStat.cost += pnl.cost;
+                    meStat.inputVat += pnl.inputVat;
+                }
             }
         });
         periodMiscExpenses.filter(e => !e.projectId).forEach(exp => {
@@ -1330,7 +1328,7 @@ export const DataProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
         return enrichedAssets.map(asset => {
             const isUsd = asset.currency === 'USD';
             const periodInflows = [ ...commissions.filter(t => t.assetId === asset.id && isDateInPeriod(t.date, currentPeriod)).map(t => isUsd ? t.usdAmount : t.vndAmount), ...exchangeLogs.filter(t => t.receivingAssetId === asset.id && isDateInPeriod(t.date, currentPeriod)).map(t => t.vndAmount), ...capitalInflows.filter(t => t.assetId === asset.id && isDateInPeriod(t.date, currentPeriod)).map(t => t.amount), ...receivablePayments.filter(t => t.assetId === asset.id && isDateInPeriod(t.date, currentPeriod)).map(t => t.amount), ...liabilities.filter(l => l.inflowAssetId === asset.id && isDateInPeriod(l.creationDate, currentPeriod)).map(l => l.totalAmount) ].reduce((s, v) => s + v, 0);
-            const periodOutflows = [ ...adDeposits.filter(t => t.assetId === asset.id && isDateInPeriod(t.date, currentPeriod)).map(t => t.vndAmount), ...miscellaneousExpenses.filter(t => t.assetId === asset.id && isDateInPeriod(t.date, currentPeriod)).map(t => t.amount), ...exchangeLogs.filter(t => t.sellingAssetId === asset.id && isDateInPeriod(t.date, currentPeriod)).map(t => t.usdAmount), ...debtPayments.filter(t => t.assetId === asset.id && isDateInPeriod(t.date, currentPeriod)).map(t => t.amount), ...withdrawals.filter(t => t.assetId === asset.id && isDateInPeriod(t.date, currentPeriod)).map(t => t.amount), ...taxPayments.filter(t => t.assetId === asset.id && isDateInPeriod(t.date, currentPeriod)).map(t => t.amount), ...receivables.filter(t => t.outflowAssetId === asset.id && isDateInPeriod(t.creationDate, currentPeriod)).map(t => t.totalAmount) ].reduce((s, v) => s + v, 0);
+            const periodOutflows = [ ...adDeposits.filter(t => t.assetId === asset.id && isDateInPeriod(t.date, currentPeriod)).map(t => t.vndAmount), ...miscellaneousExpenses.filter(t => t.assetId === asset.id && isDateInPeriod(t.date, currentPeriod)).map(t => t.amount), ...exchangeLogs.filter(t => t.sellingAssetId === asset.id && isDateInPeriod(t.date, currentPeriod)).map(t => t.usdAmount), ...debtPayments.filter(t => t.assetId === asset.id && isDateInPeriod(t.date, currentPeriod)).map(t => t.amount), ...withdrawals.filter(t => t.assetId === asset.id && isDateInPeriod(t.date, currentPeriod)).map(t => t.amount), ...taxPayments.filter(t => t.assetId === asset.id && t.period === currentPeriod).map(t => t.amount), ...receivables.filter(t => t.outflowAssetId === asset.id && isDateInPeriod(t.creationDate, currentPeriod)).map(t => t.totalAmount) ].reduce((s, v) => s + v, 0);
             const periodChange = periodInflows - periodOutflows;
             const closingBalance = asset.balance;
             const openingBalance = closingBalance - periodChange;
