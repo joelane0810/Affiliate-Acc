@@ -1,10 +1,8 @@
 
-
 import React, { useState } from 'react';
 import { Sidebar } from './components/Sidebar';
 import { DataProvider, useData } from './context/DataContext';
 import { Card, CardContent } from './components/ui/Card';
-// FIX: The 'Page' type was not exported from 'types.ts'. I have added it to 'types.ts' to resolve this error.
 import { Page } from './types';
 import { Button } from './components/ui/Button';
 import { Menu } from './components/icons/IconComponents';
@@ -16,7 +14,7 @@ import DailyAdCosts from './pages/DailyAdCosts';
 import Commissions from './pages/Commissions';
 import ExchangeLog from './pages/ExchangeLog';
 import MiscellaneousExpenses from './pages/MiscellaneousExpenses';
-import DebtsReceivables from './pages/DebtsReceivables';
+import CapitalSources from './pages/CapitalSources';
 import Partners from './pages/Partners';
 import Assets from './pages/Assets';
 import Tax from './pages/Tax';
@@ -31,7 +29,7 @@ const pages: { [key in Page]: React.ComponentType } = {
   Commissions,
   ExchangeLog,
   MiscellaneousExpenses,
-  DebtsReceivables,
+  CapitalSources,
   Partners,
   Assets,
   Tax,
@@ -126,7 +124,7 @@ const AppContent = () => {
 
   const disabledWithoutPeriod: Page[] = [
     'Dashboard', 'Projects', 'DailyAdCosts', 'Commissions',
-    'ExchangeLog', 'MiscellaneousExpenses', 'DebtsReceivables', 'Partners', 'Tax'
+    'ExchangeLog', 'MiscellaneousExpenses', 'CapitalSources', 'Partners', 'Tax'
   ];
   
   const isPageDisabled = !activePeriod && !viewingPeriod && disabledWithoutPeriod.includes(currentPage);

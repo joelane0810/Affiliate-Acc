@@ -57,9 +57,9 @@ const AdCostForm: React.FC<{
     const [vatRate, setVatRate] = useState(cost?.vatRate || 0);
 
     const availableAdAccounts = useMemo(() => {
-        if (!projectId) return [];
+        if (!projectId) return adAccounts;
         const selectedProject = projectsForPeriod.find(p => p.id === projectId);
-        if (!selectedProject) return [];
+        if (!selectedProject) return adAccounts;
         
         return adAccounts.filter(acc => selectedProject.adsPlatforms.includes(acc.adsPlatform));
     }, [projectId, projectsForPeriod, adAccounts]);
@@ -110,7 +110,7 @@ const AdCostForm: React.FC<{
                             onChange={e => setAdAccountNumber(e.target.value)} 
                             className="flex-grow px-3 py-2 bg-gray-900 border border-gray-600 rounded-md focus:outline-none focus:ring-2 focus:ring-primary-500"
                             required
-                            disabled={!projectId || availableAdAccounts.length === 0}
+                            disabled={!projectId}
                         >
                             <option value="" disabled>-- Chọn tài khoản --</option>
                             {availableAdAccounts.map(acc => {
@@ -298,14 +298,17 @@ const AdDepositForm: React.FC<{
     
     const assetTypeMap = useMemo(() => new Map(assetTypes.map(at => [at.id, at])), [assetTypes]);
 
+    const availableAdAccounts = useMemo(() => {
+        return adAccounts.filter(acc => acc.adsPlatform === adsPlatform);
+    }, [adAccounts, adsPlatform]);
+
     useEffect(() => {
-        if (adAccountNumber) {
-            const selected = adAccounts.find(a => a.accountNumber === adAccountNumber);
-            if (selected) {
-                setAdsPlatform(selected.adsPlatform);
-            }
+        // If the selected account is not in the new list of available accounts, reset it.
+        if (adAccountNumber && !availableAdAccounts.some(acc => acc.accountNumber === adAccountNumber)) {
+            setAdAccountNumber('');
         }
-    }, [adAccountNumber, adAccounts]);
+    }, [adsPlatform, availableAdAccounts]);
+
 
     const groupedVndAssets = useMemo(() => {
         const vndAssets = assets.filter(a => a.currency === 'VND');
@@ -355,6 +358,16 @@ const AdDepositForm: React.FC<{
                 <Input id="date" type="date" value={date} onChange={e => setDate(e.target.value)} required />
             </div>
             <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                 <div>
+                    <Label htmlFor="adsPlatform">Nền tảng Ads</Label>
+                    <select id="adsPlatform" value={adsPlatform} onChange={e => {
+                        setAdsPlatform(e.target.value as T.AdsPlatform);
+                        setAdAccountNumber(''); // Reset account when platform changes
+                        setProjectId('');
+                    }} className={selectClassName}>
+                        {Object.entries(adsPlatformLabels).map(([key, label]) => <option key={key} value={key}>{label}</option>)}
+                    </select>
+                </div>
                 <div>
                     <Label htmlFor="adAccountNumber">Số tài khoản Ads</Label>
                     <select 
@@ -365,16 +378,7 @@ const AdDepositForm: React.FC<{
                         className={selectClassName}
                     >
                         <option value="" disabled>-- Chọn tài khoản --</option>
-                        {adAccounts.map(acc => <option key={acc.id} value={acc.accountNumber}>{acc.accountNumber} ({adsPlatformLabels[acc.adsPlatform]})</option>)}
-                    </select>
-                </div>
-                <div>
-                    <Label htmlFor="adsPlatform">Nền tảng Ads</Label>
-                    <select id="adsPlatform" value={adsPlatform} onChange={e => {
-                        setAdsPlatform(e.target.value as T.AdsPlatform);
-                        setProjectId('');
-                    }} className={selectClassName} disabled={!!adAccountNumber}>
-                        {Object.entries(adsPlatformLabels).map(([key, label]) => <option key={key} value={key}>{label}</option>)}
+                        {availableAdAccounts.map(acc => <option key={acc.id} value={acc.accountNumber}>{acc.accountNumber}</option>)}
                     </select>
                 </div>
                 <div>

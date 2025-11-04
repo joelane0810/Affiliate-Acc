@@ -7,7 +7,7 @@ export type Page =
   | 'Commissions' 
   | 'ExchangeLog' 
   | 'MiscellaneousExpenses' 
-  | 'DebtsReceivables' 
+  | 'CapitalSources' 
   | 'Partners' 
   | 'Assets' 
   | 'Tax' 
