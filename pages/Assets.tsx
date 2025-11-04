@@ -750,29 +750,46 @@ const WithdrawalForm: React.FC<{
 const CapitalInflowForm: React.FC<{
     inflow?: CapitalInflow;
     assets: Asset[];
+    partners: Partner[];
     onSave: (inflow: Omit<CapitalInflow, 'id'> | CapitalInflow) => void;
     onCancel: () => void;
-}> = ({ inflow, assets, onSave, onCancel }) => {
+}> = ({ inflow, assets, partners, onSave, onCancel }) => {
     const [date, setDate] = useState(inflow?.date || new Date().toISOString().split('T')[0]);
     const [description, setDescription] = useState(inflow?.description || '');
     const [assetId, setAssetId] = useState(inflow?.assetId || assets[0]?.id || '');
     const [amount, setAmount] = useState(inflow?.amount || 0);
+    
+    const [sourceType, setSourceType] = useState<'me' | 'partner' | 'external'>(() => {
+        if (inflow?.contributedByPartnerId && inflow.contributedByPartnerId !== 'default-me') return 'partner';
+        if (inflow?.externalInvestorName) return 'external';
+        return 'me';
+    });
+    const [contributedByPartnerId, setContributedByPartnerId] = useState(inflow?.contributedByPartnerId || 'default-me');
+    const [externalInvestorName, setExternalInvestorName] = useState(inflow?.externalInvestorName || '');
 
     const selectedAsset = useMemo(() => assets.find(a => a.id === assetId), [assets, assetId]);
 
     const handleSubmit = (e: React.FormEvent) => {
         e.preventDefault();
-        onSave({ 
-            ...inflow, 
-            id: inflow?.id || '', 
-            date, 
+        
+        const finalInflow: Omit<CapitalInflow, 'id'> | CapitalInflow = {
+            ...inflow,
+            id: inflow?.id || '',
+            date,
             description,
-            assetId, 
+            assetId,
             amount,
-        });
+            contributedByPartnerId: sourceType === 'partner' ? contributedByPartnerId : (sourceType === 'me' ? 'default-me' : undefined),
+            externalInvestorName: sourceType === 'external' ? externalInvestorName : undefined,
+        };
+
+        onSave(finalInflow);
     };
 
     const selectClassName = "w-full px-3 py-2 bg-gray-900 border border-gray-600 rounded-md focus:outline-none focus:ring-2 focus:ring-primary-500";
+    
+    const radioBaseClasses = "h-4 w-4 text-primary-600 bg-gray-700 border-gray-600 focus:ring-primary-500";
+    const radioLabelBaseClasses = "flex items-center space-x-2 cursor-pointer";
 
     return (
         <form onSubmit={handleSubmit} className="space-y-4">
@@ -784,7 +801,42 @@ const CapitalInflowForm: React.FC<{
                 <Label htmlFor="inflowDesc">Mô tả</Label>
                 <Input id="inflowDesc" value={description} onChange={e => setDescription(e.target.value)} placeholder="VD: Vốn góp ban đầu, Nhận đầu tư..." required />
             </div>
-            <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+
+            <div className="border-t border-gray-700 pt-4">
+                <Label className="mb-2">Nguồn vốn</Label>
+                <div className="flex space-x-6">
+                    <label className={radioLabelBaseClasses}>
+                        <input type="radio" name="sourceType" value="me" checked={sourceType === 'me'} onChange={() => setSourceType('me')} className={radioBaseClasses} />
+                        <span>Tự góp vốn</span>
+                    </label>
+                     <label className={radioLabelBaseClasses}>
+                        <input type="radio" name="sourceType" value="partner" checked={sourceType === 'partner'} onChange={() => setSourceType('partner')} className={radioBaseClasses} />
+                        <span>Đối tác</span>
+                    </label>
+                     <label className={radioLabelBaseClasses}>
+                        <input type="radio" name="sourceType" value="external" checked={sourceType === 'external'} onChange={() => setSourceType('external')} className={radioBaseClasses} />
+                        <span>Nhà đầu tư bên ngoài</span>
+                    </label>
+                </div>
+            </div>
+
+            {sourceType === 'partner' && (
+                <div>
+                    <Label htmlFor="inflowPartner">Đối tác góp vốn</Label>
+                    <select id="inflowPartner" value={contributedByPartnerId} onChange={e => setContributedByPartnerId(e.target.value)} className={selectClassName} required>
+                        {partners.map(p => <option key={p.id} value={p.id}>{p.name}</option>)}
+                    </select>
+                </div>
+            )}
+
+            {sourceType === 'external' && (
+                 <div>
+                    <Label htmlFor="inflowExternal">Tên nhà đầu tư</Label>
+                    <Input id="inflowExternal" value={externalInvestorName} onChange={e => setExternalInvestorName(e.target.value)} placeholder="VD: Mẹ tôi, Quỹ đầu tư ABC..." required />
+                </div>
+            )}
+            
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 border-t border-gray-700 pt-4">
                 <div>
                     <Label htmlFor="inflowAsset">Tài sản nhận</Label>
                     <select id="inflowAsset" value={assetId} onChange={e => setAssetId(e.target.value)} className={selectClassName} required>
@@ -1067,17 +1119,25 @@ function AssetBalanceContent() {
 
     const enrichedCapitalInflows = useMemo(() => {
         const assetMap = new Map<string, Asset>(assets.map(a => [a.id, a]));
+        const partnerMap = new Map<string, string>(partners.map(p => [p.id, p.name]));
         return capitalInflows
             .map(i => {
                 const asset = assetMap.get(i.assetId);
+                let sourceName = 'Tự góp vốn';
+                 if (i.contributedByPartnerId && i.contributedByPartnerId !== 'default-me') {
+                    sourceName = partnerMap.get(i.contributedByPartnerId) || 'Đối tác không xác định';
+                } else if (i.externalInvestorName) {
+                    sourceName = i.externalInvestorName;
+                }
                 return {
                     ...i,
                     assetName: asset?.name || 'N/A',
-                    currency: asset?.currency || 'VND'
+                    currency: asset?.currency || 'VND',
+                    sourceName
                 };
             })
             .sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime());
-    }, [capitalInflows, assets]);
+    }, [capitalInflows, assets, partners]);
 
 
     const shortTermLiabilities = useMemo(() => enrichedLiabilities.filter(l => l.type === 'short-term'), [enrichedLiabilities]);
@@ -1260,6 +1320,7 @@ function AssetBalanceContent() {
                         <TableHead><TableRow>
                             <TableHeader>Ngày</TableHeader>
                             <TableHeader>Mô tả</TableHeader>
+                            <TableHeader>Nguồn vốn</TableHeader>
                             <TableHeader>Tài sản</TableHeader>
                             <TableHeader>Số tiền</TableHeader>
                             {!isReadOnly && <TableHeader>Hành động</TableHeader>}
@@ -1268,7 +1329,8 @@ function AssetBalanceContent() {
                             {enrichedCapitalInflows.map(i => (
                                 <TableRow key={i.id}>
                                     <TableCell>{formatDate(i.date)}</TableCell>
-                                    <TableCell className="font-medium text-white">{i.description}</TableCell>
+                                    <TableCell className="font-medium text-white text-left">{i.description}</TableCell>
+                                    <TableCell>{i.sourceName}</TableCell>
                                     <TableCell>{i.assetName}</TableCell>
                                     <TableCell className="font-semibold text-green-400">{formatCurrency(i.amount, i.currency)}</TableCell>
                                     {!isReadOnly && (
@@ -1373,7 +1435,7 @@ function AssetBalanceContent() {
                     <ConfirmationModal isOpen={!!withdrawalToDelete} onClose={() => setWithdrawalToDelete(null)} onConfirm={handleConfirmDeleteWithdrawal} title="Xác nhận xóa giao dịch rút" message={`Bạn có chắc muốn xóa giao dịch rút tiền "${withdrawalToDelete?.description}" không?`} />
                 
                     <Modal isOpen={isCapitalInflowModalOpen} onClose={() => setIsCapitalInflowModalOpen(false)} title={editingCapitalInflow ? 'Sửa Vốn góp/Đầu tư' : 'Thêm Vốn góp/Đầu tư'}>
-                        <CapitalInflowForm inflow={editingCapitalInflow} assets={assets} onSave={handleSaveCapitalInflow} onCancel={() => setIsCapitalInflowModalOpen(false)} />
+                        <CapitalInflowForm inflow={editingCapitalInflow} assets={assets} partners={partners} onSave={handleSaveCapitalInflow} onCancel={() => setIsCapitalInflowModalOpen(false)} />
                     </Modal>
                     <ConfirmationModal isOpen={!!capitalInflowToDelete} onClose={() => setCapitalInflowToDelete(null)} onConfirm={handleConfirmDeleteCapitalInflow} title="Xác nhận xóa giao dịch" message={`Bạn có chắc muốn xóa giao dịch vốn góp "${capitalInflowToDelete?.description}" không?`} />
                 </>

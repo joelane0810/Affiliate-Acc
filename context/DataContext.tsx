@@ -275,7 +275,8 @@ const seedInitialData = async (db: Firestore) => {
     
     // 7. Capital Inflow
     batch.set(doc(collection(db, 'capitalInflows')), {
-        date: todayStr, assetId: vcbAssetRef.id, amount: 50000000, description: 'Vốn góp ban đầu'
+        date: todayStr, assetId: vcbAssetRef.id, amount: 50000000, description: 'Vốn góp ban đầu',
+        contributedByPartnerId: 'default-me',
     });
 
     // 8. Ad Deposit
@@ -1288,7 +1289,12 @@ export const DataProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
         withdrawals.forEach(w => addValue(w.assetId, w.withdrawnBy, w.amount, 'withdrawn'));
         debtPayments.forEach(p => addValue(p.assetId, mePartnerId, p.amount, 'withdrawn'));
         taxPayments.forEach(p => addValue(p.assetId, mePartnerId, p.amount, 'withdrawn'));
-        capitalInflows.forEach(inflow => addValue(inflow.assetId, mePartnerId, inflow.amount, 'received'));
+        
+        capitalInflows.forEach(inflow => {
+            const partnerToCredit = inflow.contributedByPartnerId || mePartnerId;
+            addValue(inflow.assetId, partnerToCredit, inflow.amount, 'received');
+        });
+
         receivablePayments.forEach(p => { if (assetMap.has(p.assetId)) addValue(p.assetId, mePartnerId, p.amount, 'received'); });
         receivables.forEach(r => { if (assetMap.has(r.outflowAssetId)) addValue(r.outflowAssetId, mePartnerId, r.totalAmount, 'withdrawn'); });
         

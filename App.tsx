@@ -1,8 +1,10 @@
 
+
 import React, { useState } from 'react';
 import { Sidebar } from './components/Sidebar';
 import { DataProvider, useData } from './context/DataContext';
 import { Card, CardContent } from './components/ui/Card';
+// FIX: The 'Page' type was not exported from 'types.ts'. I have added it to 'types.ts' to resolve this error.
 import { Page } from './types';
 import { Button } from './components/ui/Button';
 import { Menu } from './components/icons/IconComponents';
@@ -16,7 +18,6 @@ import ExchangeLog from './pages/ExchangeLog';
 import MiscellaneousExpenses from './pages/MiscellaneousExpenses';
 import DebtsReceivables from './pages/DebtsReceivables';
 import Partners from './pages/Partners';
-// FIX: Add default export to pages/Assets.tsx to resolve this import error. The fix is in pages/Assets.tsx.
 import Assets from './pages/Assets';
 import Tax from './pages/Tax';
 import Reports from './pages/Reports';

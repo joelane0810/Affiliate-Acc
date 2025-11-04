@@ -909,7 +909,7 @@ const ReceivablesContent = () => {
 // #endregion
 
 
-const TabButton: React.FC<{ active: boolean; onClick: () => void; children: React.ReactNode }> = ({ active, onClick, children }) => (
+const DebtsReceivablesTabButton: React.FC<{ active: boolean; onClick: () => void; children: React.ReactNode }> = ({ active, onClick, children }) => (
   <button
     onClick={onClick}
     className={`px-6 py-3 text-sm font-semibold transition-colors focus:outline-none ${
@@ -968,12 +968,12 @@ export default function DebtsReceivables() {
                 )}
             </Header>
              <div className="flex flex-wrap border-b border-gray-700 mb-6" role="tablist">
-                <TabButton active={activeTab === 'payable'} onClick={() => setActiveTab('payable')}>
+                <DebtsReceivablesTabButton active={activeTab === 'payable'} onClick={() => setActiveTab('payable')}>
                     Nợ phải trả
-                </TabButton>
-                <TabButton active={activeTab === 'receivable'} onClick={() => setActiveTab('receivable')}>
+                </DebtsReceivablesTabButton>
+                <DebtsReceivablesTabButton active={activeTab === 'receivable'} onClick={() => setActiveTab('receivable')}>
                     Nợ phải thu
-                </TabButton>
+                </DebtsReceivablesTabButton>
             </div>
              <div>
                 {activeTab === 'payable' && <LiabilitiesContent />}
