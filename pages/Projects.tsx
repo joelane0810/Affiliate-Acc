@@ -2,6 +2,8 @@
 
 
 
+
+
 import React, { useState, useMemo, useEffect } from 'react';
 import { useData } from '../context/DataContext';
 import * as T from '../types';
@@ -406,7 +408,8 @@ export default function Projects() {
         return niches.filter(n => n.categoryId === filters.categoryId);
     }, [filters.categoryId, niches]);
 
-    const yAxisTickFormatter = (value: number | string) => {
+    // FIX: Changed type of value from 'number | string' to 'any' to align with recharts prop type.
+    const yAxisTickFormatter = (value: any) => {
         const num = Number(value);
         if (isNaN(num)) return '0';
         
