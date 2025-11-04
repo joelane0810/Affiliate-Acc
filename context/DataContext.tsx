@@ -1224,6 +1224,8 @@ export const DataProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
   const currentPeriod = viewingPeriod || activePeriod;
   const isReadOnly = !!viewingPeriod;
   
+  const adAccountMap = useMemo(() => new Map(adAccounts.map(acc => [acc.accountNumber, acc])), [adAccounts]);
+
   const enrichedDailyAdCosts = useMemo<EnrichedDailyAdCost[]>(() => {
     const projectMap = new Map(projects.map(p => [p.id, p]));
     type LedgerItem = { amount: number, rate: number };
@@ -1270,14 +1272,17 @@ export const DataProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
 
     return sortedCosts.map(cost => {
         const project = projectMap.get(cost.projectId);
-        if (!project || !cost.adAccountNumber) return { ...cost, vndCost: 0, effectiveRate: 0 };
-        const depositForAccount = adDeposits.find(d => d.adAccountNumber === cost.adAccountNumber);
-        const platformForCosting = depositForAccount?.adsPlatform;
-        if (!platformForCosting) return { ...cost, vndCost: 0, effectiveRate: 0 };
+        const accountDetails = adAccountMap.get(cost.adAccountNumber);
+        
+        if (!project || !accountDetails) return { ...cost, vndCost: 0, effectiveRate: 0 };
+
+        const platformForCosting = accountDetails.adsPlatform;
         const accountKey = getAccountKey(platformForCosting, cost.adAccountNumber);
         const ledger = consumableLedgers.get(accountKey);
+
         let costRemaining = cost.amount;
         let totalVndCost = 0;
+
         if (ledger) {
              for (const deposit of ledger) {
                 if (deposit.amount > 0 && costRemaining > 0) {
@@ -1289,14 +1294,16 @@ export const DataProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
                 if (costRemaining <= 0.001) break;
             }
         }
-        if (costRemaining > 0.001 && adDeposits.length > 0) {
+        
+        if (costRemaining > 0.001) {
             const relevantDeposits = adDeposits.filter(d => d.adAccountNumber === cost.adAccountNumber).sort((a,b) => new Date(a.date).getTime() - new Date(b.date).getTime());
             const lastRate = relevantDeposits.length > 0 ? relevantDeposits[relevantDeposits.length - 1].rate : 25000;
             totalVndCost += costRemaining * lastRate;
         }
+
         return { ...cost, vndCost: totalVndCost, effectiveRate: cost.amount > 0 ? totalVndCost / cost.amount : 0 };
     });
-  }, [dailyAdCosts, adDeposits, adFundTransfers, projects]);
+  }, [dailyAdCosts, adDeposits, adFundTransfers, projects, adAccountMap]);
 
   const enrichedAssets = useMemo<EnrichedAsset[]>(() => {
         const assetOwnerStats = new Map<string, Map<string, { received: number, withdrawn: number }>>();

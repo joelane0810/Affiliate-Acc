@@ -1,6 +1,6 @@
 import React, { useState, useMemo, useEffect } from 'react';
 import { useData } from '../context/DataContext';
-import type { DailyAdCost, Project, Asset, AdDeposit, AdsPlatform, AdFundTransfer, AssetType } from '../types';
+import type * as T from '../types';
 import { Header } from '../components/Header';
 import { Button } from '../components/ui/Button';
 import { Card, CardContent, CardHeader } from '../components/ui/Card';
@@ -12,7 +12,7 @@ import { Plus, Edit, Trash2, ArrowRightLeft } from '../components/icons/IconComp
 import { formatCurrency, formatDate, isDateInPeriod } from '../lib/utils';
 import { ConfirmationModal } from '../components/ui/ConfirmationModal';
 
-const adsPlatformLabels: Record<AdsPlatform, string> = {
+const adsPlatformLabels: Record<T.AdsPlatform, string> = {
     google: 'Google Ads',
     youtube: 'Youtube Ads',
     tiktok: 'Tiktok Ads',
@@ -20,7 +20,7 @@ const adsPlatformLabels: Record<AdsPlatform, string> = {
     other: 'Other'
 };
 
-const adDepositStatusLabels: Record<AdDeposit['status'], string> = {
+const adAccountStatusLabels: Record<T.AdAccount['status'], string> = {
     running: 'Đang chạy',
     stopped: 'Đã dừng',
     cancelled: 'Đã hủy'
@@ -42,12 +42,13 @@ const TabButton: React.FC<{ active: boolean; onClick: () => void; children: Reac
 );
 
 const AdCostForm: React.FC<{
-    cost?: DailyAdCost;
-    projectsForPeriod: Project[];
-    onSave: (cost: Omit<DailyAdCost, 'id'> | DailyAdCost) => void;
+    cost?: T.DailyAdCost;
+    projectsForPeriod: T.Project[];
+    adAccounts: T.AdAccount[];
+    onSave: (cost: Omit<T.DailyAdCost, 'id'> | T.DailyAdCost) => void;
     onCancel: () => void;
-}> = ({ cost, projectsForPeriod, onSave, onCancel }) => {
-    const { currentPeriod, adDeposits } = useData();
+}> = ({ cost, projectsForPeriod, adAccounts, onSave, onCancel }) => {
+    const { currentPeriod } = useData();
     const [projectId, setProjectId] = useState(cost?.projectId || (projectsForPeriod[0]?.id || ''));
     const [adAccountNumber, setAdAccountNumber] = useState(cost?.adAccountNumber || '');
     const defaultDate = currentPeriod ? `${currentPeriod}-01` : new Date().toISOString().split('T')[0];
@@ -57,36 +58,25 @@ const AdCostForm: React.FC<{
 
     const availableAdAccounts = useMemo(() => {
         if (!projectId) return [];
+        const selectedProject = projectsForPeriod.find(p => p.id === projectId);
+        if (!selectedProject) return [];
         
-        const accountNumbersForProject = [...new Set(adDeposits
-            .filter(d => d.projectId === projectId)
-            .map(d => d.adAccountNumber))];
-
-        return accountNumbersForProject.map(accNum => {
-            const latestDepositForAccount = adDeposits
-                .filter(d => d.adAccountNumber === accNum)
-                .sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime())[0];
-            
-            return {
-                number: accNum,
-                status: latestDepositForAccount?.status || 'running'
-            };
-        });
-    }, [projectId, adDeposits]);
+        return adAccounts.filter(acc => selectedProject.adsPlatforms.includes(acc.adsPlatform));
+    }, [projectId, projectsForPeriod, adAccounts]);
 
     useEffect(() => {
         if (projectId) {
-            const accounts = availableAdAccounts.map(a => a.number);
+            const accounts = availableAdAccounts.map(a => a.accountNumber);
             if (!accounts.includes(adAccountNumber)) {
                 setAdAccountNumber(accounts[0] || '');
             }
         } else {
             setAdAccountNumber('');
         }
-    }, [projectId, adDeposits, availableAdAccounts]);
+    }, [projectId, availableAdAccounts]);
 
     const selectedAccountStatus = useMemo(() => {
-        return availableAdAccounts.find(acc => acc.number === adAccountNumber)?.status;
+        return availableAdAccounts.find(acc => acc.accountNumber === adAccountNumber)?.status;
     }, [adAccountNumber, availableAdAccounts]);
 
     const handleSubmit = (e: React.FormEvent) => {
@@ -127,7 +117,7 @@ const AdCostForm: React.FC<{
                                 let statusText = '';
                                 if (acc.status === 'stopped') statusText = ' (Đã dừng)';
                                 if (acc.status === 'cancelled') statusText = ' (Đã hủy)';
-                                return <option key={acc.number} value={acc.number}>{acc.number}{statusText}</option>
+                                return <option key={acc.id} value={acc.accountNumber}>{acc.accountNumber}{statusText}</option>
                             })}
                         </select>
                         <div className="flex-shrink-0 w-24 text-center">
@@ -136,7 +126,7 @@ const AdCostForm: React.FC<{
                         </div>
                     </div>
                     {projectId && availableAdAccounts.length === 0 && (
-                        <p className="text-xs text-yellow-400 mt-1">Dự án này chưa có giao dịch nạp tiền nào.</p>
+                        <p className="text-xs text-yellow-400 mt-1">Không có tài khoản Ads nào phù hợp với nền tảng của dự án này.</p>
                     )}
                 </div>
                 <div>
@@ -161,9 +151,9 @@ const AdCostForm: React.FC<{
 };
 
 const AdCostsContent = () => {
-    const { projects, enrichedDailyAdCosts, addDailyAdCost, updateDailyAdCost, deleteDailyAdCost, currentPeriod, isReadOnly } = useData();
+    const { projects, adAccounts, enrichedDailyAdCosts, addDailyAdCost, updateDailyAdCost, deleteDailyAdCost, currentPeriod, isReadOnly } = useData();
     const [isModalOpen, setIsModalOpen] = useState(false);
-    const [editingCost, setEditingCost] = useState<DailyAdCost | undefined>(undefined);
+    const [editingCost, setEditingCost] = useState<T.DailyAdCost | undefined>(undefined);
     const [isConfirmModalOpen, setIsConfirmModalOpen] = useState(false);
     const [costToDeleteId, setCostToDeleteId] = useState<string | null>(null);
 
@@ -182,9 +172,9 @@ const AdCostsContent = () => {
             .sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime());
     }, [enrichedDailyAdCosts, projects, currentPeriod]);
 
-    const handleSave = (cost: Omit<DailyAdCost, 'id'> | DailyAdCost) => {
+    const handleSave = (cost: Omit<T.DailyAdCost, 'id'> | T.DailyAdCost) => {
         if ('id' in cost && cost.id) {
-            updateDailyAdCost(cost as DailyAdCost);
+            updateDailyAdCost(cost as T.DailyAdCost);
         } else {
             addDailyAdCost(cost);
         }
@@ -267,6 +257,7 @@ const AdCostsContent = () => {
                         <AdCostForm
                             cost={editingCost}
                             projectsForPeriod={projectsForPeriod}
+                            adAccounts={adAccounts}
                             onSave={handleSave}
                             onCancel={() => { setIsModalOpen(false); setEditingCost(undefined); }}
                         />
@@ -286,30 +277,39 @@ const AdCostsContent = () => {
 
 
 const AdDepositForm: React.FC<{
-    deposit?: AdDeposit;
-    assets: Asset[];
-    assetTypes: AssetType[];
-    projectsForPeriod: Project[];
-    onSave: (deposit: Omit<AdDeposit, 'id'> | AdDeposit) => void;
+    deposit?: T.AdDeposit;
+    assets: T.Asset[];
+    assetTypes: T.AssetType[];
+    projectsForPeriod: T.Project[];
+    onSave: (deposit: Omit<T.AdDeposit, 'id'> | T.AdDeposit) => void;
     onCancel: () => void;
-    uniqueAdAccountNumbers: string[];
-}> = ({ deposit, assets, assetTypes, projectsForPeriod, onSave, onCancel, uniqueAdAccountNumbers }) => {
+    adAccounts: T.AdAccount[];
+}> = ({ deposit, assets, assetTypes, projectsForPeriod, onSave, onCancel, adAccounts }) => {
     const { currentPeriod } = useData();
     const defaultDate = currentPeriod ? `${currentPeriod}-01` : new Date().toISOString().split('T')[0];
     const [date, setDate] = useState(deposit?.date || defaultDate);
-    const [adsPlatform, setAdsPlatform] = useState<AdsPlatform>(deposit?.adsPlatform || 'google');
+    const [adsPlatform, setAdsPlatform] = useState<T.AdsPlatform>(deposit?.adsPlatform || 'google');
     const [adAccountNumber, setAdAccountNumber] = useState(deposit?.adAccountNumber || '');
     const [projectId, setProjectId] = useState(deposit?.projectId || '');
     const [assetId, setAssetId] = useState(deposit?.assetId || '');
     const [usdAmount, setUsdAmount] = useState(deposit?.usdAmount || 0);
     const [rate, setRate] = useState(deposit?.rate || 0);
-    const [status, setStatus] = useState<AdDeposit['status']>(deposit?.status || 'running');
+    const [status, setStatus] = useState<T.AdDeposit['status']>(deposit?.status || 'running');
     
     const assetTypeMap = useMemo(() => new Map(assetTypes.map(at => [at.id, at])), [assetTypes]);
 
+    useEffect(() => {
+        if (adAccountNumber) {
+            const selected = adAccounts.find(a => a.accountNumber === adAccountNumber);
+            if (selected) {
+                setAdsPlatform(selected.adsPlatform);
+            }
+        }
+    }, [adAccountNumber, adAccounts]);
+
     const groupedVndAssets = useMemo(() => {
         const vndAssets = assets.filter(a => a.currency === 'VND');
-        const grouped: { [typeId: string]: Asset[] } = {};
+        const grouped: { [typeId: string]: T.Asset[] } = {};
 
         for (const asset of vndAssets) {
             if (!grouped[asset.typeId]) {
@@ -333,8 +333,8 @@ const AdDepositForm: React.FC<{
 
     const handleSubmit = (e: React.FormEvent) => {
         e.preventDefault();
-        if (!assetId) {
-            alert("Vui lòng chọn tài sản chi trả.");
+        if (!assetId || !adAccountNumber) {
+            alert("Vui lòng chọn tài khoản Ads và tài sản chi trả.");
             return;
         }
         const vndAmount = usdAmount * rate;
@@ -357,25 +357,23 @@ const AdDepositForm: React.FC<{
             <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                 <div>
                     <Label htmlFor="adAccountNumber">Số tài khoản Ads</Label>
-                    <Input 
+                    <select 
                         id="adAccountNumber" 
                         value={adAccountNumber} 
                         onChange={e => setAdAccountNumber(e.target.value)} 
-                        required 
-                        list="ad-account-numbers"
-                        autoComplete="off"
-                        placeholder="Chọn hoặc nhập mới..."
-                    />
-                    <datalist id="ad-account-numbers">
-                        {uniqueAdAccountNumbers.map(acc => <option key={acc} value={acc} />)}
-                    </datalist>
+                        required
+                        className={selectClassName}
+                    >
+                        <option value="" disabled>-- Chọn tài khoản --</option>
+                        {adAccounts.map(acc => <option key={acc.id} value={acc.accountNumber}>{acc.accountNumber} ({adsPlatformLabels[acc.adsPlatform]})</option>)}
+                    </select>
                 </div>
                 <div>
                     <Label htmlFor="adsPlatform">Nền tảng Ads</Label>
                     <select id="adsPlatform" value={adsPlatform} onChange={e => {
-                        setAdsPlatform(e.target.value as AdsPlatform);
-                        setProjectId(''); // Reset project selection when platform changes
-                    }} className={selectClassName}>
+                        setAdsPlatform(e.target.value as T.AdsPlatform);
+                        setProjectId('');
+                    }} className={selectClassName} disabled={!!adAccountNumber}>
                         {Object.entries(adsPlatformLabels).map(([key, label]) => <option key={key} value={key}>{label}</option>)}
                     </select>
                 </div>
@@ -401,8 +399,8 @@ const AdDepositForm: React.FC<{
                 </div>
                  <div>
                     <Label htmlFor="status">Trạng thái</Label>
-                    <select id="status" value={status} onChange={e => setStatus(e.target.value as AdDeposit['status'])} className={selectClassName}>
-                        {Object.entries(adDepositStatusLabels).map(([key, label]) => <option key={key} value={key}>{label}</option>)}
+                    <select id="status" value={status} onChange={e => setStatus(e.target.value as T.AdDeposit['status'])} className={selectClassName}>
+                        {Object.entries(adAccountStatusLabels).map(([key, label]) => <option key={key} value={key}>{label}</option>)}
                     </select>
                 </div>
             </div>
@@ -429,43 +427,38 @@ const AdDepositForm: React.FC<{
 };
 
 const AdFundTransferForm: React.FC<{
-    onSave: (transfer: Omit<AdFundTransfer, 'id'>) => void;
+    onSave: (transfer: Omit<T.AdFundTransfer, 'id'>) => void;
     onCancel: () => void;
-    projectsForPeriod: Project[];
-}> = ({ onSave, onCancel, projectsForPeriod }) => {
-    const { adDeposits, currentPeriod } = useData();
+    adAccounts: T.AdAccount[];
+}> = ({ onSave, onCancel, adAccounts }) => {
+    const { currentPeriod } = useData();
     const defaultDate = currentPeriod ? `${currentPeriod}-01` : new Date().toISOString().split('T')[0];
 
     const [date, setDate] = useState(defaultDate);
-    const [adsPlatform, setAdsPlatform] = useState<AdsPlatform>('google');
+    const [adsPlatform, setAdsPlatform] = useState<T.AdsPlatform>('google');
     const [fromAdAccountNumber, setFromAdAccountNumber] = useState('');
     const [toAdAccountNumber, setToAdAccountNumber] = useState('');
     const [amount, setAmount] = useState(0);
     const [description, setDescription] = useState('');
-    const [projectId, setProjectId] = useState('');
 
-    const fromAccountOptions = useMemo(() => {
-        let relevantDeposits = adDeposits.filter(d => d.adsPlatform === adsPlatform);
-        if (projectId) {
-            relevantDeposits = relevantDeposits.filter(d => d.projectId === projectId);
-        }
-        const uniqueAccountNumbers = [...new Set(relevantDeposits.map(d => d.adAccountNumber))];
-        
-        return uniqueAccountNumbers.map(accNum => {
-            const latestDepositForAccount = adDeposits
-                .filter(d => d.adAccountNumber === accNum)
-                .sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime())[0];
-            
-            return {
-                number: accNum,
-                status: latestDepositForAccount?.status || 'running'
-            };
-        });
-    }, [adDeposits, adsPlatform, projectId]);
+    const fromAccountOptions = useMemo(() => 
+        adAccounts.filter(acc => acc.adsPlatform === adsPlatform), 
+    [adAccounts, adsPlatform]);
+
+    const toAccountOptions = useMemo(() => 
+        adAccounts.filter(acc => acc.adsPlatform === adsPlatform && acc.accountNumber !== fromAdAccountNumber),
+    [adAccounts, adsPlatform, fromAdAccountNumber]);
+
+    useEffect(() => {
+        setFromAdAccountNumber('');
+        setToAdAccountNumber('');
+    }, [adsPlatform]);
     
-    const selectedFromAccountStatus = useMemo(() => {
-        return fromAccountOptions.find(acc => acc.number === fromAdAccountNumber)?.status;
-    }, [fromAdAccountNumber, fromAccountOptions]);
+    useEffect(() => {
+        if(toAdAccountNumber === fromAdAccountNumber && fromAdAccountNumber !== '') {
+            setToAdAccountNumber('');
+        }
+    }, [fromAdAccountNumber, toAdAccountNumber]);
 
     const handleSubmit = (e: React.FormEvent) => {
         e.preventDefault();
@@ -490,59 +483,40 @@ const AdFundTransferForm: React.FC<{
             </div>
              <div>
                 <Label htmlFor="transferPlatform">Nền tảng Ads</Label>
-                <select id="transferPlatform" value={adsPlatform} onChange={e => {
-                    setAdsPlatform(e.target.value as AdsPlatform);
-                    setFromAdAccountNumber('');
-                    setProjectId('');
-                }} className={selectClassName}>
+                <select id="transferPlatform" value={adsPlatform} onChange={e => setAdsPlatform(e.target.value as T.AdsPlatform)} className={selectClassName}>
                     {Object.entries(adsPlatformLabels).map(([key, label]) => <option key={key} value={key}>{label}</option>)}
-                </select>
-            </div>
-            <div>
-                <Label htmlFor="transferProject">Dự án (Tùy chọn)</Label>
-                <select 
-                    id="transferProject" 
-                    value={projectId} 
-                    onChange={e => {
-                        setProjectId(e.target.value);
-                        setFromAdAccountNumber('');
-                    }} 
-                    className={selectClassName}
-                >
-                    <option value="">-- Lọc theo dự án --</option>
-                    {projectsForPeriod
-                        .filter(p => p.adsPlatforms.includes(adsPlatform))
-                        .map(p => <option key={p.id} value={p.id}>{p.name}</option>)}
                 </select>
             </div>
             <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                 <div>
                     <Label htmlFor="fromAccount">Từ tài khoản</Label>
-                    <div className="flex items-center space-x-2">
-                        <select 
-                            id="fromAccount" 
-                            value={fromAdAccountNumber} 
-                            onChange={e => setFromAdAccountNumber(e.target.value)} 
-                            className="flex-grow px-3 py-2 bg-gray-900 border border-gray-600 rounded-md focus:outline-none focus:ring-2 focus:ring-primary-500" 
-                            required
-                        >
-                            <option value="" disabled>-- Chọn TK nguồn --</option>
-                            {fromAccountOptions.map(acc => {
-                                let statusText = '';
-                                if (acc.status === 'stopped') statusText = ' (Đã dừng)';
-                                if (acc.status === 'cancelled') statusText = ' (Đã hủy)';
-                                return <option key={acc.number} value={acc.number}>{acc.number}{statusText}</option>
-                            })}
-                        </select>
-                        <div className="flex-shrink-0 text-center w-16">
-                            {selectedFromAccountStatus === 'stopped' && <span className="text-yellow-400 text-xs font-semibold">Đã dừng</span>}
-                            {selectedFromAccountStatus === 'cancelled' && <span className="text-red-400 text-xs font-semibold">Đã hủy</span>}
-                        </div>
-                    </div>
+                    <select 
+                        id="fromAccount" 
+                        value={fromAdAccountNumber} 
+                        onChange={e => setFromAdAccountNumber(e.target.value)} 
+                        className={selectClassName} 
+                        required
+                    >
+                        <option value="" disabled>-- Chọn TK nguồn --</option>
+                        {fromAccountOptions.map(acc => (
+                            <option key={acc.id} value={acc.accountNumber}>{acc.accountNumber}</option>
+                        ))}
+                    </select>
                 </div>
                  <div>
                     <Label htmlFor="toAccount">Đến tài khoản</Label>
-                    <Input id="toAccount" value={toAdAccountNumber} onChange={e => setToAdAccountNumber(e.target.value)} required />
+                    <select 
+                        id="toAccount" 
+                        value={toAdAccountNumber} 
+                        onChange={e => setToAdAccountNumber(e.target.value)} 
+                        className={selectClassName} 
+                        required
+                    >
+                        <option value="" disabled>-- Chọn TK đích --</option>
+                        {toAccountOptions.map(acc => (
+                            <option key={acc.id} value={acc.accountNumber}>{acc.accountNumber}</option>
+                        ))}
+                    </select>
                 </div>
             </div>
             <div>
@@ -562,18 +536,14 @@ const AdFundTransferForm: React.FC<{
 };
 
 const AdDepositsContent = () => {
-    const { assets, assetTypes, projects, adDeposits, addAdDeposit, updateAdDeposit, deleteAdDeposit, addAdFundTransfer, currentPeriod, isReadOnly } = useData();
+    const { assets, assetTypes, projects, adAccounts, adDeposits, addAdDeposit, updateAdDeposit, deleteAdDeposit, addAdFundTransfer, currentPeriod, isReadOnly } = useData();
     const [isModalOpen, setIsModalOpen] = useState(false);
     const [isTransferModalOpen, setIsTransferModalOpen] = useState(false);
-    const [editingDeposit, setEditingDeposit] = useState<AdDeposit | undefined>(undefined);
+    const [editingDeposit, setEditingDeposit] = useState<T.AdDeposit | undefined>(undefined);
     const [isConfirmModalOpen, setIsConfirmModalOpen] = useState(false);
     const [depositToDeleteId, setDepositToDeleteId] = useState<string | null>(null);
     
     const projectsForPeriod = useMemo(() => projects.filter(p => p.period === currentPeriod), [projects, currentPeriod]);
-
-    const uniqueAdAccountNumbers = useMemo(() => 
-        [...new Set(adDeposits.map(d => d.adAccountNumber))].sort()
-    , [adDeposits]);
 
     const enrichedDeposits = useMemo(() => {
         const projectMap = new Map(projects.map(p => [p.id, p.name]));
@@ -588,9 +558,9 @@ const AdDepositsContent = () => {
             .sort((a,b) => new Date(b.date).getTime() - new Date(a.date).getTime());
     }, [adDeposits, projects, assets, currentPeriod]);
 
-    const handleSave = (deposit: Omit<AdDeposit, 'id'> | AdDeposit) => {
+    const handleSave = (deposit: Omit<T.AdDeposit, 'id'> | T.AdDeposit) => {
         if ('id' in deposit && deposit.id) {
-            updateAdDeposit(deposit as AdDeposit);
+            updateAdDeposit(deposit as T.AdDeposit);
         } else {
             addAdDeposit(deposit);
         }
@@ -598,7 +568,7 @@ const AdDepositsContent = () => {
         setEditingDeposit(undefined);
     };
 
-    const handleSaveTransfer = (transfer: Omit<AdFundTransfer, 'id'>) => {
+    const handleSaveTransfer = (transfer: Omit<T.AdFundTransfer, 'id'>) => {
         addAdFundTransfer(transfer);
         setIsTransferModalOpen(false);
     };
@@ -624,7 +594,7 @@ const AdDepositsContent = () => {
                          <Button variant="secondary" onClick={() => setIsTransferModalOpen(true)}>
                             <span className="flex items-center gap-2"><ArrowRightLeft /> Chuyển tiền Ads</span>
                         </Button>
-                        <Button onClick={() => { setEditingDeposit(undefined); setIsModalOpen(true); }} disabled={assets.length === 0}>
+                        <Button onClick={() => { setEditingDeposit(undefined); setIsModalOpen(true); }} disabled={assets.length === 0 || adAccounts.length === 0}>
                             <span className="flex items-center gap-2"><Plus /> Thêm giao dịch nạp</span>
                         </Button>
                     </div>
@@ -665,7 +635,7 @@ const AdDepositsContent = () => {
                                             d.status === 'running' ? 'bg-green-200 text-green-800' : 
                                             d.status === 'stopped' ? 'bg-gray-200 text-gray-800' : 'bg-red-200 text-red-800'
                                         }`}>
-                                            {adDepositStatusLabels[d.status]}
+                                            {adAccountStatusLabels[d.status]}
                                         </span>
                                     </TableCell>
                                     {!isReadOnly && (
@@ -693,12 +663,12 @@ const AdDepositsContent = () => {
                             projectsForPeriod={projectsForPeriod}
                             onSave={handleSave}
                             onCancel={() => { setIsModalOpen(false); setEditingDeposit(undefined); }}
-                            uniqueAdAccountNumbers={uniqueAdAccountNumbers}
+                            adAccounts={adAccounts}
                         />
                     </Modal>
                     <Modal isOpen={isTransferModalOpen} onClose={() => setIsTransferModalOpen(false)} title="Chuyển tiền giữa các tài khoản Ads">
                         <AdFundTransferForm 
-                            projectsForPeriod={projectsForPeriod}
+                            adAccounts={adAccounts}
                             onSave={handleSaveTransfer} 
                             onCancel={() => setIsTransferModalOpen(false)} 
                         />
@@ -716,40 +686,96 @@ const AdDepositsContent = () => {
     );
 };
 
+const AdAccountForm: React.FC<{
+    account?: T.AdAccount;
+    onSave: (account: Omit<T.AdAccount, 'id'> | T.AdAccount) => void;
+    onCancel: () => void;
+}> = ({ account, onSave, onCancel }) => {
+    const [accountNumber, setAccountNumber] = useState(account?.accountNumber || '');
+    const [adsPlatform, setAdsPlatform] = useState<T.AdsPlatform>(account?.adsPlatform || 'google');
+    const [status, setStatus] = useState<T.AdAccount['status']>(account?.status || 'running');
+
+    const handleSubmit = (e: React.FormEvent) => {
+        e.preventDefault();
+        if (!accountNumber.trim()) {
+            alert("Vui lòng nhập số tài khoản.");
+            return;
+        }
+        onSave({ ...account, id: account?.id || '', accountNumber, adsPlatform, status });
+    };
+
+    const selectClassName = "w-full px-3 py-2 bg-gray-900 border border-gray-600 rounded-md focus:outline-none focus:ring-2 focus:ring-primary-500";
+
+    return (
+        <form onSubmit={handleSubmit} className="space-y-4">
+            <div>
+                <Label htmlFor="accountNumber">Số tài khoản</Label>
+                <Input id="accountNumber" value={accountNumber} onChange={e => setAccountNumber(e.target.value)} required />
+            </div>
+            <div>
+                <Label htmlFor="adsPlatform">Nền tảng</Label>
+                <select id="adsPlatform" value={adsPlatform} onChange={e => setAdsPlatform(e.target.value as T.AdsPlatform)} className={selectClassName}>
+                    {Object.entries(adsPlatformLabels).map(([key, label]) => <option key={key} value={key}>{label}</option>)}
+                </select>
+            </div>
+            <div>
+                <Label htmlFor="status">Trạng thái</Label>
+                <select id="status" value={status} onChange={e => setStatus(e.target.value as T.AdAccount['status'])} className={selectClassName}>
+                    {Object.entries(adAccountStatusLabels).map(([key, label]) => <option key={key} value={key}>{label}</option>)}
+                </select>
+            </div>
+            <div className="mt-6 flex justify-end space-x-3">
+                <Button type="button" variant="secondary" onClick={onCancel}>Hủy</Button>
+                <Button type="submit">Lưu</Button>
+            </div>
+        </form>
+    );
+};
+
 const AdAccountLedgerContent = () => {
-    const { adDeposits, adFundTransfers, dailyAdCosts, projects } = useData();
+    const { 
+        adAccounts, addAdAccount, updateAdAccount, deleteAdAccount,
+        adDeposits, adFundTransfers, dailyAdCosts, projects, isReadOnly 
+    } = useData();
+    
     const [selectedAccount, setSelectedAccount] = useState<string>('');
+    const [isModalOpen, setIsModalOpen] = useState(false);
+    const [editingAccount, setEditingAccount] = useState<T.AdAccount | undefined>(undefined);
+    const [accountToDelete, setAccountToDelete] = useState<T.AdAccount | null>(null);
 
     const projectMap = useMemo(() => new Map(projects.map(p => [p.id, p.name])), [projects]);
-
-    const adAccounts = useMemo(() => {
-        const accounts = new Set<string>();
-        adDeposits.forEach(d => accounts.add(d.adAccountNumber));
-        adFundTransfers.forEach(t => {
-            accounts.add(t.fromAdAccountNumber);
-            accounts.add(t.toAdAccountNumber);
-        });
-        dailyAdCosts.forEach(c => accounts.add(c.adAccountNumber));
-        return Array.from(accounts).sort();
-    }, [adDeposits, adFundTransfers, dailyAdCosts]);
     
      useEffect(() => {
         if (!selectedAccount && adAccounts.length > 0) {
-            setSelectedAccount(adAccounts[0]);
+            setSelectedAccount(adAccounts[0].accountNumber);
         }
     }, [adAccounts, selectedAccount]);
 
+    const handleSaveAccount = (account: Omit<T.AdAccount, 'id'> | T.AdAccount) => {
+        if ('id' in account && account.id) {
+            updateAdAccount(account as T.AdAccount);
+        } else {
+            addAdAccount(account);
+        }
+        setIsModalOpen(false);
+    };
+
+    const handleDeleteClick = (account: T.AdAccount) => {
+        setAccountToDelete(account);
+    };
+
+    const handleConfirmDelete = () => {
+        if (accountToDelete) {
+            deleteAdAccount(accountToDelete.id);
+            setAccountToDelete(null);
+            if (selectedAccount === accountToDelete.accountNumber) {
+                setSelectedAccount(adAccounts.length > 1 ? adAccounts.filter(a => a.id !== accountToDelete.id)[0].accountNumber : '');
+            }
+        }
+    };
 
     const ledgerData = useMemo(() => {
         if (!selectedAccount) return [];
-
-        type LedgerEntry = {
-            date: string;
-            description: string;
-            deposit: number;
-            spent: number;
-            balance: number;
-        };
 
         const transactions = [
             ...adDeposits.filter(d => d.adAccountNumber === selectedAccount)
@@ -785,49 +811,55 @@ const AdAccountLedgerContent = () => {
 
     return (
         <div>
-            <Header title="Sổ chi tiết tài khoản Ads" />
-            <Card>
+            <Header title="Quản lý & Sổ chi tiết tài khoản Ads">
+                {!isReadOnly && (
+                    <Button onClick={() => { setEditingAccount(undefined); setIsModalOpen(true); }}>
+                        <span className="flex items-center gap-2"><Plus /> Thêm tài khoản Ads</span>
+                    </Button>
+                )}
+            </Header>
+            <Card className="mb-8">
+                <CardHeader>Danh sách tài khoản Ads</CardHeader>
                 <CardContent>
-                    <div className="mb-4">
-                        <Label htmlFor="ledgerAccountSelect">Chọn tài khoản Ads</Label>
-                         <select 
-                            id="ledgerAccountSelect"
-                            value={selectedAccount} 
-                            onChange={e => setSelectedAccount(e.target.value)}
-                            className="w-full max-w-sm px-3 py-2 bg-gray-900 border border-gray-600 rounded-md focus:outline-none focus:ring-2 focus:ring-primary-500"
-                        >
-                            {adAccounts.map(acc => <option key={acc} value={acc}>{acc}</option>)}
-                        </select>
-                    </div>
-                     <Table>
+                    <Table>
                         <TableHead>
                             <TableRow>
-                                <TableHeader>Ngày</TableHeader>
-                                <TableHeader>Mô tả</TableHeader>
-                                <TableHeader>Nạp (USD)</TableHeader>
-                                <TableHeader>Tiêu (USD)</TableHeader>
-                                <TableHeader>Số dư (USD)</TableHeader>
+                                <TableHeader>Số tài khoản</TableHeader>
+                                <TableHeader>Nền tảng</TableHeader>
+                                <TableHeader>Trạng thái</TableHeader>
+                                {!isReadOnly && <TableHeader>Hành động</TableHeader>}
                             </TableRow>
                         </TableHead>
                         <TableBody>
-                            {ledgerData.length > 0 ? ledgerData.map((row, index) => (
-                                <TableRow key={index}>
-                                    <TableCell>{formatDate(row.date)}</TableCell>
-                                    <TableCell className="text-left">{row.description}</TableCell>
-                                    <TableCell className="text-green-400">
-                                        {row.deposit > 0 ? formatCurrency(row.deposit, 'USD') : '—'}
+                            {adAccounts.length > 0 ? adAccounts.map(acc => (
+                                <TableRow 
+                                    key={acc.id} 
+                                    onClick={() => setSelectedAccount(acc.accountNumber)}
+                                    className={`cursor-pointer ${selectedAccount === acc.accountNumber ? 'bg-primary-900/50' : ''}`}
+                                >
+                                    <TableCell className="font-medium text-white">{acc.accountNumber}</TableCell>
+                                    <TableCell>{adsPlatformLabels[acc.adsPlatform]}</TableCell>
+                                    <TableCell>
+                                        <span className={`px-2 inline-flex text-xs leading-5 font-semibold rounded-full ${
+                                            acc.status === 'running' ? 'bg-green-200 text-green-800' : 
+                                            acc.status === 'stopped' ? 'bg-gray-200 text-gray-800' : 'bg-red-200 text-red-800'
+                                        }`}>
+                                            {adAccountStatusLabels[acc.status]}
+                                        </span>
                                     </TableCell>
-                                    <TableCell className="text-red-400">
-                                        {row.spent > 0 ? formatCurrency(row.spent, 'USD') : '—'}
-                                    </TableCell>
-                                    <TableCell className="font-semibold text-white">
-                                        {formatCurrency(row.balance, 'USD')}
-                                    </TableCell>
+                                    {!isReadOnly && (
+                                        <TableCell>
+                                            <div className="flex items-center space-x-3 justify-center">
+                                                <button onClick={(e) => { e.stopPropagation(); setEditingAccount(acc); setIsModalOpen(true); }} className="text-gray-400 hover:text-primary-400"><Edit /></button>
+                                                <button onClick={(e) => { e.stopPropagation(); handleDeleteClick(acc); }} className="text-gray-400 hover:text-red-400"><Trash2 /></button>
+                                            </div>
+                                        </TableCell>
+                                    )}
                                 </TableRow>
                             )) : (
                                 <TableRow>
-                                    <TableCell colSpan={5} className="text-center text-gray-500 py-8">
-                                        {selectedAccount ? 'Không có giao dịch cho tài khoản này.' : 'Vui lòng chọn một tài khoản.'}
+                                    <TableCell colSpan={!isReadOnly ? 4 : 3} className="text-center text-gray-500 py-8">
+                                        Chưa có tài khoản Ads nào. Hãy thêm một tài khoản mới.
                                     </TableCell>
                                 </TableRow>
                             )}
@@ -835,6 +867,67 @@ const AdAccountLedgerContent = () => {
                     </Table>
                 </CardContent>
             </Card>
+
+            {selectedAccount && (
+                 <Card>
+                    <CardHeader>Sổ chi tiết cho tài khoản: {selectedAccount}</CardHeader>
+                    <CardContent>
+                         <Table>
+                            <TableHead>
+                                <TableRow>
+                                    <TableHeader>Ngày</TableHeader>
+                                    <TableHeader>Mô tả</TableHeader>
+                                    <TableHeader>Nạp (USD)</TableHeader>
+                                    <TableHeader>Tiêu (USD)</TableHeader>
+                                    <TableHeader>Số dư (USD)</TableHeader>
+                                </TableRow>
+                            </TableHead>
+                            <TableBody>
+                                {ledgerData.length > 0 ? ledgerData.map((row, index) => (
+                                    <TableRow key={index}>
+                                        <TableCell>{formatDate(row.date)}</TableCell>
+                                        <TableCell className="text-left">{row.description}</TableCell>
+                                        <TableCell className="text-green-400">
+                                            {row.deposit > 0 ? formatCurrency(row.deposit, 'USD') : '—'}
+                                        </TableCell>
+                                        <TableCell className="text-red-400">
+                                            {row.spent > 0 ? formatCurrency(row.spent, 'USD') : '—'}
+                                        </TableCell>
+                                        <TableCell className="font-semibold text-white">
+                                            {formatCurrency(row.balance, 'USD')}
+                                        </TableCell>
+                                    </TableRow>
+                                )) : (
+                                    <TableRow>
+                                        <TableCell colSpan={5} className="text-center text-gray-500 py-8">
+                                            Không có giao dịch cho tài khoản này.
+                                        </TableCell>
+                                    </TableRow>
+                                )}
+                            </TableBody>
+                        </Table>
+                    </CardContent>
+                </Card>
+            )}
+
+            {!isReadOnly && (
+                <>
+                    <Modal isOpen={isModalOpen} onClose={() => setIsModalOpen(false)} title={editingAccount ? 'Sửa tài khoản Ads' : 'Thêm tài khoản Ads'}>
+                        <AdAccountForm 
+                            account={editingAccount}
+                            onSave={handleSaveAccount}
+                            onCancel={() => setIsModalOpen(false)}
+                        />
+                    </Modal>
+                     <ConfirmationModal
+                        isOpen={!!accountToDelete}
+                        onClose={() => setAccountToDelete(null)}
+                        onConfirm={handleConfirmDelete}
+                        title="Xác nhận xóa tài khoản Ads"
+                        message={`Bạn có chắc muốn xóa tài khoản "${accountToDelete?.accountNumber}"? Hành động này không thể hoàn tác.`}
+                    />
+                </>
+            )}
         </div>
     );
 };
@@ -853,7 +946,7 @@ export default function DailyAdCosts() {
                     Nạp tiền Ads
                 </TabButton>
                  <TabButton active={activeTab === 'ledger'} onClick={() => setActiveTab('ledger')}>
-                    Sổ chi tiết tài khoản Ads
+                    Quản lý & Sổ chi tiết Ads
                 </TabButton>
             </div>
              <div>

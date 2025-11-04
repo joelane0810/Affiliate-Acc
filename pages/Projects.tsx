@@ -4,6 +4,9 @@
 
 
 
+
+
+
 import React, { useState, useMemo, useEffect } from 'react';
 import { useData } from '../context/DataContext';
 import * as T from '../types';
@@ -358,7 +361,8 @@ const CustomChartTooltip = ({ active, payload, label }: TooltipProps<ValueType, 
   if (active && payload && payload.length) {
     return (
       <div className="bg-gray-800 p-3 border border-gray-600 rounded-lg shadow-lg">
-        <p className="label text-white font-bold mb-2">{formatDate(label)}</p>
+        {/* FIX: The 'label' prop from recharts can be a string or a number, but `formatDate` expects a string. Cast to string to prevent type errors. */}
+        <p className="label text-white font-bold mb-2">{formatDate(String(label))}</p>
         {payload.map((pld, index) => (
             <p key={index} style={{ color: pld.color }} className="text-sm">
                 {`${pld.name}: ${formatCurrency(pld.value as number)}`}
@@ -794,7 +798,8 @@ export default function Projects() {
                                     <XAxis 
                                         dataKey="date" 
                                         stroke="#94a3b8" 
-                                        tickFormatter={(tick) => formatDate(tick).substring(0, 5)} // dd/MM
+                                        // FIX: The 'tick' value from recharts can be of a non-string type, but `formatDate` expects a string. This was likely the source of the build error.
+                                        tickFormatter={(tick) => formatDate(String(tick)).substring(0, 5)} // dd/MM
                                     />
                                     <YAxis 
                                         stroke="#94a3b8" 
