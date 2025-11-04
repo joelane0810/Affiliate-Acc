@@ -1,3 +1,5 @@
+
+
 import React, { createContext, useContext, ReactNode, useMemo, useState, useEffect } from 'react';
 import { useLocalStorage } from '../hooks/useLocalStorage';
 import * as T from '../types';
@@ -1319,14 +1321,14 @@ export const DataProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
         });
         // FIX: Explicitly type the accumulator and initial value in reduce to ensure correct type inference.
         const revenueDetails = Object.entries(
-            Array.from(projectPnL.entries()).reduce((acc: Record<string, number>, [projectId, pnl]) => {
+            Array.from(projectPnL.entries()).reduce((acc, [projectId, pnl]) => {
                 const name = projectMap.get(projectId) || 'Dự án không xác định';
                 acc[name] = (acc[name] || 0) + pnl.revenue;
                 return acc;
             }, {} as Record<string, number>)
         ).map(([name, amount]) => ({ name, amount }));
         const adCostDetails = Object.entries(
-            periodAdCosts.reduce((acc: Record<string, number>, cost) => {
+            periodAdCosts.reduce((acc, cost) => {
                 const name = projectMap.get(cost.projectId) || 'Dự án không xác định';
                 acc[name] = (acc[name] || 0) + cost.vndCost;
                 return acc;

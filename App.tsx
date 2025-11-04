@@ -1,10 +1,11 @@
+
 import React, { useState } from 'react';
 import { Sidebar } from './components/Sidebar';
 import { DataProvider, useData } from './context/DataContext';
 import { Card, CardContent } from './components/ui/Card';
 import { Page } from './types';
-// FIX: Import the 'Button' component.
 import { Button } from './components/ui/Button';
+import { Menu } from './components/icons/IconComponents';
 
 // Dynamically import pages
 import Dashboard from './pages/Dashboard';
@@ -15,6 +16,7 @@ import ExchangeLog from './pages/ExchangeLog';
 import MiscellaneousExpenses from './pages/MiscellaneousExpenses';
 import DebtsReceivables from './pages/DebtsReceivables';
 import Partners from './pages/Partners';
+// FIX: Add default export to pages/Assets.tsx to resolve this import error. The fix is in pages/Assets.tsx.
 import Assets from './pages/Assets';
 import Tax from './pages/Tax';
 import Reports from './pages/Reports';
@@ -94,15 +96,15 @@ const ViewingModeIndicator = () => {
     const periodLabel = new Date(parseInt(year), parseInt(month) - 1).toLocaleString('vi-VN', { month: 'long', year: 'numeric' });
 
     return (
-        <div className="fixed top-4 right-8 bg-blue-900/80 backdrop-blur-sm border border-primary-700 text-white text-sm rounded-lg shadow-lg z-50 flex items-center p-2">
+        <div className="fixed top-4 right-4 sm:right-8 bg-blue-900/80 backdrop-blur-sm border border-primary-700 text-white text-sm rounded-lg shadow-lg z-50 flex items-center p-2">
             <div className="p-2">
                 <p>
-                    Đang xem kỳ báo cáo: <span className="font-bold">{periodLabel}</span>
+                    Đang xem: <span className="font-bold hidden sm:inline">kỳ báo cáo: </span><span className="font-bold">{periodLabel}</span>
                 </p>
             </div>
             <button
                 onClick={clearViewingPeriod}
-                className="ml-4 px-3 py-1 bg-primary-600 hover:bg-primary-700 rounded-md font-semibold transition-colors"
+                className="ml-2 sm:ml-4 px-3 py-1 bg-primary-600 hover:bg-primary-700 rounded-md font-semibold transition-colors"
             >
                 Thoát
             </button>
@@ -112,6 +114,7 @@ const ViewingModeIndicator = () => {
 
 const AppContent = () => {
   const [isSidebarExpanded, setIsSidebarExpanded] = useState(true);
+  const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false);
   const { isLoading, activePeriod, viewingPeriod, currentPage, setCurrentPage, firebaseConfig, closedPeriods } = useData();
 
   if (isLoading) {
@@ -139,13 +142,33 @@ const AppContent = () => {
 
 
   return (
-    <div className="flex h-screen bg-gray-900 text-gray-200">
+    <div className="relative min-h-screen md:flex bg-gray-900 text-gray-200">
+      {/* Overlay for mobile */}
+      {isMobileMenuOpen && (
+        <div 
+          className="fixed inset-0 bg-black/60 z-30 md:hidden"
+          onClick={() => setIsMobileMenuOpen(false)}
+          aria-hidden="true"
+        ></div>
+      )}
+      
       <ViewingModeIndicator />
       <Sidebar 
         isExpanded={isSidebarExpanded}
         setIsExpanded={setIsSidebarExpanded}
+        isMobileOpen={isMobileMenuOpen}
+        setIsMobileOpen={setIsMobileMenuOpen}
       />
-      <main className={`flex-1 flex flex-col transition-all duration-300 ${isSidebarExpanded ? 'ml-64' : 'ml-20'}`}>
+      <main className={`flex-1 flex flex-col transition-all duration-300 md:${isSidebarExpanded ? 'ml-64' : 'ml-20'}`}>
+        {/* Mobile Header */}
+        <header className="md:hidden flex items-center justify-between p-4 border-b border-gray-800 sticky top-0 bg-gray-900 z-20">
+          <button onClick={() => setIsMobileMenuOpen(true)} className="text-gray-300 hover:text-white" aria-label="Mở menu">
+            <Menu />
+          </button>
+          <h1 className="text-lg font-bold text-white capitalize">{currentPage.replace(/([A-Z])/g, ' $1').trim()}</h1>
+          <div className="w-6"></div> {/* Spacer to balance the title */}
+        </header>
+
         <div className="flex-1 p-4 sm:p-6 lg:p-8 overflow-y-auto">
           {mainContent}
         </div>

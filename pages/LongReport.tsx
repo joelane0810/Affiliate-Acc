@@ -778,7 +778,7 @@ export default function LongReport() {
     <div>
       <Header title="Tổng hợp báo cáo" />
       
-      <div className="border-b border-gray-700" role="tablist">
+      <div className="flex flex-wrap border-b border-gray-700" role="tablist">
         <TabButton active={activeTab === 'reportingPeriod'} onClick={() => setActiveTab('reportingPeriod')}>
           Kỳ báo cáo
         </TabButton>

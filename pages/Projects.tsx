@@ -1,6 +1,7 @@
 
 
 
+
 import React, { useState, useMemo, useEffect } from 'react';
 import { useData } from '../context/DataContext';
 import * as T from '../types';
@@ -11,7 +12,7 @@ import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '.
 import { Modal } from '../components/ui/Modal';
 import { Input, Label } from '../components/ui/Input';
 import { NumberInput } from '../components/ui/NumberInput';
-import { Plus, Edit, Trash2, Users } from '../components/icons/IconComponents';
+import { Plus, Edit, Trash2, Users, X } from '../components/icons/IconComponents';
 import { formatCurrency, isDateInPeriod, formatPercentage, formatDate } from '../lib/utils';
 import { ConfirmationModal } from '../components/ui/ConfirmationModal';
 import { ResponsiveContainer, LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, Legend, TooltipProps } from 'recharts';
@@ -232,7 +233,7 @@ const ProjectForm: React.FC<{ project?: T.Project; onSave: (project: Omit<T.Proj
                         )}
                     </div>
                 </div>
-                <div className="grid grid-cols-2 gap-4">
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                     <div>
                         <Label htmlFor="category">Hạng mục</Label>
                         <select id="category" value={categoryId} onChange={e => setCategoryId(e.target.value)} className={selectClassName}>
@@ -264,7 +265,7 @@ const ProjectForm: React.FC<{ project?: T.Project; onSave: (project: Omit<T.Proj
                         ))}
                     </div>
                 </div>
-                <div className="grid grid-cols-2 gap-4">
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                      <div>
                         <Label htmlFor="projectType">Loại</Label>
                         <select id="projectType" value={projectType} onChange={e => setProjectType(e.target.value as T.ProjectType)} className={selectClassName}>
@@ -604,7 +605,7 @@ export default function Projects() {
                 )}
             </Header>
 
-            <div className="border-b border-gray-700 mb-6" role="tablist">
+            <div className="flex flex-wrap border-b border-gray-700 mb-6" role="tablist">
                  <TabButton active={activeTab === 'report'} onClick={() => setActiveTab('report')}>
                     Báo cáo dự án
                 </TabButton>
@@ -615,7 +616,7 @@ export default function Projects() {
             
             <Card className="mb-6">
                 <CardContent>
-                    <div className="grid grid-cols-2 md:grid-cols-4 lg:grid-cols-8 gap-4 items-end">
+                    <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-4 lg:grid-cols-8 gap-4 items-end">
                         <div className="lg:col-span-2">
                             <Label htmlFor="filter-project-id">Tên dự án</Label>
                             <select 

@@ -1,4 +1,6 @@
 
+
+
 import React, { useState, useMemo } from 'react';
 import { useData } from '../context/DataContext';
 import type { Liability, Asset, Receivable, ReceivablePayment, DebtPayment } from '../types';
@@ -487,7 +489,7 @@ export default function DebtsReceivables() {
     return (
         <div>
             <Header title="Công nợ & Phải thu trong kỳ" />
-             <div className="border-b border-gray-700 mb-6" role="tablist">
+             <div className="flex flex-wrap border-b border-gray-700 mb-6" role="tablist">
                 <TabButton active={activeTab === 'payable'} onClick={() => setActiveTab('payable')}>
                     Nợ phải trả
                 </TabButton>

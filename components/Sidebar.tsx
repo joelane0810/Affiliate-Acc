@@ -2,13 +2,15 @@ import React from 'react';
 import type { Page } from '../types';
 import { 
   LayoutDashboard, BarChart3, Target, DollarSign, Repeat, Package, 
-  Handshake, Users, Landmark, Banknote, FileText, CalendarClock, Settings, ChevronLeft, ChevronRight, Book 
+  Handshake, Users, Landmark, Banknote, FileText, CalendarClock, Settings, ChevronLeft, ChevronRight, Book, X
 } from './icons/IconComponents';
 import { useData } from '../context/DataContext';
 
 interface SidebarProps {
   isExpanded: boolean;
   setIsExpanded: (expanded: boolean) => void;
+  isMobileOpen: boolean;
+  setIsMobileOpen: (open: boolean) => void;
 }
 
 const navItems: { page: Page; label: string; icon: React.ReactNode }[] = [
@@ -29,8 +31,13 @@ const navItems: { page: Page; label: string; icon: React.ReactNode }[] = [
 
 const alwaysEnabledPages: Page[] = ['Assets', 'Reports', 'LongReport', 'Settings'];
 
-export const Sidebar: React.FC<SidebarProps> = ({ isExpanded, setIsExpanded }) => {
+export const Sidebar: React.FC<SidebarProps> = ({ isExpanded, setIsExpanded, isMobileOpen, setIsMobileOpen }) => {
   const { activePeriod, viewingPeriod, currentPage, setCurrentPage } = useData();
+
+  const handleNavigation = (page: Page) => {
+    setCurrentPage(page);
+    setIsMobileOpen(false); // Close menu on mobile after navigation
+  };
 
   let periodLabel = '';
   let statusLabel = '';
@@ -53,15 +60,20 @@ export const Sidebar: React.FC<SidebarProps> = ({ isExpanded, setIsExpanded }) =
       showIndicator = true;
   }
 
+  const showText = isExpanded || isMobileOpen;
+
   return (
-    <aside className={`fixed top-0 left-0 h-full bg-gray-950 flex flex-col z-10 transition-all duration-300 ${isExpanded ? 'w-64' : 'w-20'}`}>
+    <aside className={`fixed top-0 left-0 h-full bg-gray-950 flex flex-col z-40 w-64 transition-transform duration-300 ease-in-out ${isMobileOpen ? 'translate-x-0' : '-translate-x-full'} md:translate-x-0 md:transition-all ${isExpanded ? 'md:w-64' : 'md:w-20'}`}>
       {/* Header with Period Indicator */}
-      <div className={`flex items-center border-b border-gray-800 h-16 shrink-0 ${isExpanded ? 'pl-4' : 'justify-center'}`}>
+      <div className={`flex items-center border-b border-gray-800 h-16 shrink-0 relative ${showText ? 'pl-4' : 'justify-center'}`}>
+        <button className="absolute top-3 right-3 text-gray-400 hover:text-white md:hidden p-2" onClick={() => setIsMobileOpen(false)} aria-label="Đóng menu">
+            <X />
+        </button>
         <div className="flex items-center min-w-0">
           {showIndicator && (
               <div className="flex items-center">
                   <Book className={`flex-shrink-0 ${statusColor}`} />
-                  {isExpanded && (
+                  {showText && (
                       <div className="ml-3 truncate">
                           <p className={`text-xs ${statusColor}`}>{statusLabel}</p>
                           <p className="font-semibold text-white leading-tight">{periodLabel}</p>
@@ -80,17 +92,17 @@ export const Sidebar: React.FC<SidebarProps> = ({ isExpanded, setIsExpanded }) =
             return (
               <li key={item.page}>
                 <button
-                  onClick={() => setCurrentPage(item.page)}
+                  onClick={() => handleNavigation(item.page)}
                   disabled={isDisabled}
                   className={`flex items-center w-full text-left p-4 my-1 transition-colors duration-200 ${
                     currentPage === item.page
                       ? 'bg-primary-600 text-white'
                       : 'text-gray-400 hover:bg-gray-800 hover:text-white'
-                  } ${!isExpanded ? 'justify-center' : ''}
+                  } ${!showText ? 'justify-center' : ''}
                   ${isDisabled ? 'opacity-50 cursor-not-allowed' : ''}`}
                 >
                   <div className="flex-shrink-0">{item.icon}</div>
-                  {isExpanded && <span className="ml-4">{item.label}</span>}
+                  {showText && <span className="ml-4">{item.label}</span>}
                 </button>
               </li>
             )
@@ -99,14 +111,14 @@ export const Sidebar: React.FC<SidebarProps> = ({ isExpanded, setIsExpanded }) =
       </nav>
 
       {/* Footer with App Name and Toggle */}
-      <div className={`flex items-center border-t border-gray-800 shrink-0 h-16 relative ${isExpanded ? 'p-4' : 'justify-center'}`}>
-        <div className={`flex items-center ${isExpanded ? 'flex-1 min-w-0' : ''}`}>
+      <div className={`flex items-center border-t border-gray-800 shrink-0 h-16 relative ${showText ? 'p-4' : 'justify-center'}`}>
+        <div className={`flex items-center ${showText ? 'flex-1 min-w-0' : ''}`}>
             <Banknote className="w-8 h-8 text-primary-500 flex-shrink-0" />
-            {isExpanded && <h1 className="text-xl font-bold ml-3 text-white truncate">Affiliate Acc.</h1>}
+            {showText && <h1 className="text-xl font-bold ml-3 text-white truncate">Affiliate Acc.</h1>}
         </div>
         <button 
           onClick={() => setIsExpanded(!isExpanded)} 
-          className={`text-gray-400 hover:text-white p-2 rounded-lg hover:bg-gray-800 flex-shrink-0 ${isExpanded ? '' : 'absolute right-2 top-1/2 -translate-y-1/2'}`}
+          className={`hidden md:flex text-gray-400 hover:text-white p-2 rounded-lg hover:bg-gray-800 flex-shrink-0 ${isExpanded ? '' : 'absolute right-2 top-1/2 -translate-y-1/2'}`}
           aria-label={isExpanded ? 'Thu gọn thanh công cụ' : 'Mở rộng thanh công cụ'}
         >
           {isExpanded ? <ChevronLeft /> : <ChevronRight />}

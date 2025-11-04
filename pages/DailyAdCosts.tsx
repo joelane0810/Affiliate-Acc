@@ -353,7 +353,7 @@ const AdDepositForm: React.FC<{
                 <Label htmlFor="date">Ngày nạp</Label>
                 <Input id="date" type="date" value={date} onChange={e => setDate(e.target.value)} required />
             </div>
-            <div className="grid grid-cols-2 gap-4">
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                 <div>
                     <Label htmlFor="adAccountNumber">Số tài khoản Ads</Label>
                     <Input id="adAccountNumber" value={adAccountNumber} onChange={e => setAdAccountNumber(e.target.value)} required />
@@ -503,7 +503,7 @@ const AdFundTransferForm: React.FC<{
                         .map(p => <option key={p.id} value={p.id}>{p.name}</option>)}
                 </select>
             </div>
-            <div className="grid grid-cols-2 gap-4">
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                 <div>
                     <Label htmlFor="fromAccount">Từ tài khoản</Label>
                     <div className="flex items-center space-x-2">
@@ -828,7 +828,7 @@ export default function DailyAdCosts() {
     
     return (
         <div>
-            <div className="border-b border-gray-700 mb-6" role="tablist">
+            <div className="flex flex-wrap border-b border-gray-700 mb-6" role="tablist">
                  <TabButton active={activeTab === 'costs'} onClick={() => setActiveTab('costs')}>
                     Chi phí Ads
                 </TabButton>

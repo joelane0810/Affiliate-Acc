@@ -1,3 +1,4 @@
+
 import React, { useState, useMemo, useEffect } from 'react';
 import { useData } from '../context/DataContext';
 import type { Asset, Liability, DebtPayment, Withdrawal, Partner, AssetType, TaxPayment, CapitalInflow, Receivable, ReceivablePayment } from '../types';
@@ -394,7 +395,7 @@ const AssetForm: React.FC<{
                     <Label htmlFor="assetName">Tên tài sản</Label>
                     <Input id="assetName" value={name} onChange={e => setName(e.target.value)} required />
                 </div>
-                <div className="grid grid-cols-2 gap-4">
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                      <div>
                         <Label htmlFor="assetType">Loại tài sản</Label>
                         <div className="flex items-center gap-2">
@@ -481,7 +482,7 @@ const LiabilityForm: React.FC<{
                 <Label htmlFor="liabilityDescription">Mô tả</Label>
                 <Input id="liabilityDescription" value={description} onChange={e => setDescription(e.target.value)} placeholder="VD: Vay mua xe, Trả góp Macbook..." required />
             </div>
-            <div className="grid grid-cols-2 gap-4">
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                 <div>
                     <Label htmlFor="liabilityType">Loại công nợ</Label>
                     <select id="liabilityType" value={type} onChange={e => setType(e.target.value as Liability['type'])} className={selectClassName}>
@@ -508,7 +509,7 @@ const LiabilityForm: React.FC<{
             </div>
             
             {isInstallment && (
-                <div className="grid grid-cols-2 gap-4 p-4 bg-gray-900/50 rounded-lg">
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 p-4 bg-gray-900/50 rounded-lg">
                     <div>
                         <Label htmlFor="liabilityStartDate">Ngày bắt đầu trả</Label>
                         <Input id="liabilityStartDate" type="date" value={startDate} onChange={e => setStartDate(e.target.value)} disabled={!!liability}/>
@@ -517,7 +518,7 @@ const LiabilityForm: React.FC<{
                         <Label htmlFor="numberOfInstallments">Số kỳ trả góp (tháng)</Label>
                         <NumberInput id="numberOfInstallments" value={numberOfInstallments} onValueChange={(val) => setNumberOfInstallments(Math.max(1, val))} disabled={!!liability}/>
                     </div>
-                     <div className="col-span-2">
+                     <div className="col-span-1 sm:col-span-2">
                         <Label>Số tiền mỗi kỳ</Label>
                         <Input value={formatCurrency(monthlyPayment)} readOnly className="bg-gray-800" />
                     </div>
@@ -593,7 +594,7 @@ const ReceivableForm: React.FC<{
                 <Label htmlFor="rec-desc">Mô tả</Label>
                 <Input id="rec-desc" value={description} onChange={e => setDescription(e.target.value)} placeholder="VD: Cho mượn, Tạm ứng cho đối tác..." required />
             </div>
-            <div className="grid grid-cols-2 gap-4">
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                 <div>
                     <Label htmlFor="rec-type">Loại phải thu</Label>
                     <select id="rec-type" value={type} onChange={e => setType(e.target.value as Receivable['type'])} className={selectClassName}>
@@ -627,7 +628,7 @@ const ReceivableForm: React.FC<{
             </div>
             
             {isInstallment && (
-                <div className="grid grid-cols-2 gap-4 p-4 bg-gray-900/50 rounded-lg">
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 p-4 bg-gray-900/50 rounded-lg">
                     <div>
                         <Label htmlFor="rec-startDate">Ngày bắt đầu thu</Label>
                         <Input id="rec-startDate" type="date" value={startDate} onChange={e => setStartDate(e.target.value)} disabled={!!receivable} />
@@ -636,7 +637,7 @@ const ReceivableForm: React.FC<{
                         <Label htmlFor="rec-numInstallments">Số kỳ thu (tháng)</Label>
                         <NumberInput id="rec-numInstallments" value={numberOfInstallments} onValueChange={(val) => setNumberOfInstallments(Math.max(1, val))} disabled={!!receivable} />
                     </div>
-                     <div className="col-span-2">
+                     <div className="col-span-1 sm:col-span-2">
                         <Label>Số tiền mỗi kỳ</Label>
                         <Input value={formatCurrency(monthlyReceivable, currency)} readOnly className="bg-gray-800" />
                     </div>
@@ -713,7 +714,7 @@ const WithdrawalForm: React.FC<{
                 <Label htmlFor="withdrawalDesc">Mô tả</Label>
                 <Input id="withdrawalDesc" value={description} onChange={e => setDescription(e.target.value)} placeholder="VD: Rút tiền mặt, chuyển khoản cho đối tác..." required />
             </div>
-            <div className="grid grid-cols-2 gap-4">
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                 <div>
                     <Label htmlFor="withdrawalPartner">Đối tác rút</Label>
                     <select id="withdrawalPartner" value={withdrawnBy} onChange={e => setWithdrawnBy(e.target.value)} className={selectClassName} required>
@@ -1002,7 +1003,7 @@ function AssetBalanceContent() {
     const longTermReceivables = useMemo(() => enrichedReceivables.filter(r => r.type === 'long-term'), [enrichedReceivables]);
     const enrichedVndAssets = useMemo(() => enrichedAssets.filter(asset => asset.currency === 'VND'), [enrichedAssets]);
 
-    const renderLiabilityTable = (liabilities: EnrichedLiability[], title: string) => (
+    const renderLiabilityTable = (liabilitiesToRender: EnrichedLiability[], title: string) => (
         <div>
             <h3 className="text-lg font-semibold text-gray-200 mb-4">{title}</h3>
             <Table>
@@ -1016,7 +1017,7 @@ function AssetBalanceContent() {
                     {!isReadOnly && <TableHeader className="w-24">Hành động</TableHeader>}
                 </TableRow></TableHead>
                 <TableBody>
-                    {liabilities.length > 0 ? liabilities.map(l => (
+                    {liabilitiesToRender.length > 0 ? liabilitiesToRender.map(l => (
                         <TableRow key={l.id}>
                             <TableCell className="font-medium text-white">{l.description}</TableCell>
                             <TableCell>{formatCurrency(l.totalAmount)}</TableCell>
@@ -1024,7 +1025,7 @@ function AssetBalanceContent() {
                             <TableCell className="font-semibold text-yellow-400">{formatCurrency(l.remainingAmount)}</TableCell>
                             <TableCell><ProgressBar value={l.paidAmount} max={l.totalAmount} /></TableCell>
                             <TableCell>
-                                {l.remainingAmount <= 0 ? (
+                                {l.remainingAmount <= 0.001 ? (
                                     <span className="px-2 inline-flex text-xs leading-5 font-semibold rounded-full bg-green-200 text-green-800">Đã thanh toán</span>
                                 ) : (!isReadOnly && <Button size="sm" onClick={() => setPayingLiability(l)}>Thanh toán</Button>)}
                             </TableCell>
@@ -1036,14 +1037,18 @@ function AssetBalanceContent() {
                             )}
                         </TableRow>
                     )) : (
-                        <TableRow><TableCell colSpan={isReadOnly ? 6 : 7} className="py-4 text-center text-gray-500">Không có dữ liệu.</TableCell></TableRow>
+                        <TableRow>
+                            <TableCell colSpan={!isReadOnly ? 7 : 6} className="text-center text-gray-500 py-8">
+                                Không có công nợ nào trong mục này.
+                            </TableCell>
+                        </TableRow>
                     )}
                 </TableBody>
             </Table>
         </div>
     );
-    
-    const renderReceivableTable = (receivables: EnrichedReceivable[], title: string) => (
+
+    const renderReceivableTable = (receivablesToRender: EnrichedReceivable[], title: string) => (
         <div>
             <h3 className="text-lg font-semibold text-gray-200 mb-4">{title}</h3>
             <Table>
@@ -1057,7 +1062,7 @@ function AssetBalanceContent() {
                     {!isReadOnly && <TableHeader className="w-24">Hành động</TableHeader>}
                 </TableRow></TableHead>
                 <TableBody>
-                    {receivables.length > 0 ? receivables.map(r => (
+                    {receivablesToRender.length > 0 ? receivablesToRender.map(r => (
                         <TableRow key={r.id}>
                             <TableCell className="font-medium text-white">{r.description}</TableCell>
                             <TableCell>{formatCurrency(r.totalAmount, r.currency)}</TableCell>
@@ -1065,7 +1070,7 @@ function AssetBalanceContent() {
                             <TableCell className="font-semibold text-yellow-400">{formatCurrency(r.remainingAmount, r.currency)}</TableCell>
                             <TableCell><ProgressBar value={r.paidAmount} max={r.totalAmount} /></TableCell>
                             <TableCell>
-                                {r.remainingAmount <= 0 ? (
+                                {r.remainingAmount <= 0.001 ? (
                                     <span className="px-2 inline-flex text-xs leading-5 font-semibold rounded-full bg-green-200 text-green-800">Đã thu đủ</span>
                                 ) : (!isReadOnly && <Button size="sm" onClick={() => setCollectingReceivable(r)}>Thu nợ</Button>)}
                             </TableCell>
@@ -1077,268 +1082,111 @@ function AssetBalanceContent() {
                             )}
                         </TableRow>
                     )) : (
-                        <TableRow><TableCell colSpan={isReadOnly ? 6 : 7} className="py-4 text-center text-gray-500">Không có dữ liệu.</TableCell></TableRow>
+                        <TableRow>
+                            <TableCell colSpan={!isReadOnly ? 7 : 6} className="text-center text-gray-500 py-8">
+                                Không có khoản phải thu nào trong mục này.
+                            </TableCell>
+                        </TableRow>
                     )}
                 </TableBody>
             </Table>
         </div>
     );
 
-
     return (
-        <>
-            <div className="space-y-8">
-                <Card>
-                    <CardHeader className="flex justify-between items-center">
-                        <span>Bảng cân đối tài sản</span>
-                        <div className="flex items-center gap-4">
-                            {!isReadOnly && (
-                                <Button onClick={() => { setEditingWithdrawal(undefined); setIsWithdrawalModalOpen(true); }} variant="secondary">
-                                    <span className="flex items-center gap-2"><Plus /> Rút tiền</span>
-                                </Button>
-                            )}
-                             {!isReadOnly && (
-                                <Button onClick={() => { setEditingAsset(undefined); setIsAssetModalOpen(true); }}>
-                                    <span className="flex items-center gap-2"><Plus /> Thêm tài sản</span>
-                                </Button>
-                            )}
-                        </div>
-                    </CardHeader>
-                    <CardContent>
-                        <Table>
-                            <TableHead><TableRow>
-                                <TableHeader className="text-left pl-10">Tài sản</TableHeader>
-                                <TableHeader>Loại</TableHeader>
-                                <TableHeader>Tiền nhận</TableHeader>
-                                <TableHeader>Tiền rút</TableHeader>
-                                <TableHeader>Số dư</TableHeader>
-                                {!isReadOnly && <TableHeader>Hành động</TableHeader>}
-                            </TableRow></TableHead>
-                            <TableBody>
-                                {enrichedAssets.map(asset => (
-                                    <React.Fragment key={asset.id}>
-                                        <TableRow>
-                                            <TableCell className="font-medium text-white text-left px-2"><div className="flex items-center">
-                                                <div className="w-8 flex-shrink-0 flex items-center justify-center">
-                                                    {asset.isExpandable && (<button onClick={() => toggleRow(asset.id)} className="p-1 rounded-full hover:bg-gray-700" aria-label="Toggle details">
-                                                        {expandedRows.has(asset.id) ? <ChevronDown /> : <ChevronRight />}
-                                                    </button>)}
-                                                </div>
-                                                <span>{asset.name}</span>
-                                            </div></TableCell>
-                                            <TableCell>{assetTypeMap.get(asset.typeId) || 'N/A'}</TableCell>
-                                            <TableCell className="text-primary-400">{formatCurrency(asset.totalReceived, asset.currency)}</TableCell>
-                                            <TableCell className="text-yellow-400">-{formatCurrency(asset.totalWithdrawn, asset.currency)}</TableCell>
-                                            <TableCell className={`font-semibold ${asset.balance >= 0 ? 'text-green-500' : 'text-red-500'}`}>{formatCurrency(asset.balance, asset.currency)}</TableCell>
-                                            {!isReadOnly && (<TableCell><div className="flex items-center space-x-3 justify-center">
-                                                <button onClick={() => { setEditingAsset(asset); setIsAssetModalOpen(true); }} className="text-gray-400 hover:text-primary-400"><Edit /></button>
-                                                <button onClick={() => handleDeleteAssetClick(asset)} className="text-gray-400 hover:text-red-400"><Trash2 /></button>
-                                            </div></TableCell>)}
-                                        </TableRow>
-                                        {asset.isExpandable && expandedRows.has(asset.id) && asset.owners.map(owner => (
-                                            <React.Fragment key={`${asset.id}-${owner.id}`}>
-                                                <TableRow className="bg-gray-800/50 hover:bg-gray-800/40">
-                                                    <TableCell className="py-2 pl-12 text-sm text-gray-300 font-semibold text-left">{owner.name}</TableCell>
-                                                    <TableCell className="py-2"></TableCell>
-                                                    <TableCell className="text-primary-300 py-2 text-sm">{formatCurrency(owner.received, asset.currency)}</TableCell>
-                                                    <TableCell className="text-yellow-300 py-2 text-sm">-{formatCurrency(owner.withdrawn, asset.currency)}</TableCell>
-                                                    <TableCell className={`font-semibold text-sm ${owner.received - owner.withdrawn >= 0 ? 'text-green-400' : 'text-red-400'}`}>{formatCurrency(owner.received - owner.withdrawn, asset.currency)}</TableCell>
-                                                    {!isReadOnly && <TableCell className="py-2"></TableCell>}
-                                                </TableRow>
-                                                {enrichedWithdrawals.filter(w => w.assetId === asset.id && w.withdrawnBy === owner.id).map(w => (
-                                                    <TableRow key={w.id} className="bg-gray-800/30 hover:bg-gray-800/20">
-                                                        <TableCell className="py-1.5 pl-16 text-xs text-gray-400 italic text-left">- {w.description} ({formatDate(w.date)})</TableCell>
-                                                        <TableCell className="py-1.5"></TableCell>
-                                                        <TableCell className="py-1.5"></TableCell>
-                                                        <TableCell className="py-1.5 text-xs text-red-400/80 font-mono">-{formatCurrency(w.amount, w.isUSD ? 'USD' : 'VND')}</TableCell>
-                                                        <TableCell className="py-1.5"></TableCell>
-                                                        {!isReadOnly && <TableCell className="py-1.5"><div className="flex items-center space-x-3 justify-center">
-                                                            <button onClick={() => { setEditingWithdrawal(w); setIsWithdrawalModalOpen(true); }} className="text-gray-500 hover:text-primary-400"><Edit /></button>
-                                                            <button onClick={() => handleDeleteWithdrawalClick(w)} className="text-gray-500 hover:text-red-400"><Trash2 /></button>
-                                                        </div></TableCell>}
-                                                    </TableRow>
-                                                ))}
-                                            </React.Fragment>
-                                        ))}
-                                    </React.Fragment>
-                                ))}
-                            </TableBody>
-                        </Table>
-                    </CardContent>
-                </Card>
-
-                <Card>
-                    <CardHeader className="flex justify-between items-center">
-                        <span>Công nợ Phải Trả</span>
-                        {!isReadOnly && (
-                            <Button onClick={() => { setEditingLiability(undefined); setIsLiabilityModalOpen(true); }}>
-                                <span className="flex items-center gap-2"><Plus /> Thêm công nợ</span>
-                            </Button>
-                        )}
-                    </CardHeader>
-                    <CardContent className="space-y-8">
-                        {renderLiabilityTable(shortTermLiabilities, "Nợ ngắn hạn")}
-                        {renderLiabilityTable(longTermLiabilities, "Nợ dài hạn")}
-                    </CardContent>
-                </Card>
-
-                <Card>
-                    <CardHeader className="flex justify-between items-center">
-                        <span>Công nợ Phải Thu</span>
-                        {!isReadOnly && (
-                            <Button onClick={() => { setEditingReceivable(undefined); setIsReceivableModalOpen(true); }}>
-                                <span className="flex items-center gap-2"><Plus /> Thêm khoản phải thu</span>
-                            </Button>
-                        )}
-                    </CardHeader>
-                    <CardContent className="space-y-8">
-                        {renderReceivableTable(shortTermReceivables, "Phải thu ngắn hạn")}
-                        {renderReceivableTable(longTermReceivables, "Phải thu dài hạn")}
-                    </CardContent>
-                </Card>
-            </div>
-            
-            {!isReadOnly && (
-                <>
-                    <Modal isOpen={isAssetModalOpen} onClose={() => setIsAssetModalOpen(false)} title={editingAsset ? 'Sửa tài sản' : 'Thêm tài sản mới'}>
-                        <AssetForm asset={editingAsset} assetTypes={assetTypes} onSave={handleSaveAsset} onCancel={() => { setIsAssetModalOpen(false); setEditingAsset(undefined); }} onAddAssetType={handleAddAssetType} />
-                    </Modal>
-                    <ConfirmationModal isOpen={!!assetToDelete} onClose={() => setAssetToDelete(null)} onConfirm={handleConfirmDeleteAsset} title="Xác nhận xóa tài sản" message={`Bạn có chắc chắn muốn xóa tài sản "${assetToDelete?.name}" không? Hành động này không thể hoàn tác.`} />
-
-                    <Modal isOpen={isLiabilityModalOpen} onClose={() => setIsLiabilityModalOpen(false)} title={editingLiability ? 'Sửa công nợ' : 'Thêm công nợ mới'}>
-                        <LiabilityForm liability={editingLiability} onSave={handleSaveLiability} onCancel={() => { setIsLiabilityModalOpen(false); setEditingLiability(undefined); }} />
-                    </Modal>
-                    {payingLiability && <AssetDebtPaymentModal liability={payingLiability} vndAssets={enrichedVndAssets} onClose={() => setPayingLiability(null)} onSave={handleSaveDebtPayment} />}
-                    <ConfirmationModal isOpen={!!liabilityToDelete} onClose={() => setLiabilityToDelete(null)} onConfirm={handleConfirmDeleteLiability} title="Xác nhận xóa công nợ" message={`Bạn có chắc chắn muốn xóa công nợ "${liabilityToDelete?.description}" không? Hành động này không thể hoàn tác.`} />
-
-                    <Modal isOpen={isReceivableModalOpen} onClose={() => setIsReceivableModalOpen(false)} title={editingReceivable ? 'Sửa khoản phải thu' : 'Thêm khoản phải thu'}>
-                        <ReceivableForm receivable={editingReceivable} assets={assets} onSave={handleSaveReceivable} onCancel={() => { setIsReceivableModalOpen(false); setEditingReceivable(undefined); }} />
-                    </Modal>
-                    {collectingReceivable && <ReceivablePaymentModal receivable={collectingReceivable} assets={assets} onClose={() => setCollectingReceivable(null)} onSave={handleSaveReceivablePayment} />}
-                    <ConfirmationModal isOpen={!!receivableToDelete} onClose={() => setReceivableToDelete(null)} onConfirm={handleConfirmDeleteReceivable} title="Xác nhận xóa khoản phải thu" message={`Bạn có chắc chắn muốn xóa khoản phải thu "${receivableToDelete?.description}" không? Mọi khoản thanh toán liên quan cũng sẽ bị xóa.`} />
-                    
-                    <Modal isOpen={isWithdrawalModalOpen} onClose={() => setIsWithdrawalModalOpen(false)} title={editingWithdrawal ? 'Sửa giao dịch rút tiền' : 'Thêm giao dịch rút tiền'}>
-                        <WithdrawalForm withdrawal={editingWithdrawal} assets={assets} partners={partners} enrichedAssets={enrichedAssets} onSave={handleSaveWithdrawal} onCancel={() => { setIsWithdrawalModalOpen(false); setEditingWithdrawal(undefined); }} />
-                    </Modal>
-                    <ConfirmationModal isOpen={!!withdrawalToDelete} onClose={() => setWithdrawalToDelete(null)} onConfirm={handleConfirmDeleteWithdrawal} title="Xác nhận xóa giao dịch rút tiền" message={`Bạn có chắc chắn muốn xóa giao dịch rút tiền "${withdrawalToDelete?.description}" không? Hành động này sẽ hoàn lại số dư vào tài sản và không thể hoàn tác.`} />
-                </>
-            )}
-        </>
-    );
-}
-// #endregion
-
-const CapitalInflowForm: React.FC<{
-    inflow?: CapitalInflow;
-    assets: Asset[];
-    onSave: (inflow: Omit<CapitalInflow, 'id'> | CapitalInflow) => void;
-    onCancel: () => void;
-}> = ({ inflow, assets, onSave, onCancel }) => {
-    const [date, setDate] = useState(inflow?.date || new Date().toISOString().split('T')[0]);
-    const [description, setDescription] = useState(inflow?.description || '');
-    const [assetId, setAssetId] = useState(inflow?.assetId || assets[0]?.id || '');
-    const [amount, setAmount] = useState(inflow?.amount || 0);
-
-    const selectedAsset = useMemo(() => assets.find(a => a.id === assetId), [assets, assetId]);
-
-    const handleSubmit = (e: React.FormEvent) => {
-        e.preventDefault();
-        onSave({ ...inflow, id: inflow?.id || '', date, description, assetId, amount });
-    };
-
-    const selectClassName = "w-full px-3 py-2 bg-gray-900 border border-gray-600 rounded-md focus:outline-none focus:ring-2 focus:ring-primary-500";
-
-    return (
-        <form onSubmit={handleSubmit} className="space-y-4">
-            <div>
-                <Label htmlFor="inflowDate">Ngày</Label>
-                <Input id="inflowDate" type="date" value={date} onChange={e => setDate(e.target.value)} required />
-            </div>
-            <div>
-                <Label htmlFor="inflowDesc">Mô tả</Label>
-                <Input id="inflowDesc" value={description} onChange={e => setDescription(e.target.value)} placeholder="VD: Chủ sở hữu góp vốn, Vốn đầu tư..." />
-            </div>
-            <div>
-                <Label htmlFor="inflowAsset">Tài sản nhận</Label>
-                <select id="inflowAsset" value={assetId} onChange={e => setAssetId(e.target.value)} className={selectClassName} required>
-                    {assets.map(a => <option key={a.id} value={a.id}>{a.name} ({a.currency})</option>)}
-                </select>
-            </div>
-            <div>
-                <Label htmlFor="inflowAmount">Số tiền ({selectedAsset?.currency})</Label>
-                <NumberInput id="inflowAmount" value={amount} onValueChange={setAmount} required />
-            </div>
-            <div className="mt-6 flex justify-end space-x-3">
-                <Button type="button" variant="secondary" onClick={onCancel}>Hủy</Button>
-                <Button type="submit">Lưu</Button>
-            </div>
-        </form>
-    );
-};
-
-const CapitalInflowsContent = () => {
-    const { assets, capitalInflows, addCapitalInflow, updateCapitalInflow, deleteCapitalInflow, isReadOnly } = useData();
-    const [isModalOpen, setIsModalOpen] = useState(false);
-    const [editingInflow, setEditingInflow] = useState<CapitalInflow | undefined>(undefined);
-    const [inflowToDelete, setInflowToDelete] = useState<CapitalInflow | null>(null);
-
-    const enrichedInflows = useMemo(() => {
-        const assetMap = new Map<string, Asset>(assets.map(a => [a.id, a]));
-        return capitalInflows
-            .map(i => ({
-                ...i,
-                assetName: assetMap.get(i.assetId)?.name || 'N/A',
-                currency: assetMap.get(i.assetId)?.currency || 'VND',
-            }))
-            .sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime());
-    }, [capitalInflows, assets]);
-
-    const handleSave = (inflow: Omit<CapitalInflow, 'id'> | CapitalInflow) => {
-        if ('id' in inflow && inflow.id) {
-            updateCapitalInflow(inflow as CapitalInflow);
-        } else {
-            addCapitalInflow(inflow);
-        }
-        setIsModalOpen(false);
-        setEditingInflow(undefined);
-    };
-
-    return (
-        <>
+        <div className="space-y-8">
+            {/* Assets Table */}
             <Card>
                 <CardHeader className="flex justify-between items-center">
-                    <span>Quản lý Vốn & Đầu tư</span>
-                    {!isReadOnly && (
-                        <Button onClick={() => { setEditingInflow(undefined); setIsModalOpen(true); }} disabled={assets.length === 0}>
-                            <span className="flex items-center gap-2"><Plus /> Thêm vốn đầu tư</span>
-                        </Button>
-                    )}
+                    <span>Tài sản</span>
+                    {!isReadOnly && <Button onClick={() => { setEditingAsset(undefined); setIsAssetModalOpen(true); }}><span className="flex items-center gap-2"><Plus /> Thêm tài sản</span></Button>}
                 </CardHeader>
                 <CardContent>
                     <Table>
-                        <TableHead>
-                            <TableRow>
-                                <TableHeader>Ngày</TableHeader>
-                                <TableHeader>Mô tả</TableHeader>
-                                <TableHeader>Tài sản nhận</TableHeader>
-                                <TableHeader>Số tiền</TableHeader>
-                                {!isReadOnly && <TableHeader>Hành động</TableHeader>}
-                            </TableRow>
-                        </TableHead>
+                        <TableHead><TableRow>
+                            <TableHeader></TableHeader>
+                            <TableHeader>Tên tài sản</TableHeader>
+                            <TableHeader>Loại</TableHeader>
+                            <TableHeader>Tiền tệ</TableHeader>
+                            <TableHeader>Số dư</TableHeader>
+                            {!isReadOnly && <TableHeader>Hành động</TableHeader>}
+                        </TableRow></TableHead>
                         <TableBody>
-                            {enrichedInflows.map(inflow => (
-                                <TableRow key={inflow.id}>
-                                    <TableCell>{formatDate(inflow.date)}</TableCell>
-                                    <TableCell className="text-white">{inflow.description || 'Vốn góp'}</TableCell>
-                                    <TableCell>{inflow.assetName}</TableCell>
-                                    <TableCell className="font-semibold text-green-400">{formatCurrency(inflow.amount, inflow.currency)}</TableCell>
-                                    {!isReadOnly && (
+                            {enrichedAssets.map(asset => (
+                                <React.Fragment key={asset.id}>
+                                    <TableRow>
                                         <TableCell>
-                                            <div className="flex items-center space-x-3 justify-center">
-                                                <button onClick={() => { setEditingInflow(inflow); setIsModalOpen(true); }} className="text-gray-400 hover:text-primary-400"><Edit /></button>
-                                                <button onClick={() => setInflowToDelete(inflow)} className="text-gray-400 hover:text-red-400"><Trash2 /></button>
-                                            </div>
+                                            {asset.isExpandable && (
+                                                <button onClick={() => toggleRow(asset.id)} className="text-gray-400 hover:text-white">
+                                                    {expandedRows.has(asset.id) ? <ChevronDown /> : <ChevronRight />}
+                                                </button>
+                                            )}
                                         </TableCell>
+                                        <TableCell className="font-medium text-white">{asset.name}</TableCell>
+                                        <TableCell>{assetTypeMap.get(asset.typeId) || 'N/A'}</TableCell>
+                                        <TableCell>{asset.currency}</TableCell>
+                                        <TableCell className="font-semibold text-primary-400">{formatCurrency(asset.balance, asset.currency)}</TableCell>
+                                        {!isReadOnly && (
+                                            <TableCell><div className="flex items-center space-x-3 justify-center">
+                                                <button onClick={() => { setEditingAsset(asset); setIsAssetModalOpen(true); }} className="text-gray-400 hover:text-primary-400"><Edit /></button>
+                                                <button onClick={() => handleDeleteAssetClick(asset)} className="text-gray-400 hover:text-red-400"><Trash2 /></button>
+                                            </div></TableCell>
+                                        )}
+                                    </TableRow>
+                                    {asset.isExpandable && expandedRows.has(asset.id) && (
+                                        <TableRow className="bg-gray-900/50">
+                                            <TableCell colSpan={!isReadOnly ? 6 : 5}>
+                                                <div className="p-4">
+                                                    <h4 className="font-semibold text-white mb-2">Phân bổ theo đối tác</h4>
+                                                    <ul className="space-y-1 text-sm text-gray-300">
+                                                        {asset.owners.map(owner => (
+                                                            <li key={owner.id} className="grid grid-cols-3 gap-4">
+                                                                <span>{owner.name}</span>
+                                                                <span className="text-green-400 text-right">In: {formatCurrency(owner.received, asset.currency)}</span>
+                                                                <span className="text-red-400 text-right">Out: {formatCurrency(owner.withdrawn, asset.currency)}</span>
+                                                            </li>
+                                                        ))}
+                                                    </ul>
+                                                </div>
+                                            </TableCell>
+                                        </TableRow>
+                                    )}
+                                </React.Fragment>
+                            ))}
+                        </TableBody>
+                    </Table>
+                </CardContent>
+            </Card>
+
+            {/* Withdrawals Table */}
+            <Card>
+                <CardHeader className="flex justify-between items-center">
+                    <span>Rút tiền</span>
+                    {!isReadOnly && <Button onClick={() => { setEditingWithdrawal(undefined); setIsWithdrawalModalOpen(true); }}><span className="flex items-center gap-2"><Plus /> Thêm giao dịch rút</span></Button>}
+                </CardHeader>
+                <CardContent>
+                    <Table>
+                        <TableHead><TableRow>
+                            <TableHeader>Ngày</TableHeader>
+                            <TableHeader>Mô tả</TableHeader>
+                            <TableHeader>Đối tác</TableHeader>
+                            <TableHeader>Tài sản</TableHeader>
+                            <TableHeader>Số tiền</TableHeader>
+                            {!isReadOnly && <TableHeader>Hành động</TableHeader>}
+                        </TableRow></TableHead>
+                        <TableBody>
+                            {enrichedWithdrawals.map(w => (
+                                <TableRow key={w.id}>
+                                    <TableCell>{formatDate(w.date)}</TableCell>
+                                    <TableCell className="font-medium text-white">{w.description}</TableCell>
+                                    <TableCell>{w.partnerName}</TableCell>
+                                    <TableCell>{w.assetName}</TableCell>
+                                    <TableCell className="font-semibold text-red-400">{formatCurrency(w.amount, w.isUSD ? 'USD' : 'VND')}</TableCell>
+                                    {!isReadOnly && (
+                                        <TableCell><div className="flex items-center space-x-3 justify-center">
+                                            <button onClick={() => { setEditingWithdrawal(w); setIsWithdrawalModalOpen(true); }} className="text-gray-400 hover:text-primary-400"><Edit /></button>
+                                            <button onClick={() => handleDeleteWithdrawalClick(w)} className="text-gray-400 hover:text-red-400"><Trash2 /></button>
+                                        </div></TableCell>
                                     )}
                                 </TableRow>
                             ))}
@@ -1347,162 +1195,91 @@ const CapitalInflowsContent = () => {
                 </CardContent>
             </Card>
 
-            {!isReadOnly && (
-                <>
-                    <Modal isOpen={isModalOpen} onClose={() => setIsModalOpen(false)} title={editingInflow ? 'Sửa Vốn đầu tư' : 'Thêm Vốn đầu tư'}>
-                        <CapitalInflowForm
-                            inflow={editingInflow}
-                            assets={assets}
-                            onSave={handleSave}
-                            onCancel={() => { setIsModalOpen(false); setEditingInflow(undefined); }}
-                        />
-                    </Modal>
-                    <ConfirmationModal
-                        isOpen={!!inflowToDelete}
-                        onClose={() => setInflowToDelete(null)}
-                        onConfirm={() => { if(inflowToDelete) { deleteCapitalInflow(inflowToDelete.id); setInflowToDelete(null); } }}
-                        title="Xác nhận xóa Vốn"
-                        message={`Bạn có chắc chắn muốn xóa khoản vốn "${inflowToDelete?.description || 'Vốn góp'}" không?`}
-                    />
-                </>
-            )}
-        </>
-    )
-}
-
-const AssetTypesContent = () => {
-    const { assetTypes, addAssetType, updateAssetType, deleteAssetType, enrichedAssets } = useData();
-    const [isModalOpen, setIsModalOpen] = useState(false);
-    const [editingType, setEditingType] = useState<AssetType | undefined>(undefined);
-    const [typeToDelete, setTypeToDelete] = useState<AssetType | null>(null);
-
-    const handleSave = (assetType: Omit<AssetType, 'id'> | AssetType) => {
-        if ('id' in assetType && assetType.id) {
-            updateAssetType(assetType as AssetType);
-        } else {
-            addAssetType(assetType);
-        }
-        setIsModalOpen(false);
-        setEditingType(undefined);
-    };
-
-    const handleDeleteClick = (assetType: AssetType) => {
-        const assetsOfType = enrichedAssets.filter(asset => asset.typeId === assetType.id);
-        
-        const balanceByCurrency = assetsOfType.reduce((acc, asset) => {
-            acc[asset.currency] = (acc[asset.currency] || 0) + asset.balance;
-            return acc;
-        }, {} as Record<'USD' | 'VND', number>);
-
-        const nonZeroBalances = Object.entries(balanceByCurrency).filter(([, balance]) => Math.abs(balance as number) > 0.001);
-
-        if (nonZeroBalances.length > 0) {
-            const balanceStrings = nonZeroBalances.map(([currency, balance]) => formatCurrency(balance as number, currency as 'USD' | 'VND')).join(' và ');
-            alert(`Không thể xóa loại tài sản "${assetType.name}" vì tổng số dư của các tài sản liên quan khác không: ${balanceStrings}. Vui lòng điều chỉnh số dư về 0 trước khi xóa.`);
-            return;
-        }
-
-        setTypeToDelete(assetType);
-    };
-
-    const handleConfirmDelete = () => {
-        if (typeToDelete) {
-            deleteAssetType(typeToDelete.id);
-            setTypeToDelete(null);
-        }
-    };
-
-    return (
-        <>
+            {/* Liabilities Section */}
             <Card>
                 <CardHeader className="flex justify-between items-center">
-                    <span>Quản lý Loại tài sản</span>
-                    <Button onClick={() => { setEditingType(undefined); setIsModalOpen(true); }}>
-                        <span className="flex items-center gap-2"><Plus /> Thêm loại tài sản</span>
-                    </Button>
+                    <span>Công nợ Phải trả</span>
+                    {!isReadOnly && <Button onClick={() => { setEditingLiability(undefined); setIsLiabilityModalOpen(true); }}><span className="flex items-center gap-2"><Plus /> Thêm Công nợ</span></Button>}
                 </CardHeader>
-                <CardContent>
-                    <Table>
-                        <TableHead>
-                            <TableRow>
-                                <TableHeader className="text-left pl-6">Tên loại tài sản</TableHeader>
-                                <TableHeader>Hành động</TableHeader>
-                            </TableRow>
-                        </TableHead>
-                        <TableBody>
-                            {assetTypes.map(type => (
-                                <TableRow key={type.id}>
-                                    <TableCell className="font-medium text-white text-left pl-6">{type.name}</TableCell>
-                                    <TableCell>
-                                        <div className="flex items-center space-x-3 justify-center">
-                                            <button 
-                                                onClick={() => { setEditingType(type); setIsModalOpen(true); }} 
-                                                className="text-gray-400 hover:text-primary-400"
-                                                aria-label={`Sửa ${type.name}`}
-                                            >
-                                                <Edit />
-                                            </button>
-                                            <button 
-                                                onClick={() => handleDeleteClick(type)} 
-                                                className="text-gray-400 hover:text-red-400"
-                                                aria-label={`Xóa ${type.name}`}
-                                            >
-                                                <Trash2 />
-                                            </button>
-                                        </div>
-                                    </TableCell>
-                                </TableRow>
-                            ))}
-                        </TableBody>
-                    </Table>
+                <CardContent className="space-y-6">
+                    {renderLiabilityTable(shortTermLiabilities, "Công nợ Ngắn hạn")}
+                    {renderLiabilityTable(longTermLiabilities, "Công nợ Dài hạn")}
                 </CardContent>
             </Card>
-            
-            <AssetTypeFormModal
-                isOpen={isModalOpen}
-                onClose={() => setIsModalOpen(false)}
-                onSave={handleSave}
-                existingAssetType={editingType}
-            />
 
-            <ConfirmationModal
-                isOpen={!!typeToDelete}
-                onClose={() => setTypeToDelete(null)}
-                onConfirm={handleConfirmDelete}
-                title="Xác nhận xóa loại tài sản"
-                message={`Bạn có chắc chắn muốn xóa loại tài sản "${typeToDelete?.name}" không? Hành động này không thể hoàn tác.`}
-            />
-        </>
+            {/* Receivables Section */}
+            <Card>
+                <CardHeader className="flex justify-between items-center">
+                    <span>Công nợ Phải thu</span>
+                    {!isReadOnly && <Button onClick={() => { setEditingReceivable(undefined); setIsReceivableModalOpen(true); }}><span className="flex items-center gap-2"><Plus /> Thêm Khoản phải thu</span></Button>}
+                </CardHeader>
+                <CardContent className="space-y-6">
+                    {renderReceivableTable(shortTermReceivables, "Phải thu Ngắn hạn")}
+                    {renderReceivableTable(longTermReceivables, "Phải thu Dài hạn")}
+                </CardContent>
+            </Card>
+
+
+            {/* Modals */}
+            {!isReadOnly && (
+                <>
+                    <Modal isOpen={isAssetModalOpen} onClose={() => setIsAssetModalOpen(false)} title={editingAsset ? 'Sửa tài sản' : 'Thêm tài sản mới'}>
+                        <AssetForm asset={editingAsset} assetTypes={assetTypes} onSave={handleSaveAsset} onCancel={() => setIsAssetModalOpen(false)} onAddAssetType={handleAddAssetType} />
+                    </Modal>
+                    <ConfirmationModal isOpen={!!assetToDelete} onClose={() => setAssetToDelete(null)} onConfirm={handleConfirmDeleteAsset} title="Xác nhận xóa tài sản" message={`Bạn có chắc muốn xóa tài sản "${assetToDelete?.name}" không?`} />
+
+                    <Modal isOpen={isLiabilityModalOpen} onClose={() => setIsLiabilityModalOpen(false)} title={editingLiability ? 'Sửa công nợ' : 'Thêm công nợ mới'}>
+                        <LiabilityForm liability={editingLiability} onSave={handleSaveLiability} onCancel={() => setIsLiabilityModalOpen(false)} />
+                    </Modal>
+                    <ConfirmationModal isOpen={!!liabilityToDelete} onClose={() => setLiabilityToDelete(null)} onConfirm={handleConfirmDeleteLiability} title="Xác nhận xóa công nợ" message={`Bạn có chắc muốn xóa công nợ "${liabilityToDelete?.description}" không? Tất cả các giao dịch thanh toán liên quan cũng sẽ bị xóa.`} />
+                    {payingLiability && <AssetDebtPaymentModal liability={payingLiability} vndAssets={enrichedVndAssets} onClose={() => setPayingLiability(null)} onSave={handleSaveDebtPayment} />}
+
+                    <Modal isOpen={isReceivableModalOpen} onClose={() => setIsReceivableModalOpen(false)} title={editingReceivable ? 'Sửa khoản phải thu' : 'Thêm khoản phải thu mới'}>
+                        <ReceivableForm receivable={editingReceivable} assets={assets} onSave={handleSaveReceivable} onCancel={() => setIsReceivableModalOpen(false)} />
+                    </Modal>
+                    <ConfirmationModal isOpen={!!receivableToDelete} onClose={() => setReceivableToDelete(null)} onConfirm={handleConfirmDeleteReceivable} title="Xác nhận xóa khoản phải thu" message={`Bạn có chắc muốn xóa khoản phải thu "${receivableToDelete?.description}" không? Tất cả các giao dịch thu tiền liên quan cũng sẽ bị xóa.`} />
+                    {collectingReceivable && <ReceivablePaymentModal receivable={collectingReceivable} assets={assets} onClose={() => setCollectingReceivable(null)} onSave={handleSaveReceivablePayment} />}
+
+                    <Modal isOpen={isWithdrawalModalOpen} onClose={() => setIsWithdrawalModalOpen(false)} title={editingWithdrawal ? 'Sửa giao dịch rút' : 'Thêm giao dịch rút'}>
+                        <WithdrawalForm withdrawal={editingWithdrawal} assets={assets} partners={partners} enrichedAssets={enrichedAssets} onSave={handleSaveWithdrawal} onCancel={() => setIsWithdrawalModalOpen(false)} />
+                    </Modal>
+                    <ConfirmationModal isOpen={!!withdrawalToDelete} onClose={() => setWithdrawalToDelete(null)} onConfirm={handleConfirmDeleteWithdrawal} title="Xác nhận xóa giao dịch rút" message={`Bạn có chắc muốn xóa giao dịch rút tiền "${withdrawalToDelete?.description}" không?`} />
+                </>
+            )}
+        </div>
     );
-};
+}
 
+// #endregion
 
+// #region --- Main Component ---
 export default function Assets() {
-  const [activeTab, setActiveTab] = useState<'balance' | 'capital' | 'history' | 'types'>('balance');
+    const [activeTab, setActiveTab] = useState<'balance' | 'history'>('balance');
+    
+    const renderContent = () => {
+        switch (activeTab) {
+        case 'balance':
+            return <AssetBalanceContent />;
+        case 'history':
+            return <TransactionHistoryContent />;
+        default:
+            return null;
+        }
+    };
 
     return (
         <div>
-            <Header title="Tài sản" />
-            <div className="border-b border-gray-700 mb-6" role="tablist">
+            <Header title="Tài sản & Nguồn vốn" />
+            <div className="flex flex-wrap border-b border-gray-700 mb-6" role="tablist">
                 <TabButton active={activeTab === 'balance'} onClick={() => setActiveTab('balance')}>
-                    Cân đối tài sản
-                </TabButton>
-                 <TabButton active={activeTab === 'capital'} onClick={() => setActiveTab('capital')}>
-                    Vốn & Đầu tư
+                    Bảng cân đối Tài sản & Nguồn vốn
                 </TabButton>
                 <TabButton active={activeTab === 'history'} onClick={() => setActiveTab('history')}>
                     Lịch sử giao dịch
                 </TabButton>
-                <TabButton active={activeTab === 'types'} onClick={() => setActiveTab('types')}>
-                    Loại tài sản
-                </TabButton>
             </div>
-            <div>
-                {activeTab === 'balance' && <AssetBalanceContent />}
-                {activeTab === 'capital' && <CapitalInflowsContent />}
-                {activeTab === 'history' && <TransactionHistoryContent />}
-                {activeTab === 'types' && <AssetTypesContent />}
-            </div>
+            <div>{renderContent()}</div>
         </div>
     );
 }
+// #endregion

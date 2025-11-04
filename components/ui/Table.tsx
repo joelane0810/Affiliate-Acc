@@ -23,7 +23,7 @@ interface TableHeaderProps extends React.ThHTMLAttributes<HTMLTableHeaderCellEle
     children?: React.ReactNode;
 }
 export const TableHeader: React.FC<TableHeaderProps> = ({ children, className, ...props }) => (
-  <th scope="col" className={`px-6 py-3 text-center text-xs font-medium text-gray-400 uppercase tracking-wider ${className}`} {...props}>
+  <th scope="col" className={`px-2 py-3 text-center text-xs font-medium text-gray-400 uppercase tracking-wider sm:px-6 ${className}`} {...props}>
     {children}
   </th>
 );
@@ -33,5 +33,5 @@ interface TableCellProps extends React.TdHTMLAttributes<HTMLTableCellElement> {
     children?: React.ReactNode;
 }
 export const TableCell: React.FC<TableCellProps> = ({ children, className, ...props }) => (
-  <td className={`px-6 py-4 whitespace-nowrap text-sm text-gray-300 text-center ${className}`} {...props}>{children}</td>
+  <td className={`px-2 py-4 whitespace-nowrap text-sm text-gray-300 text-center sm:px-6 ${className}`} {...props}>{children}</td>
 );
