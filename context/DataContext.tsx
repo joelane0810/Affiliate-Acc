@@ -1319,20 +1319,20 @@ export const DataProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
             const partnerTax = calculateTax(stats.revenue, partnerProfit, stats.inputVat);
             return { partnerId: p.id, name: p.name, revenue: stats.revenue, cost: stats.cost, profit: partnerProfit, inputVat: stats.inputVat, taxPayable: partnerTax.taxPayable };
         });
-        // FIX: Explicitly type the accumulator and initial value in reduce to ensure correct type inference.
+        // FIX: Explicitly type the accumulator in reduce to ensure correct type inference.
         const revenueDetails = Object.entries(
-            Array.from(projectPnL.entries()).reduce((acc, [projectId, pnl]) => {
+            Array.from(projectPnL.entries()).reduce<Record<string, number>>((acc, [projectId, pnl]) => {
                 const name = projectMap.get(projectId) || 'Dự án không xác định';
                 acc[name] = (acc[name] || 0) + pnl.revenue;
                 return acc;
-            }, {} as Record<string, number>)
+            }, {})
         ).map(([name, amount]) => ({ name, amount }));
         const adCostDetails = Object.entries(
-            periodAdCosts.reduce((acc, cost) => {
+            periodAdCosts.reduce<Record<string, number>>((acc, cost) => {
                 const name = projectMap.get(cost.projectId) || 'Dự án không xác định';
                 acc[name] = (acc[name] || 0) + cost.vndCost;
                 return acc;
-            }, {} as Record<string, number>)
+            }, {})
         ).map(([name, amount]) => ({ name, amount }));
         const miscCostDetails = periodMiscExpenses.map(exp => ({ name: exp.description, amount: exp.vndAmount }));
         const totalVndReceivedFromSales = periodExchangeLogs.reduce((sum, log) => sum + log.vndAmount, 0);

@@ -12,7 +12,7 @@ interface State {
   errorInfo?: ErrorInfo;
 }
 
-// FIX: Change to extend React.Component to fix errors related to missing 'setState' and 'props'.
+// FIX: To resolve errors related to missing 'setState' and 'props', the class must extend React.Component.
 class ErrorBoundary extends React.Component<Props, State> {
   public state: State = {
     hasError: false,

@@ -1,6 +1,7 @@
 
 
 
+
 import React, { useState, useMemo } from 'react';
 import { useData } from '../context/DataContext';
 import type { Liability, Asset, Receivable, ReceivablePayment, DebtPayment } from '../types';
@@ -72,7 +73,7 @@ const DebtPaymentModal: React.FC<{
                 <div>
                     <Label htmlFor="paymentAmount">Số tiền trả ({debtItem.liability.currency})</Label>
                     <NumberInput id="paymentAmount" value={amount} onValueChange={setAmount} />
-                    <div className="text-xs text-gray-400 mt-1 flex justify-between">
+                    <div className="text-xs text-gray-400 mt-1 flex flex-col gap-1 sm:flex-row sm:justify-between">
                         <span>Kỳ này: {formatCurrency(debtItem.dueThisPeriod, debtItem.liability.currency)}</span>
                         <span>Tổng còn lại: {formatCurrency(debtItem.totalRemaining, debtItem.liability.currency)}</span>
                     </div>
@@ -307,7 +308,7 @@ const ReceivablePaymentModal: React.FC<{
                 <div>
                     <Label htmlFor="rec-pay-amount">Số tiền ({receivableItem.receivable.currency})</Label>
                     <NumberInput id="rec-pay-amount" value={amount} onValueChange={setAmount} />
-                     <div className="text-xs text-gray-400 mt-1 flex justify-between">
+                     <div className="text-xs text-gray-400 mt-1 flex flex-col gap-1 sm:flex-row sm:justify-between">
                         <span>Cần thu kỳ này: {formatCurrency(amountLeftToPayThisPeriod, receivableItem.receivable.currency)}</span>
                         <span>Tổng còn lại: {formatCurrency(receivableItem.remainingAmount, receivableItem.receivable.currency)}</span>
                     </div>
