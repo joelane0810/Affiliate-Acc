@@ -90,7 +90,7 @@ const COLLECTION_NAMES = [
     'assetTypes', 'assets', 'liabilities', 'receivables', 'receivablePayments', 
     'exchangeLogs', 'miscellaneousExpenses', 'partners', 'withdrawals', 
     'debtPayments', 'taxPayments', 'capitalInflows', 'categories', 'niches',
-    'periodLiabilities', 'periodReceivables'
+    'periodLiabilities', 'periodReceivables', 'periodDebtPayments', 'periodReceivablePayments'
 ];
 
 

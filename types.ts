@@ -314,9 +314,6 @@ export interface PeriodLiability {
   description: string;
   amount: number;
   currency: 'USD' | 'VND';
-  isPaid: boolean;
-  paymentDate?: string; // "YYYY-MM-DD"
-  paymentAssetId?: string;
 }
 
 export interface PeriodReceivable {
@@ -326,7 +323,20 @@ export interface PeriodReceivable {
   description: string;
   amount: number;
   currency: 'USD' | 'VND';
-  isReceived: boolean;
-  receiptDate?: string; // "YYYY-MM-DD"
-  receiptAssetId?: string;
+}
+
+export interface PeriodDebtPayment {
+  id: string;
+  periodLiabilityId: string;
+  date: string; // YYYY-MM-DD
+  amount: number;
+  assetId: string;
+}
+
+export interface PeriodReceivablePayment {
+  id: string;
+  periodReceivableId: string;
+  date: string; // YYYY-MM-DD
+  amount: number;
+  assetId: string;
 }
