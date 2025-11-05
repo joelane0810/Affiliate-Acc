@@ -11,6 +11,7 @@ interface State {
 }
 
 // FIX: To resolve errors related to missing 'setState' and 'props', the class must extend React.Component.
+// This gives the class access to component lifecycle methods and properties.
 class ErrorBoundary extends React.Component<Props, State> {
   public state: State = {
     hasError: false,

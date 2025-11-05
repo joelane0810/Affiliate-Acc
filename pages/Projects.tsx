@@ -1,14 +1,3 @@
-
-
-
-
-
-
-
-
-
-
-
 import React, { useState, useMemo, useEffect } from 'react';
 import { useData } from '../context/DataContext';
 import * as T from '../types';
@@ -799,8 +788,9 @@ export default function Projects() {
                                     <XAxis 
                                         dataKey="date" 
                                         stroke="#94a3b8" 
-                                        // FIX: The 'tick' value from recharts can be of a non-string type, but `formatDate` expects a string. Cast to string to fix type error.
-                                        tickFormatter={(tick) => formatDate(String(tick)).substring(0, 5)} // dd/MM
+                                        // FIX: The 'tick' parameter from recharts is of type 'any' which is not assignable to the 'string' expected by 'formatDate'.
+                                        // Casting 'tick' to a string resolves the type mismatch.
+                                        tickFormatter={(tick) => formatDate(String(tick)).substring(0, 5)}
                                     />
                                     <YAxis 
                                         stroke="#94a3b8" 
@@ -844,4 +834,5 @@ export default function Projects() {
             )}
         </>
     );
+    //tét
 }

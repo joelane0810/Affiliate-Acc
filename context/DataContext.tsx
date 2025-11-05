@@ -1274,7 +1274,9 @@ export const DataProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
         const project = projectMap.get(cost.projectId);
         const accountDetails = adAccountMap.get(cost.adAccountNumber);
         
-        if (!project || !accountDetails) return { ...cost, vndCost: 0, effectiveRate: 0 };
+        if (!project || !accountDetails) {
+            return { ...cost, vndCost: 0, effectiveRate: 0 };
+        }
 
         const platformForCosting = accountDetails.adsPlatform;
         const accountKey = getAccountKey(platformForCosting, cost.adAccountNumber);

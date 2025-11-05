@@ -20,6 +20,7 @@ const navItems: { page: Page; label: string; icon: React.ReactNode }[] = [
   { page: 'Commissions', label: 'Hoa hồng', icon: <DollarSign /> },
   { page: 'ExchangeLog', label: 'Bán USD', icon: <Repeat /> },
   { page: 'MiscellaneousExpenses', label: 'Chi phí phát sinh', icon: <Package /> },
+  { page: 'AdAccounts', label: 'Quản lý & Sổ Ads', icon: <Book /> },
   { page: 'Assets', label: 'Tài sản', icon: <Landmark /> },
   { page: 'CapitalSources', label: 'Nguồn vốn', icon: <Handshake /> },
   { page: 'Partners', label: 'Đối tác', icon: <Users /> },
@@ -29,7 +30,7 @@ const navItems: { page: Page; label: string; icon: React.ReactNode }[] = [
   { page: 'Settings', label: 'Cài đặt', icon: <Settings /> },
 ];
 
-const alwaysEnabledPages: Page[] = ['Assets', 'Reports', 'LongReport', 'Settings'];
+const alwaysEnabledPages: Page[] = ['AdAccounts', 'Assets', 'Reports', 'LongReport', 'Settings'];
 
 export const Sidebar: React.FC<SidebarProps> = ({ isExpanded, setIsExpanded, isMobileOpen, setIsMobileOpen }) => {
   const { activePeriod, viewingPeriod, currentPage, setCurrentPage } = useData();
