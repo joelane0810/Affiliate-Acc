@@ -217,40 +217,6 @@ export interface TaxSettings {
     periodClosingDay: number;
 }
 
-export interface PeriodLiability {
-    id: string;
-    period: string;
-    date: string;
-    description: string;
-    amount: number;
-    currency: 'VND' | 'USD';
-}
-
-export interface PeriodDebtPayment {
-    id: string;
-    periodLiabilityId: string;
-    date: string;
-    amount: number;
-    assetId: string;
-}
-
-export interface PeriodReceivable {
-    id: string;
-    period: string;
-    date: string;
-    description: string;
-    amount: number;
-    currency: 'VND' | 'USD';
-}
-
-export interface PeriodReceivablePayment {
-    id: string;
-    periodReceivableId: string;
-    date: string;
-    amount: number;
-    assetId: string;
-}
-
 export interface ClosedPeriod {
     period: string;
     closedAt: string;
@@ -343,4 +309,39 @@ export interface FirebaseConfig {
     storageBucket: string;
     messagingSenderId: string;
     appId: string;
+}
+
+// FIX: Add missing type definitions for period-specific debts and receivables
+export interface PeriodLiability {
+    id: string;
+    period: string;
+    date: string;
+    description: string;
+    amount: number;
+    currency: 'VND' | 'USD';
+}
+  
+export interface PeriodReceivable {
+    id: string;
+    period: string;
+    date: string;
+    description: string;
+    amount: number;
+    currency: 'VND' | 'USD';
+}
+
+export interface PeriodDebtPayment {
+    id: string;
+    periodLiabilityId: string;
+    date: string;
+    amount: number;
+    assetId: string;
+}
+
+export interface PeriodReceivablePayment {
+    id: string;
+    periodReceivableId: string;
+    date: string;
+    amount: number;
+    assetId: string;
 }

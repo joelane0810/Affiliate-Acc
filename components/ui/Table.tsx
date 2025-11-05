@@ -14,8 +14,12 @@ export const TableBody: React.FC<{ children: React.ReactNode }> = ({ children })
   <tbody className="bg-gray-900 divide-y divide-gray-800">{children}</tbody>
 );
 
-export const TableRow: React.FC<{ children: React.ReactNode, className?: string }> = ({ children, className }) => (
-  <tr className={`hover:bg-gray-800 transition-colors duration-150 ${className}`}>{children}</tr>
+// FIX: Allow all tr attributes (like onClick) and make children optional.
+interface TableRowProps extends React.HTMLAttributes<HTMLTableRowElement> {
+    children?: React.ReactNode;
+}
+export const TableRow: React.FC<TableRowProps> = ({ children, className, ...props }) => (
+  <tr className={`hover:bg-gray-800 transition-colors duration-150 ${className}`} {...props}>{children}</tr>
 );
 
 // Fix: Allow all th attributes (like onClick) and make children optional.

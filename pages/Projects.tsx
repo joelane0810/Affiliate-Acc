@@ -834,5 +834,4 @@ export default function Projects() {
             )}
         </>
     );
-    //tét
 }

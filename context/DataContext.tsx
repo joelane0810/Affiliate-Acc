@@ -55,7 +55,8 @@ interface DataContextType {
   adFundTransfers: T.AdFundTransfer[];
   addAdFundTransfer: (transfer: Omit<T.AdFundTransfer, 'id'>) => Promise<void>;
   updateAdFundTransfer: (transfer: T.AdFundTransfer) => Promise<void>;
-  deleteAdFundTransfer: (transfer: T.AdFundTransfer) => Promise<void>;
+  // FIX: Changed parameter type from T.AdFundTransfer to string to match implementation.
+  deleteAdFundTransfer: (id: string) => Promise<void>;
 
   commissions: T.Commission[];
   addCommission: (commission: Omit<T.Commission, 'id'>) => Promise<void>;
@@ -123,26 +124,6 @@ interface DataContextType {
   taxSettings: T.TaxSettings;
   updateTaxSettings: (settings: T.TaxSettings) => Promise<void>;
 
-  periodLiabilities: T.PeriodLiability[];
-  addPeriodLiability: (liability: Omit<T.PeriodLiability, 'id' | 'period'>) => Promise<void>;
-  updatePeriodLiability: (liability: T.PeriodLiability) => Promise<void>;
-  deletePeriodLiability: (id: string) => Promise<void>;
-
-  periodDebtPayments: T.PeriodDebtPayment[];
-  addPeriodDebtPayment: (payment: Omit<T.PeriodDebtPayment, 'id'>) => Promise<void>;
-  updatePeriodDebtPayment: (payment: T.PeriodDebtPayment) => Promise<void>;
-  deletePeriodDebtPayment: (id: string) => Promise<void>;
-
-  periodReceivables: T.PeriodReceivable[];
-  addPeriodReceivable: (receivable: Omit<T.PeriodReceivable, 'id' | 'period'>) => Promise<void>;
-  updatePeriodReceivable: (receivable: T.PeriodReceivable) => Promise<void>;
-  deletePeriodReceivable: (id: string) => Promise<void>;
-
-  periodReceivablePayments: T.PeriodReceivablePayment[];
-  addPeriodReceivablePayment: (payment: Omit<T.PeriodReceivablePayment, 'id'>) => Promise<void>;
-  updatePeriodReceivablePayment: (payment: T.PeriodReceivablePayment) => Promise<void>;
-  deletePeriodReceivablePayment: (id: string) => Promise<void>;
-
   activePeriod: string | null;
   viewingPeriod: string | null;
   openPeriod: (period: string) => Promise<void>;
@@ -177,6 +158,21 @@ interface DataContextType {
 
   firebaseConfig: T.FirebaseConfig | null;
   setFirebaseConfig: React.Dispatch<React.SetStateAction<T.FirebaseConfig | null>>;
+
+  // FIX: Add properties for period-specific debts and receivables
+  periodLiabilities: T.PeriodLiability[];
+  addPeriodLiability: (liability: Omit<T.PeriodLiability, 'id' | 'period'>) => Promise<void>;
+  updatePeriodLiability: (liability: T.PeriodLiability) => Promise<void>;
+  deletePeriodLiability: (id: string) => Promise<void>;
+  periodDebtPayments: T.PeriodDebtPayment[];
+  addPeriodDebtPayment: (payment: Omit<T.PeriodDebtPayment, 'id'>) => Promise<void>;
+
+  periodReceivables: T.PeriodReceivable[];
+  addPeriodReceivable: (receivable: Omit<T.PeriodReceivable, 'id' | 'period'>) => Promise<void>;
+  updatePeriodReceivable: (receivable: T.PeriodReceivable) => Promise<void>;
+  deletePeriodReceivable: (id: string) => Promise<void>;
+  periodReceivablePayments: T.PeriodReceivablePayment[];
+  addPeriodReceivablePayment: (payment: Omit<T.PeriodReceivablePayment, 'id'>) => Promise<void>;
 }
 
 const DataContext = createContext<DataContextType | undefined>(undefined);
@@ -201,8 +197,9 @@ const COLLECTION_NAMES_FOR_SEED = [
     'assetTypes', 'assets', 'liabilities', 'receivables', 'receivablePayments', 
     'exchangeLogs', 'miscellaneousExpenses', 'partners', 'withdrawals', 
     'debtPayments', 'taxPayments', 'capitalInflows', 'categories', 'niches',
-    'periodLiabilities', 'periodReceivables', 'periodDebtPayments', 'periodReceivablePayments',
-    'adAccounts'
+    'adAccounts',
+    // FIX: Add period-specific collections to be wiped during seeding.
+    'periodLiabilities', 'periodDebtPayments', 'periodReceivables', 'periodReceivablePayments',
 ];
 
 const wipeAllFirestoreData = async (db: Firestore) => {
@@ -386,9 +383,10 @@ export const DataProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
   const [capitalInflows, setCapitalInflows] = useState<T.CapitalInflow[]>([]);
   const [categories, setCategories] = useState<T.Category[]>([]);
   const [niches, setNiches] = useState<T.Niche[]>([]);
+  // FIX: Add state for period-specific debts and receivables
   const [periodLiabilities, setPeriodLiabilities] = useState<T.PeriodLiability[]>([]);
-  const [periodReceivables, setPeriodReceivables] = useState<T.PeriodReceivable[]>([]);
   const [periodDebtPayments, setPeriodDebtPayments] = useState<T.PeriodDebtPayment[]>([]);
+  const [periodReceivables, setPeriodReceivables] = useState<T.PeriodReceivable[]>([]);
   const [periodReceivablePayments, setPeriodReceivablePayments] = useState<T.PeriodReceivablePayment[]>([]);
   
   const [taxSettings, setTaxSettings] = useState<T.TaxSettings>(defaultTaxSettings);
@@ -469,9 +467,10 @@ export const DataProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
                 fetchCollection<T.AssetType>('assetTypes', setAssetTypes),
                 fetchCollection<T.Category>('categories', setCategories),
                 fetchCollection<T.Niche>('niches', setNiches),
+                // FIX: Fetch period-specific collections.
                 fetchCollection<T.PeriodLiability>('periodLiabilities', setPeriodLiabilities),
-                fetchCollection<T.PeriodReceivable>('periodReceivables', setPeriodReceivables),
                 fetchCollection<T.PeriodDebtPayment>('periodDebtPayments', setPeriodDebtPayments),
+                fetchCollection<T.PeriodReceivable>('periodReceivables', setPeriodReceivables),
                 fetchCollection<T.PeriodReceivablePayment>('periodReceivablePayments', setPeriodReceivablePayments),
             ]);
             console.log("All data fetched successfully.");
@@ -1086,113 +1085,81 @@ export const DataProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
     }
   };
 
-  const addPeriodLiability = async (liability: Omit<T.PeriodLiability, 'id' | 'period'>) => {
-    if (!activePeriod || !firestoreDb) return;
-    const newLiability = { ...liability, period: activePeriod };
-    try {
-      const docRef = await addDoc(collection(firestoreDb, 'periodLiabilities'), newLiability);
-      setPeriodLiabilities(prev => [...prev, { ...newLiability, id: docRef.id }]);
-    } catch (e) { console.error("Error adding period liability: ", e); }
-  };
-  const updatePeriodLiability = async (updatedLiability: T.PeriodLiability) => {
-    if (!firestoreDb) return;
-    const { id, ...data } = updatedLiability;
-    try {
-      await updateDoc(doc(firestoreDb, 'periodLiabilities', id), data);
-      setPeriodLiabilities(prev => prev.map(l => l.id === id ? updatedLiability : l));
-    } catch (e) { console.error("Error updating period liability: ", e); }
-  };
-  const deletePeriodLiability = async (id: string) => {
-    if (!firestoreDb) return;
-    try {
-      const batch = writeBatch(firestoreDb);
-      batch.delete(doc(firestoreDb, 'periodLiabilities', id));
-      const q = query(collection(firestoreDb, 'periodDebtPayments'), where('periodLiabilityId', '==', id));
-      const snapshot = await getDocs(q);
-      snapshot.forEach(doc => batch.delete(doc.ref));
-      await batch.commit();
+    // FIX: Add CRUD functions for period-specific debts and receivables
+    const addPeriodLiability = async (liability: Omit<T.PeriodLiability, 'id' | 'period'>) => {
+        if (!activePeriod || !firestoreDb) return;
+        const newLiabilityData = { ...liability, period: activePeriod };
+        try {
+            const docRef = await addDoc(collection(firestoreDb, 'periodLiabilities'), newLiabilityData);
+            setPeriodLiabilities(prev => [...prev, { ...newLiabilityData, id: docRef.id }]);
+        } catch (e) { console.error("Error adding period liability: ", e); }
+    };
+    const updatePeriodLiability = async (updatedLiability: T.PeriodLiability) => {
+        if (!firestoreDb) return;
+        const { id, ...data } = updatedLiability;
+        try {
+            await updateDoc(doc(firestoreDb, 'periodLiabilities', id), data);
+            setPeriodLiabilities(prev => prev.map(l => l.id === id ? updatedLiability : l));
+        } catch (e) { console.error("Error updating period liability: ", e); }
+    };
+    const deletePeriodLiability = async (id: string) => {
+        if (!firestoreDb) return;
+        try {
+            const batch = writeBatch(firestoreDb);
+            batch.delete(doc(firestoreDb, "periodLiabilities", id));
+            const paymentsQuery = query(collection(firestoreDb, "periodDebtPayments"), where("periodLiabilityId", "==", id));
+            const paymentsSnapshot = await getDocs(paymentsQuery);
+            paymentsSnapshot.forEach(doc => batch.delete(doc.ref));
+            await batch.commit();
+            setPeriodLiabilities(prev => prev.filter(l => l.id !== id));
+            setPeriodDebtPayments(prev => prev.filter(p => p.periodLiabilityId !== id));
+        } catch (e) { console.error("Error deleting period liability and payments: ", e); }
+    };
+    const addPeriodDebtPayment = async (payment: Omit<T.PeriodDebtPayment, 'id'>) => {
+        if (!firestoreDb) return;
+        try {
+            const docRef = await addDoc(collection(firestoreDb, 'periodDebtPayments'), payment);
+            setPeriodDebtPayments(prev => [...prev, { ...payment, id: docRef.id }]);
+        } catch (e) { console.error("Error adding period debt payment: ", e); }
+    };
 
-      setPeriodLiabilities(prev => prev.filter(l => l.id !== id));
-      setPeriodDebtPayments(prev => prev.filter(p => p.periodLiabilityId !== id));
-    } catch (e) { console.error("Error deleting period liability: ", e); }
-  };
+    const addPeriodReceivable = async (receivable: Omit<T.PeriodReceivable, 'id' | 'period'>) => {
+        if (!activePeriod || !firestoreDb) return;
+        const newReceivableData = { ...receivable, period: activePeriod };
+        try {
+            const docRef = await addDoc(collection(firestoreDb, 'periodReceivables'), newReceivableData);
+            setPeriodReceivables(prev => [...prev, { ...newReceivableData, id: docRef.id }]);
+        } catch (e) { console.error("Error adding period receivable: ", e); }
+    };
+    const updatePeriodReceivable = async (updatedReceivable: T.PeriodReceivable) => {
+        if (!firestoreDb) return;
+        const { id, ...data } = updatedReceivable;
+        try {
+            await updateDoc(doc(firestoreDb, 'periodReceivables', id), data);
+            setPeriodReceivables(prev => prev.map(r => r.id === id ? updatedReceivable : r));
+        } catch (e) { console.error("Error updating period receivable: ", e); }
+    };
+    const deletePeriodReceivable = async (id: string) => {
+        if (!firestoreDb) return;
+        try {
+            const batch = writeBatch(firestoreDb);
+            batch.delete(doc(firestoreDb, "periodReceivables", id));
+            const paymentsQuery = query(collection(firestoreDb, "periodReceivablePayments"), where("periodReceivableId", "==", id));
+            const paymentsSnapshot = await getDocs(paymentsQuery);
+            paymentsSnapshot.forEach(doc => batch.delete(doc.ref));
+            await batch.commit();
+            setPeriodReceivables(prev => prev.filter(r => r.id !== id));
+            setPeriodReceivablePayments(prev => prev.filter(p => p.periodReceivableId !== id));
+        } catch (e) { console.error("Error deleting period receivable and payments: ", e); }
+    };
+    const addPeriodReceivablePayment = async (payment: Omit<T.PeriodReceivablePayment, 'id'>) => {
+        if (!firestoreDb) return;
+        try {
+            const docRef = await addDoc(collection(firestoreDb, 'periodReceivablePayments'), payment);
+            setPeriodReceivablePayments(prev => [...prev, { ...payment, id: docRef.id }]);
+        } catch (e) { console.error("Error adding period receivable payment: ", e); }
+    };
 
-  const addPeriodDebtPayment = async (payment: Omit<T.PeriodDebtPayment, 'id'>) => {
-    if (!firestoreDb) return;
-    try {
-      const docRef = await addDoc(collection(firestoreDb, 'periodDebtPayments'), payment);
-      setPeriodDebtPayments(prev => [...prev, { ...payment, id: docRef.id }]);
-    } catch (e) { console.error("Error adding period debt payment: ", e); }
-  };
-  const updatePeriodDebtPayment = async (updatedPayment: T.PeriodDebtPayment) => {
-    if (!firestoreDb) return;
-    const { id, ...data } = updatedPayment;
-    try {
-      await updateDoc(doc(firestoreDb, 'periodDebtPayments', id), data);
-      setPeriodDebtPayments(prev => prev.map(p => p.id === id ? updatedPayment : p));
-    } catch (e) { console.error("Error updating period debt payment: ", e); }
-  };
-  const deletePeriodDebtPayment = async (id: string) => {
-    if (!firestoreDb) return;
-    try {
-      await deleteDoc(doc(firestoreDb, 'periodDebtPayments', id));
-      setPeriodDebtPayments(prev => prev.filter(p => p.id !== id));
-    } catch (e) { console.error("Error deleting period debt payment: ", e); }
-  };
-
-  const addPeriodReceivable = async (receivable: Omit<T.PeriodReceivable, 'id' | 'period'>) => {
-    if (!activePeriod || !firestoreDb) return;
-    const newReceivable = { ...receivable, period: activePeriod };
-    try {
-      const docRef = await addDoc(collection(firestoreDb, 'periodReceivables'), newReceivable);
-      setPeriodReceivables(prev => [...prev, { ...newReceivable, id: docRef.id }]);
-    } catch (e) { console.error("Error adding period receivable: ", e); }
-  };
-  const updatePeriodReceivable = async (updatedReceivable: T.PeriodReceivable) => {
-    if (!firestoreDb) return;
-    const { id, ...data } = updatedReceivable;
-    try {
-      await updateDoc(doc(firestoreDb, 'periodReceivables', id), data);
-      setPeriodReceivables(prev => prev.map(r => r.id === id ? updatedReceivable : r));
-    } catch (e) { console.error("Error updating period receivable: ", e); }
-  };
-  const deletePeriodReceivable = async (id: string) => {
-    if (!firestoreDb) return;
-    try {
-      const batch = writeBatch(firestoreDb);
-      batch.delete(doc(firestoreDb, 'periodReceivables', id));
-      const q = query(collection(firestoreDb, 'periodReceivablePayments'), where('periodReceivableId', '==', id));
-      const snapshot = await getDocs(q);
-      snapshot.forEach(doc => batch.delete(doc.ref));
-      await batch.commit();
-
-      setPeriodReceivables(prev => prev.filter(r => r.id !== id));
-      setPeriodReceivablePayments(prev => prev.filter(p => p.periodReceivableId !== id));
-    } catch (e) { console.error("Error deleting period receivable: ", e); }
-  };
-
-  const addPeriodReceivablePayment = async (payment: Omit<T.PeriodReceivablePayment, 'id'>) => {
-    if (!firestoreDb) return;
-    try {
-      const docRef = await addDoc(collection(firestoreDb, 'periodReceivablePayments'), payment);
-      setPeriodReceivablePayments(prev => [...prev, { ...payment, id: docRef.id }]);
-    } catch (e) { console.error("Error adding period receivable payment: ", e); }
-  };
-  const updatePeriodReceivablePayment = async (updatedPayment: T.PeriodReceivablePayment) => {
-    if (!firestoreDb) return;
-    const { id, ...data } = updatedPayment;
-    try {
-      await updateDoc(doc(firestoreDb, 'periodReceivablePayments', id), data);
-      setPeriodReceivablePayments(prev => prev.map(p => p.id === id ? updatedPayment : p));
-    } catch (e) { console.error("Error updating period receivable payment: ", e); }
-  };
-  const deletePeriodReceivablePayment = async (id: string) => {
-    if (!firestoreDb) return;
-    try {
-      await deleteDoc(doc(firestoreDb, 'periodReceivablePayments', id));
-      setPeriodReceivablePayments(prev => prev.filter(p => p.id !== id));
-    } catch (e) { console.error("Error deleting period receivable payment: ", e); }
-  };
 
     const updatePeriodsInFirestore = async (newActivePeriod: string | null, newClosedPeriods: T.ClosedPeriod[]) => {
         if (!firestoreDb) return;
@@ -1556,115 +1523,140 @@ export const DataProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
             taxPayable = Math.max(0, netVat) + incomeTax;
         }
 
-        const partnerPnlDetails = Array.from(partnerPnl.entries()).map(([id, pnl]) => {
-            let pTaxPayable = 0;
-            if(taxSettings.method === 'revenue'){
-                pTaxPayable = pnl.revenue * (taxSettings.revenueRate/100);
-            } else {
-                const pOutputVat = pnl.revenue * (taxSettings.vatRate/100);
-                const pNetVat = pOutputVat - pnl.inputVat;
-                const pIncomeTax = Math.max(0, pnl.profit) * (taxSettings.incomeRate/100);
-                pTaxPayable = Math.max(0, pNetVat) + pIncomeTax;
-            }
+        const partnerPnlDetails = Array.from(partnerPnl.entries()).map(([partnerId, pnl]) => {
+             const { taxSeparationAmount = 0 } = taxSettings;
+             const partnerInitialRevenueBase = taxSettings.incomeTaxBase === 'personal' ? pnl.revenue : totalRevenue;
+             const partnerRevenueBase = Math.max(0, partnerInitialRevenueBase - (partnerId === mePartnerId ? taxSeparationAmount : 0)); // only apply separation to 'me'
+             const partnerCostBase = taxSettings.incomeTaxBase === 'personal' ? pnl.cost : totalCost;
+             const partnerProfitBase = partnerRevenueBase - partnerCostBase;
+             const partnerVatOutputBase = taxSettings.vatOutputBase === 'personal' ? pnl.revenue : totalRevenue;
+             const partnerVatInputBase = taxSettings.vatInputMethod === 'manual' ? taxSettings.manualInputVat : (taxSettings.vatInputBase === 'personal' ? pnl.inputVat : totalInputVat);
+             
+             let partnerTaxPayable=0;
+             if(taxSettings.method === 'revenue'){
+                partnerTaxPayable = partnerRevenueBase * (taxSettings.revenueRate/100);
+             } else {
+                 const partnerOutputVat = partnerVatOutputBase * (taxSettings.vatRate/100);
+                 const partnerNetVat = partnerOutputVat - partnerVatInputBase;
+                 const partnerIncomeTax = Math.max(0, partnerProfitBase) * (taxSettings.incomeRate/100);
+                 partnerTaxPayable = Math.max(0, partnerNetVat) + partnerIncomeTax;
+             }
+            
             return {
-                partnerId: id,
-                name: partners.find(p => p.id === id)?.name || 'N/A',
+                partnerId,
+                name: partners.find(p => p.id === partnerId)?.name || 'N/A',
                 ...pnl,
-                taxPayable: pTaxPayable
+                taxPayable: partnerId === mePartnerId ? taxPayable : partnerTaxPayable,
             };
         });
 
-        const operatingInflows: T.CashFlowDetails[] = periodCommissions.map(c => ({label: `HH: ${projectMap.get(c.projectId) || ''}`, amount: c.vndAmount}));
-        const operatingOutflows: T.CashFlowDetails[] = [
-            ...periodAdDeposits.map(d => ({label: `Nạp Ads: ${d.adAccountNumber}`, amount: d.vndAmount})),
-            ...periodMiscExpenses.map(e => ({label: `CP: ${e.description}`, amount: e.vndAmount})),
-            ...periodTaxPayments.map(p => ({label: 'Nộp thuế', amount: p.amount}))
-        ];
-        const investingOutflows: T.CashFlowDetails[] = periodReceivables.filter(r => assetMap.get(r.outflowAssetId)?.currency === 'VND').map(r => ({label: `Tạm ứng: ${r.description}`, amount: r.totalAmount}));
-        const investingInflows: T.CashFlowDetails[] = periodReceivablePayments.filter(p => assetMap.get(p.assetId)?.currency === 'VND').map(p => ({label: 'Thu nợ', amount: p.amount}));
-        const financingInflows: T.CashFlowDetails[] = periodCapitalInflows.filter(i => assetMap.get(i.assetId)?.currency === 'VND').map(i => ({label: `Vốn: ${i.description}`, amount: i.amount}));
-        const financingOutflows: T.CashFlowDetails[] = [
-            ...periodDebtPayments.map(p => ({label: 'Trả nợ', amount: p.amount})),
-            ...periodWithdrawals.filter(w => assetMap.get(w.assetId)?.currency === 'VND').map(w => ({label: `Rút tiền: ${w.description}`, amount: w.vndAmount})),
-        ];
-
-        const beginningBalance = periodAssetDetails.filter(a => a.currency === 'VND').reduce((sum, a) => sum + a.openingBalance, 0);
-        const endBalance = periodAssetDetails.filter(a => a.currency === 'VND').reduce((sum, a) => sum + a.closingBalance, 0);
+        const cashFlow = {
+            operating: { inflows: [] as T.CashFlowDetails[], outflows: [] as T.CashFlowDetails[], net: 0 },
+            investing: { inflows: [] as T.CashFlowDetails[], outflows: [] as T.CashFlowDetails[], net: 0 },
+            financing: { inflows: [] as T.CashFlowDetails[], outflows: [] as T.CashFlowDetails[], net: 0 },
+            netChange: 0, beginningBalance: 0, endBalance: 0,
+        };
+        const addCashFlow = (category: 'operating' | 'investing' | 'financing', type: 'inflows' | 'outflows', label: string, amount: number) => {
+            if(amount === 0) return;
+            cashFlow[category][type].push({label, amount});
+        }
         
+        // Operating - Inflows
+        addCashFlow('operating', 'inflows', 'Từ hoa hồng', periodCommissions.reduce((s, c) => {
+             const receivingAsset = assetMap.get(c.assetId);
+             if(!receivingAsset || receivingAsset.currency !== 'VND') return s;
+             return s + c.vndAmount;
+        }, 0));
+        addCashFlow('operating', 'inflows', 'Từ thu nợ phải thu', periodReceivablePayments.reduce((s, p) => s + p.amount, 0));
+        addCashFlow('operating', 'inflows', 'Từ bán USD', periodExchangeLogs.reduce((s, l) => s + l.vndAmount, 0));
+
+        // Operating - Outflows
+        addCashFlow('operating', 'outflows', 'Nạp tiền Ads', periodAdDeposits.reduce((s, d) => s + d.vndAmount, 0));
+        addCashFlow('operating', 'outflows', 'Chi phí phát sinh', periodMiscExpenses.reduce((s, e) => s + e.vndAmount, 0));
+        addCashFlow('operating', 'outflows', 'Trả nợ', periodDebtPayments.reduce((s, p) => s + p.amount, 0));
+        addCashFlow('operating', 'outflows', 'Nộp thuế', periodTaxPayments.reduce((s, p) => s + p.amount, 0));
+        
+        // Investing - Outflows
+        addCashFlow('investing', 'outflows', 'Tạo khoản phải thu', periodReceivables.reduce((s,r) => s+r.totalAmount, 0));
+
+        // Financing - Inflows & Outflows
+        addCashFlow('financing', 'inflows', 'Vốn góp', periodCapitalInflows.reduce((s,i)=>s+i.amount, 0));
+        addCashFlow('financing', 'outflows', 'Rút vốn', periodWithdrawals.reduce((s,w)=>s+w.vndAmount, 0));
+        
+        cashFlow.operating.net = cashFlow.operating.inflows.reduce((s,i)=>s+i.amount,0) - cashFlow.operating.outflows.reduce((s,i)=>s+i.amount,0);
+        cashFlow.investing.net = cashFlow.investing.inflows.reduce((s,i)=>s+i.amount,0) - cashFlow.investing.outflows.reduce((s,i)=>s+i.amount,0);
+        cashFlow.financing.net = cashFlow.financing.inflows.reduce((s,i)=>s+i.amount,0) - cashFlow.financing.outflows.reduce((s,i)=>s+i.amount,0);
+        
+        cashFlow.netChange = cashFlow.operating.net + cashFlow.investing.net + cashFlow.financing.net;
+        cashFlow.beginningBalance = periodAssetDetails.filter(a => a.currency === 'VND').reduce((sum, a) => sum + a.openingBalance, 0);
+        cashFlow.endBalance = cashFlow.beginningBalance + cashFlow.netChange;
+
         return {
             totalRevenue, totalAdCost, totalMiscCost, totalCost, totalProfit, totalInputVat,
             myRevenue: myPnl.revenue, myCost: myPnl.cost, myProfit: myPnl.profit, myInputVat: myPnl.inputVat,
-            exchangeRateGainLoss, profitBeforeTax: totalProfit, netProfit: totalProfit - taxPayable,
-            tax: { taxPayable, incomeTax, netVat, outputVat },
+            exchangeRateGainLoss, profitBeforeTax: totalProfit, netProfit: totalProfit - taxPayable, tax: { taxPayable, incomeTax, netVat, outputVat },
             taxBases: { initialRevenueBase, taxSeparationAmount, revenueBase, costBase, profitBase, vatOutputBase, vatInputBase },
-            partnerPnlDetails,
-            revenueDetails: periodCommissions.map(c => ({name: projectMap.get(c.projectId) || 'N/A', amount: c.vndAmount})),
-            adCostDetails: periodAdCosts.map(c => ({name: projectMap.get(c.projectId) || 'N/A', amount: c.vndCost})),
-            miscCostDetails: periodMiscExpenses.map(e => ({name: e.description, amount: e.vndAmount})),
-            cashFlow: {
-                operating: { inflows: operatingInflows, outflows: operatingOutflows, net: operatingInflows.reduce((s,i)=>s+i.amount,0)-operatingOutflows.reduce((s,i)=>s+i.amount,0) },
-                investing: { inflows: investingInflows, outflows: investingOutflows, net: investingInflows.reduce((s,i)=>s+i.amount,0)-investingOutflows.reduce((s,i)=>s+i.amount,0) },
-                financing: { inflows: financingInflows, outflows: financingOutflows, net: financingInflows.reduce((s,i)=>s+i.amount,0)-financingOutflows.reduce((s,i)=>s+i.amount,0) },
-                netChange: endBalance - beginningBalance,
-                beginningBalance,
-                endBalance
-            }
+            partnerPnlDetails, cashFlow,
+            revenueDetails: Array.from(projectPnL.entries()).map(([id, pnl]) => ({name: projectMap.get(id) || 'N/A', amount: pnl.revenue})).filter(d => d.amount > 0),
+            adCostDetails: periodAdCosts.map(c => ({name: projectMap.get(c.projectId) || 'N/A', amount: c.vndCost})).filter(d => d.amount > 0),
+            miscCostDetails: periodMiscExpenses.map(e => ({name: e.description, amount: e.vndAmount})).filter(d => d.amount > 0),
         };
+    }, [
+        currentPeriod, taxSettings, partners, projects, enrichedDailyAdCosts, commissions, miscellaneousExpenses,
+        exchangeLogs, debtPayments, withdrawals, adDeposits, taxPayments, capitalInflows, receivables, receivablePayments,
+        periodAssetDetails, assets
+    ]);
 
-  }, [currentPeriod, commissions, enrichedDailyAdCosts, miscellaneousExpenses, projects, partners, taxSettings, assets, liabilities, debtPayments, withdrawals, taxPayments, capitalInflows, receivables, receivablePayments, adDeposits, exchangeLogs, periodAssetDetails]);
-
-
-  const masterProjects = useMemo<MasterProject[]>(() => {
-    const uniqueProjects = new Map<string, MasterProject>();
-    projects.forEach(p => {
-        const key = p.name.trim().toLowerCase();
-        if (!uniqueProjects.has(key)) {
-            uniqueProjects.set(key, { name: p.name, categoryId: p.categoryId, nicheId: p.nicheId });
-        }
-    });
-    return Array.from(uniqueProjects.values());
-  }, [projects]);
+    const masterProjects = useMemo(() => {
+        const uniqueProjects = new Map<string, { name: string; categoryId?: string; nicheId?: string; }>();
+        projects.forEach(p => {
+            const key = p.name.trim().toLowerCase();
+            if (!uniqueProjects.has(key)) {
+                uniqueProjects.set(key, { name: p.name, categoryId: p.categoryId, nicheId: p.nicheId });
+            }
+        });
+        return Array.from(uniqueProjects.values());
+    }, [projects]);
 
 
   return (
-    <DataContext.Provider value={{
-      isLoading,
-      projects, addProject, updateProject, deleteProject,
-      adAccounts, addAdAccount, updateAdAccount, deleteAdAccount,
-      dailyAdCosts, addDailyAdCost, updateDailyAdCost, deleteDailyAdCost,
-      adDeposits, addAdDeposit, updateAdDeposit, deleteAdDeposit,
-      adFundTransfers, addAdFundTransfer, updateAdFundTransfer, deleteAdFundTransfer,
-      commissions, addCommission, updateCommission, deleteCommission,
-      assetTypes, addAssetType, updateAssetType, deleteAssetType,
-      assets, addAsset, updateAsset, deleteAsset,
-      liabilities, addLiability, updateLiability, deleteLiability,
-      receivables, addReceivable, updateReceivable, deleteReceivable,
-      receivablePayments, addReceivablePayment, updateReceivablePayment, deleteReceivablePayment,
-      exchangeLogs, addExchangeLog, updateExchangeLog, deleteExchangeLog,
-      miscellaneousExpenses, addMiscellaneousExpense, updateMiscellaneousExpense, deleteMiscellaneousExpense,
-      partners, addPartner, updatePartner, deletePartner,
-      withdrawals, addWithdrawal, updateWithdrawal, deleteWithdrawal,
-      debtPayments, addDebtPayment, updateDebtPayment, deleteDebtPayment,
-      taxPayments, addTaxPayment,
-      capitalInflows, addCapitalInflow, updateCapitalInflow, deleteCapitalInflow,
-      taxSettings, updateTaxSettings,
-      periodLiabilities, addPeriodLiability, updatePeriodLiability, deletePeriodLiability,
-      periodDebtPayments, addPeriodDebtPayment, updatePeriodDebtPayment, deletePeriodDebtPayment,
-      periodReceivables, addPeriodReceivable, updatePeriodReceivable, deletePeriodReceivable,
-      periodReceivablePayments, addPeriodReceivablePayment, updatePeriodReceivablePayment, deletePeriodReceivablePayment,
-      activePeriod, openPeriod, closePeriod, closedPeriods, viewingPeriod, setViewingPeriod, clearViewingPeriod,
-      seedData,
-      currentPage, setCurrentPage,
-      currentPeriod, isReadOnly,
-      enrichedAssets,
-      enrichedDailyAdCosts,
-      periodFinancials,
-      periodAssetDetails,
-      categories, addCategory, updateCategory, deleteCategory,
-      niches, addNiche, updateNiche, deleteNiche,
-      masterProjects,
-      firebaseConfig, setFirebaseConfig,
-    }}>
+    <DataContext.Provider value={{ 
+        isLoading, projects, addProject, updateProject, deleteProject, adAccounts, addAdAccount, updateAdAccount,
+        deleteAdAccount, dailyAdCosts, addDailyAdCost, updateDailyAdCost, deleteDailyAdCost,
+        partners, addPartner, updatePartner, deletePartner,
+        assetTypes, addAssetType, updateAssetType, deleteAssetType,
+        assets, addAsset, updateAsset, deleteAsset,
+        commissions, addCommission, updateCommission, deleteCommission,
+        exchangeLogs, addExchangeLog, updateExchangeLog, deleteExchangeLog,
+        miscellaneousExpenses, addMiscellaneousExpense, updateMiscellaneousExpense, deleteMiscellaneousExpense,
+        adDeposits, addAdDeposit, updateAdDeposit, deleteAdDeposit,
+        adFundTransfers, addAdFundTransfer, updateAdFundTransfer, deleteAdFundTransfer,
+        liabilities, addLiability, updateLiability, deleteLiability,
+        receivables, addReceivable, updateReceivable, deleteReceivable,
+        receivablePayments, addReceivablePayment, updateReceivablePayment, deleteReceivablePayment,
+        withdrawals, addWithdrawal, updateWithdrawal, deleteWithdrawal,
+        debtPayments, addDebtPayment, updateDebtPayment, deleteDebtPayment,
+        taxPayments, addTaxPayment,
+        capitalInflows, addCapitalInflow, updateCapitalInflow, deleteCapitalInflow,
+        taxSettings, updateTaxSettings,
+        activePeriod, openPeriod, closePeriod, closedPeriods, viewingPeriod, setViewingPeriod, clearViewingPeriod,
+        currentPage, setCurrentPage,
+        currentPeriod, isReadOnly,
+        enrichedAssets,
+        enrichedDailyAdCosts,
+        periodFinancials,
+        periodAssetDetails,
+        seedData,
+        categories, addCategory, updateCategory, deleteCategory,
+        niches, addNiche, updateNiche, deleteNiche,
+        masterProjects,
+        firebaseConfig, setFirebaseConfig,
+        // Add period-specific data and functions
+        periodLiabilities, addPeriodLiability, updatePeriodLiability, deletePeriodLiability,
+        periodDebtPayments, addPeriodDebtPayment,
+        periodReceivables, addPeriodReceivable, updatePeriodReceivable, deletePeriodReceivable,
+        periodReceivablePayments, addPeriodReceivablePayment,
+     }}>
       {children}
     </DataContext.Provider>
   );
