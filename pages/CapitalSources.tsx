@@ -502,8 +502,16 @@ export default function CapitalSources() {
 
     // Liability handlers
     const handleSaveLiability = (liability: Omit<Liability, 'id'> | Liability) => {
-        if ('id' in liability && liability.id) { updateLiability(liability as Liability); } else { addLiability(liability); }
-        setIsLiabilityModalOpen(false); setEditingLiability(undefined);
+        if ('id' in liability && liability.id) {
+            updateLiability(liability as Liability);
+        } else {
+            // FIX: Cast liability to Liability to safely destructure 'id' property.
+            // The form component always provides a full Liability object, with an empty string for new items.
+            const { id, ...newLiability } = liability as Liability;
+            addLiability(newLiability);
+        }
+        setIsLiabilityModalOpen(false);
+        setEditingLiability(undefined);
     };
     const handleDeleteLiabilityClick = (liability: Liability) => { setLiabilityToDelete(liability); };
     const handleConfirmDeleteLiability = () => { if (liabilityToDelete) { deleteLiability(liabilityToDelete.id); setLiabilityToDelete(null); } };
@@ -521,8 +529,16 @@ export default function CapitalSources() {
     
     // Receivable handlers
     const handleSaveReceivable = (receivable: Omit<Receivable, 'id'> | Receivable) => {
-        if ('id' in receivable && receivable.id) { updateReceivable(receivable as Receivable); } else { addReceivable(receivable); }
-        setIsReceivableModalOpen(false); setEditingReceivable(undefined);
+        if ('id' in receivable && receivable.id) {
+            updateReceivable(receivable as Receivable);
+        } else {
+            // FIX: Cast receivable to Receivable to safely destructure 'id' property.
+            // The form component always provides a full Receivable object, with an empty string for new items.
+            const { id, ...newReceivable } = receivable as Receivable;
+            addReceivable(newReceivable);
+        }
+        setIsReceivableModalOpen(false);
+        setEditingReceivable(undefined);
     };
     const handleDeleteReceivableClick = (receivable: Receivable) => { setReceivableToDelete(receivable); };
     const handleConfirmDeleteReceivable = () => { if (receivableToDelete) { deleteReceivable(receivableToDelete.id); setReceivableToDelete(null); } };
@@ -540,8 +556,16 @@ export default function CapitalSources() {
 
     // Capital Inflow handlers
     const handleSaveCapitalInflow = (inflow: Omit<CapitalInflow, 'id'> | CapitalInflow) => {
-        if ('id' in inflow && inflow.id) { updateCapitalInflow(inflow as CapitalInflow); } else { addCapitalInflow(inflow); }
-        setIsCapitalInflowModalOpen(false); setEditingCapitalInflow(undefined);
+        if ('id' in inflow && inflow.id) {
+            updateCapitalInflow(inflow as CapitalInflow);
+        } else {
+            // FIX: Cast inflow to CapitalInflow to safely destructure 'id' property.
+            // The form component always provides a full CapitalInflow object, with an empty string for new items.
+            const { id, ...newInflow } = inflow as CapitalInflow;
+            addCapitalInflow(newInflow);
+        }
+        setIsCapitalInflowModalOpen(false);
+        setEditingCapitalInflow(undefined);
     };
     const handleDeleteCapitalInflowClick = (inflow: any) => { setCapitalInflowToDelete(inflow); };
     const handleConfirmDeleteCapitalInflow = () => { if (capitalInflowToDelete) { deleteCapitalInflow(capitalInflowToDelete.id); setCapitalInflowToDelete(null); } };
