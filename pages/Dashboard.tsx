@@ -3,7 +3,7 @@ import { ResponsiveContainer, BarChart, XAxis, YAxis, Tooltip, Legend, Bar, PieC
 import { Header } from '../components/Header';
 import { Card, CardHeader, CardContent } from '../components/ui/Card';
 import { useData } from '../context/DataContext';
-import { formatCurrency, getMonthYear, isDateInPeriod, formatPercentage } from '../lib/utils';
+import { formatCurrency, getMonthYear, isDateInPeriod, formatPercentage, formatVietnameseCurrencyShorthand } from '../lib/utils';
 import { NameType, ValueType } from 'recharts/types/component/DefaultTooltipContent';
 import * as T from '../types';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '../components/ui/Table';
@@ -98,7 +98,7 @@ export default function Dashboard() {
              <ResponsiveContainer width="100%" height="100%">
                 <BarChart data={performanceData}>
                   <XAxis dataKey="month" stroke="#94a3b8" />
-                  <YAxis stroke="#94a3b8" tickFormatter={(value) => formatCurrency(value as number, 'VND').replace(' ₫', 'K').replace(/,000$/, '')} />
+                  <YAxis stroke="#94a3b8" tickFormatter={(tick) => formatVietnameseCurrencyShorthand(tick)} />
                   <Tooltip content={<CustomTooltip />} cursor={{ fill: '#334155' }} />
                   <Legend />
                   <Bar dataKey="revenue" fill="#3b82f6" name="Doanh thu"/>

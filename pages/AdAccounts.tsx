@@ -74,26 +74,15 @@ const AdAccountForm: React.FC<{
 export default function AdAccounts() {
     const { 
         adAccounts, addAdAccount, updateAdAccount, deleteAdAccount,
-        adDeposits, adFundTransfers, dailyAdCosts, projects
+        adAccountTransactions, enrichedAdAccounts
     } = useData();
     
     // This page should be independent of period, so isReadOnly is not based on viewingPeriod
     const isReadOnly = false; 
 
-    const [selectedAccount, setSelectedAccount] = useState<string>('');
     const [isModalOpen, setIsModalOpen] = useState(false);
     const [editingAccount, setEditingAccount] = useState<T.AdAccount | undefined>(undefined);
     const [accountToDelete, setAccountToDelete] = useState<T.AdAccount | null>(null);
-
-    const projectMap = useMemo(() => new Map(projects.map(p => [p.id, p.name])), [projects]);
-    
-     useEffect(() => {
-        if (!selectedAccount && adAccounts.length > 0) {
-            // Sort accounts by name before selecting the first one
-            const sortedAccounts = [...adAccounts].sort((a,b) => a.accountNumber.localeCompare(b.accountNumber));
-            setSelectedAccount(sortedAccounts[0].accountNumber);
-        }
-    }, [adAccounts, selectedAccount]);
 
     const handleSaveAccount = (account: Omit<T.AdAccount, 'id'> | T.AdAccount) => {
         if ('id' in account && account.id) {
@@ -113,47 +102,13 @@ export default function AdAccounts() {
         if (accountToDelete) {
             deleteAdAccount(accountToDelete.id);
             setAccountToDelete(null);
-            if (selectedAccount === accountToDelete.accountNumber) {
-                const remainingAccounts = adAccounts.filter(a => a.id !== accountToDelete.id);
-                setSelectedAccount(remainingAccounts.length > 0 ? remainingAccounts[0].accountNumber : '');
-            }
         }
     };
 
+    // The ledger now shows all transactions, sorted by date.
     const ledgerData = useMemo(() => {
-        if (!selectedAccount) return [];
-
-        const transactions = [
-            ...adDeposits.filter(d => d.adAccountNumber === selectedAccount)
-                .map(d => ({ date: d.date, type: 'deposit' as const, amount: d.usdAmount, description: 'Nạp tiền' })),
-            ...dailyAdCosts.filter(c => c.adAccountNumber === selectedAccount)
-                .map(c => ({ date: c.date, type: 'cost' as const, amount: c.amount, description: `Chi phí: ${projectMap.get(c.projectId) || c.projectId}` })),
-            ...adFundTransfers.filter(t => t.fromAdAccountNumber === selectedAccount)
-                .map(t => ({ date: t.date, type: 'transfer_out' as const, amount: t.amount, description: `Chuyển tiền đến TK ${t.toAdAccountNumber}` })),
-            ...adFundTransfers.filter(t => t.toAdAccountNumber === selectedAccount)
-                .map(t => ({ date: t.date, type: 'transfer_in' as const, amount: t.amount, description: `Nhận tiền từ TK ${t.fromAdAccountNumber}` })),
-        ].sort((a, b) => new Date(a.date).getTime() - new Date(b.date).getTime());
-
-        let runningBalance = 0;
-        return transactions.map(tx => {
-            let deposit = 0;
-            let spent = 0;
-            if (tx.type === 'deposit' || tx.type === 'transfer_in') {
-                runningBalance += tx.amount;
-                deposit = tx.amount;
-            } else {
-                runningBalance -= tx.amount;
-                spent = tx.amount;
-            }
-            return {
-                date: tx.date,
-                description: tx.description,
-                deposit,
-                spent,
-                balance: runningBalance
-            };
-        });
-    }, [selectedAccount, adDeposits, adFundTransfers, dailyAdCosts, projectMap]);
+        return adAccountTransactions;
+    }, [adAccountTransactions]);
 
     return (
         <div>
@@ -172,19 +127,19 @@ export default function AdAccounts() {
                             <TableRow>
                                 <TableHeader>Số tài khoản</TableHeader>
                                 <TableHeader>Nền tảng</TableHeader>
+                                <TableHeader>Số dư (USD)</TableHeader>
                                 <TableHeader>Trạng thái</TableHeader>
                                 {!isReadOnly && <TableHeader>Hành động</TableHeader>}
                             </TableRow>
                         </TableHead>
                         <TableBody>
-                            {adAccounts.length > 0 ? [...adAccounts].sort((a,b) => a.accountNumber.localeCompare(b.accountNumber)).map(acc => (
+                            {enrichedAdAccounts.length > 0 ? enrichedAdAccounts.map(acc => (
                                 <TableRow 
                                     key={acc.id} 
-                                    onClick={() => setSelectedAccount(acc.accountNumber)}
-                                    className={`cursor-pointer ${selectedAccount === acc.accountNumber ? 'bg-primary-900/50' : ''}`}
                                 >
                                     <TableCell className="font-medium text-white">{acc.accountNumber}</TableCell>
                                     <TableCell>{adsPlatformLabels[acc.adsPlatform]}</TableCell>
+                                    <TableCell className="font-semibold text-primary-400">{formatCurrency(acc.balance, 'USD')}</TableCell>
                                     <TableCell>
                                         <span className={`px-2 inline-flex text-xs leading-5 font-semibold rounded-full ${
                                             acc.status === 'running' ? 'bg-green-200 text-green-800' : 
@@ -204,7 +159,7 @@ export default function AdAccounts() {
                                 </TableRow>
                             )) : (
                                 <TableRow>
-                                    <TableCell colSpan={!isReadOnly ? 4 : 3} className="text-center text-gray-500 py-8">
+                                    <TableCell colSpan={!isReadOnly ? 5 : 4} className="text-center text-gray-500 py-8">
                                         Chưa có tài khoản Ads nào. Hãy thêm một tài khoản mới.
                                     </TableCell>
                                 </TableRow>
@@ -214,14 +169,15 @@ export default function AdAccounts() {
                 </CardContent>
             </Card>
 
-            {selectedAccount && (
+            {adAccounts.length > 0 && (
                  <Card>
-                    <CardHeader>Sổ chi tiết cho tài khoản: {selectedAccount}</CardHeader>
+                    <CardHeader>Biến động số dư tài khoản ads</CardHeader>
                     <CardContent>
                          <Table>
                             <TableHead>
                                 <TableRow>
                                     <TableHeader>Ngày</TableHeader>
+                                    <TableHeader>Tài khoản ads</TableHeader>
                                     <TableHeader>Mô tả</TableHeader>
                                     <TableHeader>Nạp (USD)</TableHeader>
                                     <TableHeader>Tiêu (USD)</TableHeader>
@@ -232,6 +188,7 @@ export default function AdAccounts() {
                                 {ledgerData.length > 0 ? ledgerData.map((row, index) => (
                                     <TableRow key={index}>
                                         <TableCell>{formatDate(row.date)}</TableCell>
+                                        <TableCell className="font-medium text-white">{row.adAccountNumber}</TableCell>
                                         <TableCell className="text-left">{row.description}</TableCell>
                                         <TableCell className="text-green-400">
                                             {row.deposit > 0 ? formatCurrency(row.deposit, 'USD') : '—'}
@@ -245,20 +202,12 @@ export default function AdAccounts() {
                                     </TableRow>
                                 )) : (
                                     <TableRow>
-                                        <TableCell colSpan={5} className="text-center text-gray-500 py-8">
-                                            Không có giao dịch cho tài khoản này.
+                                        <TableCell colSpan={6} className="text-center text-gray-500 py-8">
+                                            Không có giao dịch cho tài khoản nào.
                                         </TableCell>
                                     </TableRow>
                                 )}
                             </TableBody>
-                             <tfoot className="border-t-2 border-gray-700">
-                                <TableRow className="font-bold bg-gray-800/50 hover:bg-gray-800/50">
-                                    <TableCell colSpan={4} className="text-right pr-6 text-white">Số dư cuối cùng</TableCell>
-                                    <TableCell className="text-white text-lg">
-                                        {formatCurrency(ledgerData.length > 0 ? ledgerData[ledgerData.length - 1].balance : 0, 'USD')}
-                                    </TableCell>
-                                </TableRow>
-                            </tfoot>
                         </Table>
                     </CardContent>
                 </Card>
@@ -278,7 +227,7 @@ export default function AdAccounts() {
                         onClose={() => setAccountToDelete(null)}
                         onConfirm={handleConfirmDelete}
                         title="Xác nhận xóa tài khoản Ads"
-                        message={`Bạn có chắc muốn xóa tài khoản "${accountToDelete?.accountNumber}"? Các giao dịch liên quan sẽ không bị xóa nhưng có thể không hiển thị đúng. Hành động này không thể hoàn tác.`}
+                        message={`Bạn có chắc muốn xóa tài khoản "${accountToDelete?.accountNumber}"? Hành động này không thể hoàn tác.`}
                     />
                 </>
             )}

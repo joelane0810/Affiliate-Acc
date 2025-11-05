@@ -234,7 +234,22 @@ const WithdrawalForm: React.FC<{
     );
 };
 
-export default function Assets() {
+const TabButton: React.FC<{ active: boolean; onClick: () => void; children: React.ReactNode }> = ({ active, onClick, children }) => (
+    <button
+      onClick={onClick}
+      className={`px-6 py-3 text-sm font-semibold transition-colors focus:outline-none ${
+        active
+          ? 'border-b-2 border-primary-500 text-white'
+          : 'text-gray-400 hover:text-white'
+      }`}
+      role="tab"
+      aria-selected={active}
+    >
+      {children}
+    </button>
+);
+
+const BalanceSheetContent = () => {
     const { 
         assets, addAsset, updateAsset, deleteAsset,
         assetTypes, addAssetType,
@@ -307,132 +322,215 @@ export default function Assets() {
     }, [withdrawals, assets, partners]);
 
     return (
-        <div>
-            <Header title="Tài sản" />
-            <div className="space-y-8">
-                {/* Assets Table */}
-                <Card>
-                    <CardHeader className="flex justify-between items-center">
-                        <span>Bảng cân đối tài sản</span>
-                        {!isReadOnly && <Button onClick={() => { setEditingAsset(undefined); setIsAssetModalOpen(true); }}><span className="flex items-center gap-2"><Plus /> Thêm tài sản</span></Button>}
-                    </CardHeader>
-                    <CardContent>
-                        <Table>
-                            <TableHead><TableRow>
-                                <TableHeader className="w-12"></TableHeader>
-                                <TableHeader>Tên tài sản</TableHeader>
-                                <TableHeader>Loại</TableHeader>
-                                <TableHeader>Tiền tệ</TableHeader>
-                                <TableHeader>Tiền vào</TableHeader>
-                                <TableHeader>Tiền ra</TableHeader>
-                                <TableHeader>Số dư</TableHeader>
-                                {!isReadOnly && <TableHeader>Hành động</TableHeader>}
-                            </TableRow></TableHead>
-                            <TableBody>
-                                {enrichedAssets.map(asset => (
-                                    <React.Fragment key={asset.id}>
-                                        <TableRow>
-                                            <TableCell>
-                                                {asset.isExpandable && (
-                                                    <button onClick={() => toggleRow(asset.id)} className="text-gray-400 hover:text-white">
-                                                        {expandedRows.has(asset.id) ? <ChevronDown /> : <ChevronRight />}
-                                                    </button>
-                                                )}
-                                            </TableCell>
-                                            <TableCell className="font-medium text-white">{asset.name}</TableCell>
-                                            <TableCell>{assetTypeMap.get(asset.typeId) || 'N/A'}</TableCell>
-                                            <TableCell>{asset.currency}</TableCell>
-                                            <TableCell className="font-semibold text-green-400">{formatCurrency(asset.totalReceived, asset.currency)}</TableCell>
-                                            <TableCell className="font-semibold text-red-400">{formatCurrency(asset.totalWithdrawn, asset.currency)}</TableCell>
-                                            <TableCell className="font-semibold text-primary-400">{formatCurrency(asset.balance, asset.currency)}</TableCell>
-                                            {!isReadOnly && (
-                                                <TableCell><div className="flex items-center space-x-3 justify-center">
-                                                    <button onClick={() => { setEditingAsset(asset); setIsAssetModalOpen(true); }} className="text-gray-400 hover:text-primary-400"><Edit /></button>
-                                                    <button onClick={() => handleDeleteAssetClick(asset)} className="text-gray-400 hover:text-red-400"><Trash2 /></button>
-                                                </div></TableCell>
+        <div className="space-y-8">
+            <Card>
+                <CardHeader className="flex justify-between items-center">
+                    <span>Bảng cân đối tài sản</span>
+                    {!isReadOnly && <Button onClick={() => { setEditingAsset(undefined); setIsAssetModalOpen(true); }}><span className="flex items-center gap-2"><Plus /> Thêm tài sản</span></Button>}
+                </CardHeader>
+                <CardContent>
+                    <Table>
+                        <TableHead><TableRow>
+                            <TableHeader className="w-12"></TableHeader>
+                            <TableHeader>Tên tài sản</TableHeader>
+                            <TableHeader>Loại</TableHeader>
+                            <TableHeader>Tiền tệ</TableHeader>
+                            <TableHeader>Tiền vào</TableHeader>
+                            <TableHeader>Tiền ra</TableHeader>
+                            <TableHeader>Số dư</TableHeader>
+                            {!isReadOnly && <TableHeader>Hành động</TableHeader>}
+                        </TableRow></TableHead>
+                        <TableBody>
+                            {enrichedAssets.map(asset => (
+                                <React.Fragment key={asset.id}>
+                                    <TableRow>
+                                        <TableCell>
+                                            {asset.isExpandable && (
+                                                <button onClick={() => toggleRow(asset.id)} className="text-gray-400 hover:text-white">
+                                                    {expandedRows.has(asset.id) ? <ChevronDown /> : <ChevronRight />}
+                                                </button>
                                             )}
-                                        </TableRow>
-                                        {asset.isExpandable && expandedRows.has(asset.id) && (
-                                            <>
-                                                <TableRow className="bg-gray-900/50">
-                                                    <TableCell></TableCell>
-                                                    <TableCell colSpan={!isReadOnly ? 7 : 6} className="!py-2 !px-4 !text-left">
-                                                        <h4 className="font-semibold text-white">Phân bổ theo đối tác</h4>
-                                                    </TableCell>
-                                                </TableRow>
-                                                {asset.owners.map(owner => (
-                                                    <TableRow key={owner.id} className="bg-gray-900/50 hover:bg-gray-800/70">
-                                                        <TableCell></TableCell>
-                                                        <TableCell className="pl-12 text-gray-300">{owner.name}</TableCell>
-                                                        <TableCell></TableCell>
-                                                        <TableCell></TableCell>
-                                                        <TableCell className="text-green-400">{formatCurrency(owner.received, asset.currency)}</TableCell>
-                                                        <TableCell className="text-red-400">{formatCurrency(owner.withdrawn, asset.currency)}</TableCell>
-                                                        <TableCell></TableCell>
-                                                        {!isReadOnly && <TableCell></TableCell>}
-                                                    </TableRow>
-                                                ))}
-                                            </>
-                                        )}
-                                    </React.Fragment>
-                                ))}
-                            </TableBody>
-                        </Table>
-                    </CardContent>
-                </Card>
-
-                {/* Withdrawals Table */}
-                <Card>
-                    <CardHeader className="flex justify-between items-center">
-                        <span>Rút tiền</span>
-                        {!isReadOnly && <Button onClick={() => { setEditingWithdrawal(undefined); setIsWithdrawalModalOpen(true); }}><span className="flex items-center gap-2"><Plus /> Thêm giao dịch rút</span></Button>}
-                    </CardHeader>
-                    <CardContent>
-                        <Table>
-                            <TableHead><TableRow>
-                                <TableHeader>Ngày</TableHeader>
-                                <TableHeader>Mô tả</TableHeader>
-                                <TableHeader>Đối tác</TableHeader>
-                                <TableHeader>Tài sản</TableHeader>
-                                <TableHeader>Số tiền</TableHeader>
-                                {!isReadOnly && <TableHeader>Hành động</TableHeader>}
-                            </TableRow></TableHead>
-                            <TableBody>
-                                {enrichedWithdrawals.map(w => (
-                                    <TableRow key={w.id}>
-                                        <TableCell>{formatDate(w.date)}</TableCell>
-                                        <TableCell className="font-medium text-white">{w.description}</TableCell>
-                                        <TableCell>{w.partnerName}</TableCell>
-                                        <TableCell>{w.assetName}</TableCell>
-                                        <TableCell className="font-semibold text-red-400">{formatCurrency(w.amount, w.isUSD ? 'USD' : 'VND')}</TableCell>
+                                        </TableCell>
+                                        <TableCell className="font-medium text-white">{asset.name}</TableCell>
+                                        <TableCell>{assetTypeMap.get(asset.typeId) || 'N/A'}</TableCell>
+                                        <TableCell>{asset.currency}</TableCell>
+                                        <TableCell className="font-semibold text-green-400">{formatCurrency(asset.totalReceived, asset.currency)}</TableCell>
+                                        <TableCell className="font-semibold text-red-400">{formatCurrency(asset.totalWithdrawn, asset.currency)}</TableCell>
+                                        <TableCell className="font-semibold text-primary-400">{formatCurrency(asset.balance, asset.currency)}</TableCell>
                                         {!isReadOnly && (
                                             <TableCell><div className="flex items-center space-x-3 justify-center">
-                                                <button onClick={() => { setEditingWithdrawal(w); setIsWithdrawalModalOpen(true); }} className="text-gray-400 hover:text-primary-400"><Edit /></button>
-                                                <button onClick={() => handleDeleteWithdrawalClick(w)} className="text-gray-400 hover:text-red-400"><Trash2 /></button>
+                                                <button onClick={() => { setEditingAsset(asset); setIsAssetModalOpen(true); }} className="text-gray-400 hover:text-primary-400"><Edit /></button>
+                                                <button onClick={() => handleDeleteAssetClick(asset)} className="text-gray-400 hover:text-red-400"><Trash2 /></button>
                                             </div></TableCell>
                                         )}
                                     </TableRow>
-                                ))}
-                            </TableBody>
-                        </Table>
-                    </CardContent>
-                </Card>
+                                    {asset.isExpandable && expandedRows.has(asset.id) && (
+                                        <>
+                                            <TableRow className="bg-gray-900/50">
+                                                <TableCell></TableCell>
+                                                <TableCell colSpan={!isReadOnly ? 7 : 6} className="!py-2 !px-4 !text-left">
+                                                    <h4 className="font-semibold text-white">Phân bổ theo đối tác</h4>
+                                                </TableCell>
+                                            </TableRow>
+                                            {asset.owners.map(owner => (
+                                                <TableRow key={owner.id} className="bg-gray-900/50 hover:bg-gray-800/70">
+                                                    <TableCell></TableCell>
+                                                    <TableCell className="pl-12 text-gray-300">{owner.name}</TableCell>
+                                                    <TableCell></TableCell>
+                                                    <TableCell></TableCell>
+                                                    <TableCell className="text-green-400">{formatCurrency(owner.received, asset.currency)}</TableCell>
+                                                    <TableCell className="text-red-400">{formatCurrency(owner.withdrawn, asset.currency)}</TableCell>
+                                                    <TableCell className="text-gray-300 font-semibold">{formatCurrency(owner.received - owner.withdrawn, asset.currency)}</TableCell>
+                                                    {!isReadOnly && <TableCell></TableCell>}
+                                                </TableRow>
+                                            ))}
+                                        </>
+                                    )}
+                                </React.Fragment>
+                            ))}
+                        </TableBody>
+                    </Table>
+                </CardContent>
+            </Card>
 
-                {/* Modals */}
-                {!isReadOnly && (
-                    <>
-                        <Modal isOpen={isAssetModalOpen} onClose={() => setIsAssetModalOpen(false)} title={editingAsset ? 'Sửa tài sản' : 'Thêm tài sản mới'}>
-                            <AssetForm asset={editingAsset} assetTypes={assetTypes} onSave={handleSaveAsset} onCancel={() => setIsAssetModalOpen(false)} onAddAssetType={handleAddAssetType} />
-                        </Modal>
-                        <ConfirmationModal isOpen={!!assetToDelete} onClose={() => setAssetToDelete(null)} onConfirm={handleConfirmDeleteAsset} title="Xác nhận xóa tài sản" message={`Bạn có chắc muốn xóa tài sản "${assetToDelete?.name}" không?`} />
+            <Card>
+                <CardHeader className="flex justify-between items-center">
+                    <span>Rút tiền</span>
+                    {!isReadOnly && <Button onClick={() => { setEditingWithdrawal(undefined); setIsWithdrawalModalOpen(true); }}><span className="flex items-center gap-2"><Plus /> Thêm giao dịch rút</span></Button>}
+                </CardHeader>
+                <CardContent>
+                    <Table>
+                        <TableHead><TableRow>
+                            <TableHeader>Ngày</TableHeader>
+                            <TableHeader>Mô tả</TableHeader>
+                            <TableHeader>Đối tác</TableHeader>
+                            <TableHeader>Tài sản</TableHeader>
+                            <TableHeader>Số tiền</TableHeader>
+                            {!isReadOnly && <TableHeader>Hành động</TableHeader>}
+                        </TableRow></TableHead>
+                        <TableBody>
+                            {enrichedWithdrawals.map(w => (
+                                <TableRow key={w.id}>
+                                    <TableCell>{formatDate(w.date)}</TableCell>
+                                    <TableCell className="font-medium text-white">{w.description}</TableCell>
+                                    <TableCell>{w.partnerName}</TableCell>
+                                    <TableCell>{w.assetName}</TableCell>
+                                    <TableCell className="font-semibold text-red-400">{formatCurrency(w.amount, w.isUSD ? 'USD' : 'VND')}</TableCell>
+                                    {!isReadOnly && (
+                                        <TableCell><div className="flex items-center space-x-3 justify-center">
+                                            <button onClick={() => { setEditingWithdrawal(w); setIsWithdrawalModalOpen(true); }} className="text-gray-400 hover:text-primary-400"><Edit /></button>
+                                            <button onClick={() => handleDeleteWithdrawalClick(w)} className="text-gray-400 hover:text-red-400"><Trash2 /></button>
+                                        </div></TableCell>
+                                    )}
+                                </TableRow>
+                            ))}
+                        </TableBody>
+                    </Table>
+                </CardContent>
+            </Card>
+            {!isReadOnly && (
+                <>
+                    <Modal isOpen={isAssetModalOpen} onClose={() => setIsAssetModalOpen(false)} title={editingAsset ? 'Sửa tài sản' : 'Thêm tài sản mới'}>
+                        <AssetForm asset={editingAsset} assetTypes={assetTypes} onSave={handleSaveAsset} onCancel={() => setIsAssetModalOpen(false)} onAddAssetType={handleAddAssetType} />
+                    </Modal>
+                    <ConfirmationModal isOpen={!!assetToDelete} onClose={() => setAssetToDelete(null)} onConfirm={handleConfirmDeleteAsset} title="Xác nhận xóa tài sản" message={`Bạn có chắc muốn xóa tài sản "${assetToDelete?.name}" không?`} />
 
-                        <Modal isOpen={isWithdrawalModalOpen} onClose={() => setIsWithdrawalModalOpen(false)} title={editingWithdrawal ? 'Sửa giao dịch rút' : 'Thêm giao dịch rút'}>
-                            <WithdrawalForm withdrawal={editingWithdrawal} assets={assets} partners={partners} enrichedAssets={enrichedAssets} onSave={handleSaveWithdrawal} onCancel={() => setIsWithdrawalModalOpen(false)} />
-                        </Modal>
-                        <ConfirmationModal isOpen={!!withdrawalToDelete} onClose={() => setWithdrawalToDelete(null)} onConfirm={handleConfirmDeleteWithdrawal} title="Xác nhận xóa giao dịch rút" message={`Bạn có chắc muốn xóa giao dịch rút tiền "${withdrawalToDelete?.description}" không?`} />
-                    </>
-                )}
+                    <Modal isOpen={isWithdrawalModalOpen} onClose={() => setIsWithdrawalModalOpen(false)} title={editingWithdrawal ? 'Sửa giao dịch rút' : 'Thêm giao dịch rút'}>
+                        <WithdrawalForm withdrawal={editingWithdrawal} assets={assets} partners={partners} enrichedAssets={enrichedAssets} onSave={handleSaveWithdrawal} onCancel={() => setIsWithdrawalModalOpen(false)} />
+                    </Modal>
+                    <ConfirmationModal isOpen={!!withdrawalToDelete} onClose={() => setWithdrawalToDelete(null)} onConfirm={handleConfirmDeleteWithdrawal} title="Xác nhận xóa giao dịch rút" message={`Bạn có chắc muốn xóa giao dịch rút tiền "${withdrawalToDelete?.description}" không?`} />
+                </>
+            )}
+        </div>
+    );
+}
+
+const TransactionHistoryContent = () => {
+    const { allTransactions, assets } = useData();
+    const [filters, setFilters] = useState({ assetId: 'all', startDate: '', endDate: '' });
+
+    const filteredTransactions = useMemo(() => {
+        return allTransactions.filter(t => {
+            if (filters.assetId !== 'all' && t.asset.id !== filters.assetId) return false;
+            if (filters.startDate && t.date < filters.startDate) return false;
+            if (filters.endDate && t.date > filters.endDate) return false;
+            return true;
+        });
+    }, [allTransactions, filters]);
+
+    const handleFilterChange = (field: keyof typeof filters, value: string) => {
+        setFilters(prev => ({ ...prev, [field]: value }));
+    };
+
+    return (
+        <Card>
+            <CardHeader>Lịch sử giao dịch</CardHeader>
+            <CardContent>
+                <div className="grid grid-cols-1 sm:grid-cols-3 gap-4 mb-6 p-4 bg-gray-900/50 rounded-lg">
+                    <div>
+                        <Label htmlFor="filter-asset">Tài sản</Label>
+                        <select id="filter-asset" value={filters.assetId} onChange={e => handleFilterChange('assetId', e.target.value)} className="w-full px-3 py-2 bg-gray-900 border border-gray-600 rounded-md focus:outline-none focus:ring-2 focus:ring-primary-500">
+                            <option value="all">Tất cả tài sản</option>
+                            {assets.map(a => <option key={a.id} value={a.id}>{a.name}</option>)}
+                        </select>
+                    </div>
+                    <div>
+                        <Label htmlFor="filter-start-date">Từ ngày</Label>
+                        <Input id="filter-start-date" type="date" value={filters.startDate} onChange={e => handleFilterChange('startDate', e.target.value)} />
+                    </div>
+                    <div>
+                        <Label htmlFor="filter-end-date">Đến ngày</Label>
+                        <Input id="filter-end-date" type="date" value={filters.endDate} onChange={e => handleFilterChange('endDate', e.target.value)} />
+                    </div>
+                </div>
+                <Table>
+                    <TableHead><TableRow>
+                        <TableHeader>Ngày</TableHeader>
+                        <TableHeader>Tài sản</TableHeader>
+                        <TableHeader>Loại</TableHeader>
+                        <TableHeader>Mô tả</TableHeader>
+                        <TableHeader>Người chuyển</TableHeader>
+                        <TableHeader>Người nhận</TableHeader>
+                        <TableHeader>Tiền vào</TableHeader>
+                        <TableHeader>Tiền ra</TableHeader>
+                    </TableRow></TableHead>
+                    <TableBody>
+                        {filteredTransactions.map(t => (
+                            <TableRow key={t.id}>
+                                <TableCell>{formatDate(t.date)}</TableCell>
+                                <TableCell className="font-medium text-white">{t.asset.name}</TableCell>
+                                <TableCell>{t.type}</TableCell>
+                                <TableCell className="text-left">{t.description}</TableCell>
+                                <TableCell>{t.sender || '—'}</TableCell>
+                                <TableCell>{t.receiver || '—'}</TableCell>
+                                <TableCell className="text-green-400 font-semibold">{t.inflow > 0 ? formatCurrency(t.inflow, t.asset.currency) : '—'}</TableCell>
+                                <TableCell className="text-red-400 font-semibold">{t.outflow > 0 ? formatCurrency(t.outflow, t.asset.currency) : '—'}</TableCell>
+                            </TableRow>
+                        ))}
+                    </TableBody>
+                </Table>
+            </CardContent>
+        </Card>
+    );
+};
+
+export default function Assets() {
+    const [activeTab, setActiveTab] = useState('balance');
+    
+    return (
+        <div>
+            <Header title="Tài sản" />
+            <div className="flex flex-wrap border-b border-gray-700 mb-6" role="tablist">
+                <TabButton active={activeTab === 'balance'} onClick={() => setActiveTab('balance')}>
+                    Bảng cân đối
+                </TabButton>
+                <TabButton active={activeTab === 'history'} onClick={() => setActiveTab('history')}>
+                    Lịch sử giao dịch
+                </TabButton>
             </div>
+            
+            {activeTab === 'balance' && <BalanceSheetContent />}
+            {activeTab === 'history' && <TransactionHistoryContent />}
         </div>
     );
 }

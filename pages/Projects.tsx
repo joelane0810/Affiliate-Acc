@@ -9,7 +9,7 @@ import { Modal } from '../components/ui/Modal';
 import { Input, Label } from '../components/ui/Input';
 import { NumberInput } from '../components/ui/NumberInput';
 import { Plus, Edit, Trash2, Users, X } from '../components/icons/IconComponents';
-import { formatCurrency, isDateInPeriod, formatPercentage, formatDate } from '../lib/utils';
+import { formatCurrency, isDateInPeriod, formatPercentage, formatDate, formatVietnameseCurrencyShorthand } from '../lib/utils';
 import { ConfirmationModal } from '../components/ui/ConfirmationModal';
 import { ResponsiveContainer, LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, Legend, TooltipProps } from 'recharts';
 import { NameType, ValueType } from 'recharts/types/component/DefaultTooltipContent';
@@ -402,31 +402,6 @@ export default function Projects() {
         return niches.filter(n => n.categoryId === filters.categoryId);
     }, [filters.categoryId, niches]);
 
-    // FIX: Changed type of value from 'number | string' to 'any' to align with recharts prop type.
-    const yAxisTickFormatter = (value: any) => {
-        const num = Number(value);
-        if (isNaN(num)) return '0';
-        
-        const units = [
-            { value: 1_000_000_000, symbol: 'tỷ' },
-            { value: 1_000_000, symbol: 'triệu' },
-            { value: 1_000, symbol: 'k' }
-        ];
-
-        const absNum = Math.abs(num);
-        if (absNum < 1000) return num.toLocaleString('vi-VN');
-
-        for (const unit of units) {
-            if (absNum >= unit.value) {
-                const formatted = (num / unit.value).toLocaleString('vi-VN', {
-                    maximumFractionDigits: 1,
-                });
-                return `${formatted.replace(/[,.]0$/, '')} ${unit.symbol}`;
-            }
-        }
-        return num.toLocaleString('vi-VN');
-    };
-
     const handleFilterChange = (field: keyof typeof filters, value: string) => {
         setFilters(prev => {
             const newFilters = { ...prev, [field]: value };
@@ -795,7 +770,7 @@ export default function Projects() {
                                     />
                                     <YAxis 
                                         stroke="#94a3b8" 
-                                        tickFormatter={yAxisTickFormatter} 
+                                        tickFormatter={formatVietnameseCurrencyShorthand} 
                                         width={80}
                                     />
                                     <Tooltip content={<CustomChartTooltip />} />

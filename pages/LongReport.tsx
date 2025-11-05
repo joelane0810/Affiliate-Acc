@@ -1,7 +1,7 @@
 import React, { useState, useMemo, useEffect } from 'react';
 import { Header } from '../components/Header';
 import { useData } from '../context/DataContext';
-import { formatDate, isDateInPeriod, formatCurrency } from '../lib/utils';
+import { formatDate, isDateInPeriod, formatCurrency, formatVietnameseCurrencyShorthand } from '../lib/utils';
 import { Card, CardContent, CardHeader } from '../components/ui/Card';
 import { Button } from '../components/ui/Button';
 import { ConfirmationModal } from '../components/ui/ConfirmationModal';
@@ -396,7 +396,7 @@ const TrendsContent = () => {
                         <LineChart data={trendData} margin={{ top: 5, right: 20, left: 50, bottom: 5 }}>
                             <CartesianGrid strokeDasharray="3 3" stroke="#374151" />
                             <XAxis dataKey="period" stroke="#94a3b8" />
-                            <YAxis stroke="#94a3b8" tickFormatter={(value) => formatCurrency(value as number).replace(' ₫', 'tr').replace(/,000,000$/, '')} />
+                            <YAxis stroke="#94a3b8" tickFormatter={formatVietnameseCurrencyShorthand} />
                             <Tooltip content={<CustomTooltip />} />
                             <Legend />
                             <Line type="monotone" dataKey="revenue" name="Doanh thu" stroke="#3b82f6" strokeWidth={2} dot={{ r: 4 }} activeDot={{ r: 6 }} />

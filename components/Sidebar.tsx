@@ -2,7 +2,7 @@ import React from 'react';
 import type { Page } from '../types';
 import { 
   LayoutDashboard, BarChart3, Target, DollarSign, Repeat, Package, 
-  Handshake, Users, Landmark, Banknote, FileText, CalendarClock, Settings, ChevronLeft, ChevronRight, Book, X
+  Handshake, Users, Landmark, Banknote, FileText, CalendarClock, Settings, ChevronLeft, ChevronRight, Book, X, ArrowRightLeft
 } from './icons/IconComponents';
 import { useData } from '../context/DataContext';
 
@@ -20,6 +20,7 @@ const navItems: { page: Page; label: string; icon: React.ReactNode }[] = [
   { page: 'Commissions', label: 'Hoa hồng', icon: <DollarSign /> },
   { page: 'ExchangeLog', label: 'Bán USD', icon: <Repeat /> },
   { page: 'MiscellaneousExpenses', label: 'Chi phí phát sinh', icon: <Package /> },
+  { page: 'DebtsReceivables', label: 'Công nợ & Phải thu', icon: <ArrowRightLeft /> },
   { page: 'AdAccounts', label: 'Quản lý & Sổ Ads', icon: <Book /> },
   { page: 'Assets', label: 'Tài sản', icon: <Landmark /> },
   { page: 'CapitalSources', label: 'Nguồn vốn', icon: <Handshake /> },

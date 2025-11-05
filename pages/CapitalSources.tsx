@@ -29,7 +29,7 @@ const CapitalInflowForm: React.FC<{
     inflow?: CapitalInflow;
     assets: Asset[];
     partners: Partner[];
-    onSave: (inflow: Omit<CapitalInflow, 'id'> | CapitalInflow) => void;
+    onSave: (inflow: Omit<CapitalInflow, 'id'>) => void;
     onCancel: () => void;
 }> = ({ inflow, assets, partners, onSave, onCancel }) => {
     const [date, setDate] = useState(inflow?.date || new Date().toISOString().split('T')[0]);
@@ -60,18 +60,22 @@ const CapitalInflowForm: React.FC<{
     const handleSubmit = (e: React.FormEvent) => {
         e.preventDefault();
         
-        const finalInflow: Omit<CapitalInflow, 'id'> | CapitalInflow = {
-            ...inflow,
-            id: inflow?.id || '',
+        const newInflow: Omit<CapitalInflow, 'id'> & { [key: string]: any } = {
             date,
             description,
             assetId,
             amount,
-            contributedByPartnerId: sourceType === 'partner' ? contributedByPartnerId : (sourceType === 'me' ? 'default-me' : undefined),
-            externalInvestorName: sourceType === 'external' ? externalInvestorName : undefined,
         };
-
-        onSave(finalInflow);
+    
+        if (sourceType === 'partner') {
+            newInflow.contributedByPartnerId = contributedByPartnerId;
+        } else if (sourceType === 'me') {
+            newInflow.contributedByPartnerId = 'default-me';
+        } else if (sourceType === 'external') {
+            newInflow.externalInvestorName = externalInvestorName;
+        }
+        
+        onSave(newInflow);
     };
 
     const selectClassName = "w-full px-3 py-2 bg-gray-900 border border-gray-600 rounded-md focus:outline-none focus:ring-2 focus:ring-primary-500";
@@ -146,7 +150,7 @@ const CapitalInflowForm: React.FC<{
 
 const LiabilityForm: React.FC<{
     liability?: Liability;
-    onSave: (liability: Omit<Liability, 'id'> | Liability) => void;
+    onSave: (liability: Omit<Liability, 'id' | 'currency' | 'creationDate'>) => void;
     onCancel: () => void;
 }> = ({ liability, onSave, onCancel }) => {
     const [description, setDescription] = useState(liability?.description || '');
@@ -158,19 +162,19 @@ const LiabilityForm: React.FC<{
 
     const handleSubmit = (e: React.FormEvent) => {
         e.preventDefault();
-        const finalLiability: Omit<Liability, 'id'> | Liability = {
-            ...liability,
-            id: liability?.id || '',
+        const newLiability: Omit<Liability, 'id' | 'currency' | 'creationDate'> & { [key: string]: any } = {
             description,
             totalAmount,
-            currency: 'VND', // Currently only supports VND liabilities without direct inflow.
             type,
-            creationDate: liability?.creationDate || new Date().toISOString().split('T')[0],
             isInstallment,
-            startDate: isInstallment ? startDate : undefined,
-            numberOfInstallments: isInstallment ? numberOfInstallments : undefined,
         };
-        onSave(finalLiability);
+    
+        if (isInstallment) {
+            newLiability.startDate = startDate;
+            newLiability.numberOfInstallments = numberOfInstallments;
+        }
+        
+        onSave(newLiability);
     };
     
     const monthlyPayment = useMemo(() => {
@@ -242,7 +246,7 @@ const LiabilityForm: React.FC<{
 const ReceivableForm: React.FC<{
     receivable?: Receivable;
     assets: Asset[];
-    onSave: (receivable: Omit<Receivable, 'id'> | Receivable) => void;
+    onSave: (receivable: Omit<Receivable, 'id'>) => void;
     onCancel: () => void;
 }> = ({ receivable, assets, onSave, onCancel }) => {
     const [description, setDescription] = useState(receivable?.description || '');
@@ -264,21 +268,22 @@ const ReceivableForm: React.FC<{
             return;
         }
         
-        const finalReceivable: Omit<Receivable, 'id'> | Receivable = {
-            ...receivable,
-            id: receivable?.id || '',
+        const newReceivable: Omit<Receivable, 'id'> & { [key: string]: any } = {
             description,
             totalAmount,
-            currency,
             type,
+            isInstallment,
+            currency,
             creationDate,
             outflowAssetId,
-            isInstallment,
-            startDate: isInstallment ? startDate : undefined,
-            numberOfInstallments: isInstallment ? numberOfInstallments : undefined,
         };
-
-        onSave(finalReceivable);
+    
+        if (isInstallment) {
+            newReceivable.startDate = startDate;
+            newReceivable.numberOfInstallments = numberOfInstallments;
+        }
+        
+        onSave(newReceivable);
     };
 
     const monthlyReceivable = useMemo(() => {
@@ -500,13 +505,29 @@ export default function CapitalSources() {
     const [editingCapitalInflow, setEditingCapitalInflow] = useState<CapitalInflow | undefined>(undefined);
     const [capitalInflowToDelete, setCapitalInflowToDelete] = useState<CapitalInflow | null>(null);
 
-    // Liability handlers
-    const handleSaveLiability = (liability: Omit<Liability, 'id'> | Liability) => {
-        if ('id' in liability && liability.id) {
-            updateLiability(liability as Liability);
+    // Capital Inflow handlers
+    const handleSaveCapitalInflow = (formData: Omit<CapitalInflow, 'id'>) => {
+        if (editingCapitalInflow) {
+            updateCapitalInflow({ ...editingCapitalInflow, ...formData });
         } else {
-            const { id, ...newLiability } = liability as Liability;
-            addLiability(newLiability);
+            addCapitalInflow(formData);
+        }
+        setIsCapitalInflowModalOpen(false);
+        setEditingCapitalInflow(undefined);
+    };
+    const handleDeleteCapitalInflowClick = (inflow: any) => { setCapitalInflowToDelete(inflow); };
+    const handleConfirmDeleteCapitalInflow = () => { if (capitalInflowToDelete) { deleteCapitalInflow(capitalInflowToDelete.id); setCapitalInflowToDelete(null); } };
+
+    // Liability handlers
+    const handleSaveLiability = (formData: Omit<Liability, 'id' | 'currency' | 'creationDate'>) => {
+        if (editingLiability) {
+            updateLiability({ ...editingLiability, ...formData });
+        } else {
+            addLiability({
+                ...formData,
+                currency: 'VND', // Default to VND for new liabilities
+                creationDate: new Date().toISOString().split('T')[0]
+            });
         }
         setIsLiabilityModalOpen(false);
         setEditingLiability(undefined);
@@ -526,12 +547,11 @@ export default function CapitalSources() {
     };
     
     // Receivable handlers
-    const handleSaveReceivable = (receivable: Omit<Receivable, 'id'> | Receivable) => {
-        if ('id' in receivable && receivable.id) {
-            updateReceivable(receivable as Receivable);
+    const handleSaveReceivable = (formData: Omit<Receivable, 'id'>) => {
+        if (editingReceivable) {
+            updateReceivable({ ...editingReceivable, ...formData });
         } else {
-            const { id, ...newReceivable } = receivable as Receivable;
-            addReceivable(newReceivable);
+            addReceivable(formData);
         }
         setIsReceivableModalOpen(false);
         setEditingReceivable(undefined);
@@ -550,20 +570,6 @@ export default function CapitalSources() {
         setCollectingReceivable(null);
     };
 
-    // Capital Inflow handlers
-    const handleSaveCapitalInflow = (inflow: Omit<CapitalInflow, 'id'> | CapitalInflow) => {
-        if ('id' in inflow && inflow.id) {
-            updateCapitalInflow(inflow as CapitalInflow);
-        } else {
-            const { id, ...newInflow } = inflow as CapitalInflow;
-            addCapitalInflow(newInflow);
-        }
-        setIsCapitalInflowModalOpen(false);
-        setEditingCapitalInflow(undefined);
-    };
-    const handleDeleteCapitalInflowClick = (inflow: any) => { setCapitalInflowToDelete(inflow); };
-    const handleConfirmDeleteCapitalInflow = () => { if (capitalInflowToDelete) { deleteCapitalInflow(capitalInflowToDelete.id); setCapitalInflowToDelete(null); } };
-    
     const enrichedLiabilities: EnrichedLiability[] = useMemo(() => {
         const paymentsByLiability = debtPayments.reduce((acc: Record<string, number>, p: DebtPayment) => {
             acc[p.liabilityId] = (acc[p.liabilityId] || 0) + p.amount;

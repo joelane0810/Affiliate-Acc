@@ -13,7 +13,8 @@ export type Page =
   | 'Assets' 
   | 'Tax' 
   | 'Reports' 
-  | 'LongReport' 
+  | 'LongReport'
+  | 'DebtsReceivables'
   | 'Settings';
 
 export type AdsPlatform = 'google' | 'youtube' | 'tiktok' | 'facebook' | 'other';

@@ -13,42 +13,55 @@ import { collection, getDocs, writeBatch, doc, getDoc, setDoc, deleteDoc } from 
 
 const FirebaseSettings: React.FC = () => {
     const { firebaseConfig, setFirebaseConfig } = useData();
-    const [localConfig, setLocalConfig] = useState<Partial<FirebaseConfig>>(firebaseConfig || {});
+    const [configString, setConfigString] = useState('');
     const [connectionStatus, setConnectionStatus] = useState<'unknown' | 'connected' | 'not_configured'>('unknown');
 
     useEffect(() => {
-        setLocalConfig(firebaseConfig || {});
-        if (firebaseConfig && firebaseConfig.apiKey && firebaseConfig.projectId) {
+        if (firebaseConfig && Object.values(firebaseConfig).every(v => v)) {
+            const formattedConfig = `const firebaseConfig = {\n` +
+                `  apiKey: "${firebaseConfig.apiKey}",\n` +
+                `  authDomain: "${firebaseConfig.authDomain}",\n` +
+                `  projectId: "${firebaseConfig.projectId}",\n` +
+                `  storageBucket: "${firebaseConfig.storageBucket}",\n` +
+                `  messagingSenderId: "${firebaseConfig.messagingSenderId}",\n` +
+                `  appId: "${firebaseConfig.appId}"\n` +
+                `};`;
+            setConfigString(formattedConfig);
             setConnectionStatus('connected');
         } else {
+            setConfigString('');
             setConnectionStatus('not_configured');
         }
     }, [firebaseConfig]);
 
-    const handleConfigChange = (key: keyof FirebaseConfig, value: string) => {
-        setLocalConfig(prev => ({ ...prev, [key]: value }));
-    };
-
     const handleSave = () => {
-        const fullConfig = localConfig as FirebaseConfig;
-        if (Object.values(fullConfig).length < 6 || Object.values(fullConfig).some(v => !v)) {
-            alert('Vui lòng điền đầy đủ tất cả các trường cấu hình Firebase.');
-            return;
+        const text = configString;
+
+        const extractValue = (key: string): string | null => {
+            const regex = new RegExp(`["']?${key}["']?\\s*:\\s*["']([^"']+)["']`);
+            const match = text.match(regex);
+            return match ? match[1].trim() : null;
+        };
+        
+        const configKeys: (keyof FirebaseConfig)[] = ['apiKey', 'authDomain', 'projectId', 'storageBucket', 'messagingSenderId', 'appId'];
+        
+        const extractedConfig = configKeys.reduce((acc, key) => {
+            acc[key] = extractValue(key);
+            return acc;
+        }, {} as Partial<Record<keyof FirebaseConfig, string | null>>);
+
+
+        if (Object.values(extractedConfig).every(v => v)) {
+            const newConfig = extractedConfig as FirebaseConfig;
+            setFirebaseConfig(newConfig);
+            alert('Đã lưu cấu hình Firebase. Trang sẽ được tải lại để áp dụng thay đổi.');
+            window.location.reload();
+        } else {
+            const missingKeys = configKeys.filter(key => !extractedConfig[key]);
+            alert(`Không thể phân tích cấu hình. Vui lòng dán đoạn mã cấu hình hợp lệ từ Firebase console. \n\nCác trường bị thiếu: ${missingKeys.join(', ')}`);
         }
-        setFirebaseConfig(fullConfig);
-        alert('Đã lưu cấu hình Firebase. Trang sẽ được tải lại để áp dụng thay đổi.');
-        window.location.reload();
     };
 
-    const configFields: { key: keyof FirebaseConfig, label: string }[] = [
-        { key: 'apiKey', label: 'API Key' },
-        { key: 'authDomain', label: 'Auth Domain' },
-        { key: 'projectId', label: 'Project ID' },
-        { key: 'storageBucket', label: 'Storage Bucket' },
-        { key: 'messagingSenderId', label: 'Messaging Sender ID' },
-        { key: 'appId', label: 'App ID' },
-    ];
-    
     return (
         <Card>
             <CardHeader className="flex justify-between items-center">
@@ -61,21 +74,18 @@ const FirebaseSettings: React.FC = () => {
             </CardHeader>
             <CardContent className="space-y-4">
                 <p className="text-sm text-gray-400">
-                    Dán thông tin cấu hình từ dự án Firebase của bạn vào đây. Dữ liệu sẽ được lưu cục bộ trên trình duyệt của bạn.
+                    Dán toàn bộ đoạn mã cấu hình Firebase (biến `firebaseConfig`) của bạn vào ô bên dưới. Hệ thống sẽ tự động trích xuất các thông tin cần thiết.
                 </p>
-                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                    {configFields.map(field => (
-                        <div key={field.key}>
-                            <Label htmlFor={`firebase-${field.key}`}>{field.label}</Label>
-                            <Input
-                                id={`firebase-${field.key}`}
-                                type="text"
-                                placeholder={field.label}
-                                value={localConfig[field.key] || ''}
-                                onChange={e => handleConfigChange(field.key, e.target.value)}
-                            />
-                        </div>
-                    ))}
+                <div>
+                    <Label htmlFor="firebase-config-paste">Đoạn mã cấu hình Firebase</Label>
+                    <textarea
+                        id="firebase-config-paste"
+                        className="w-full h-48 px-3 py-2 bg-gray-900 border border-gray-600 rounded-md placeholder-gray-500 focus:outline-none focus:ring-2 focus:ring-primary-500 focus:border-primary-500 font-mono text-sm"
+                        placeholder={`// Dán vào đây, ví dụ:\nconst firebaseConfig = {\n  apiKey: "...",\n  authDomain: "...",\n  ...\n};`}
+                        value={configString}
+                        onChange={e => setConfigString(e.target.value)}
+                        spellCheck="false"
+                    />
                 </div>
                  <div className="flex justify-end pt-4 border-t border-gray-700">
                     <Button onClick={handleSave}>Lưu cấu hình & Tải lại</Button>
@@ -90,6 +100,7 @@ const COLLECTION_NAMES = [
     'assetTypes', 'assets', 'liabilities', 'receivables', 'receivablePayments', 
     'exchangeLogs', 'miscellaneousExpenses', 'partners', 'withdrawals', 
     'debtPayments', 'taxPayments', 'capitalInflows', 'categories', 'niches',
+    'adAccounts', // This was missing
     'periodLiabilities', 'periodReceivables', 'periodDebtPayments', 'periodReceivablePayments'
 ];
 

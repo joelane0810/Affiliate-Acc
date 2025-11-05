@@ -118,14 +118,16 @@ export default function Partners() {
                                     {!isReadOnly && (
                                         <TableCell className="py-3">
                                             <div className="flex justify-center">
-                                                <button 
-                                                    onClick={() => handleDeleteClick(p)} 
-                                                    className="text-gray-400 hover:text-red-400 disabled:opacity-30 disabled:cursor-not-allowed"
-                                                    disabled={partners.length <= 1 || p.id === 'default-me'}
-                                                    aria-label={`Xóa đối tác ${p.name}`}
-                                                >
-                                                    <Trash2 />
-                                                </button>
+                                                {p.id !== 'default-me' && (
+                                                    <button 
+                                                        onClick={() => handleDeleteClick(p)} 
+                                                        className="text-gray-400 hover:text-red-400 disabled:opacity-30 disabled:cursor-not-allowed"
+                                                        disabled={partners.length <= 1}
+                                                        aria-label={`Xóa đối tác ${p.name}`}
+                                                    >
+                                                        <Trash2 />
+                                                    </button>
+                                                )}
                                             </div>
                                         </TableCell>
                                     )}

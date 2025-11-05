@@ -21,6 +21,7 @@ import Tax from './pages/Tax';
 import Reports from './pages/Reports';
 import LongReport from './pages/LongReport';
 import Settings from './pages/Settings';
+import DebtsReceivables from './pages/DebtsReceivables';
 
 const pages: { [key in Page]: React.ComponentType } = {
   Dashboard,
@@ -37,6 +38,7 @@ const pages: { [key in Page]: React.ComponentType } = {
   Reports,
   LongReport,
   Settings,
+  DebtsReceivables,
 };
 
 const LoadingSpinner = () => (
@@ -125,7 +127,8 @@ const AppContent = () => {
 
   const disabledWithoutPeriod: Page[] = [
     'Dashboard', 'Projects', 'DailyAdCosts', 'Commissions',
-    'ExchangeLog', 'MiscellaneousExpenses', 'CapitalSources', 'Partners', 'Tax'
+    'ExchangeLog', 'MiscellaneousExpenses', 'CapitalSources', 'Partners', 'Tax',
+    'DebtsReceivables'
   ];
   
   const isPageDisabled = !activePeriod && !viewingPeriod && disabledWithoutPeriod.includes(currentPage);

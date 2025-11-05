@@ -66,3 +66,26 @@ export const formatPercentage = (value: number): string => {
     }
     return `${value.toFixed(2).replace('.', ',')}%`;
 };
+
+export const formatVietnameseCurrencyShorthand = (value: number | string): string => {
+  const num = Number(value);
+  if (isNaN(num)) {
+    return '0';
+  }
+
+  const absNum = Math.abs(num);
+
+  if (absNum >= 1_000_000_000) {
+    const formatted = (num / 1_000_000_000).toLocaleString('vi-VN', { maximumFractionDigits: 1 });
+    return `${formatted.replace(/[,.]0$/, '')} tỷ`;
+  }
+  if (absNum >= 1_000_000) {
+    const formatted = (num / 1_000_000).toLocaleString('vi-VN', { maximumFractionDigits: 1 });
+    return `${formatted.replace(/[,.]0$/, '')} triệu`;
+  }
+  if (absNum >= 1_000) {
+    const formatted = (num / 1_000).toLocaleString('vi-VN', { maximumFractionDigits: 1 });
+    return `${formatted.replace(/[,.]0$/, '')}k`;
+  }
+  return num.toLocaleString('vi-VN');
+};
