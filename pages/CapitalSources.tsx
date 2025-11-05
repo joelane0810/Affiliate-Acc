@@ -505,8 +505,6 @@ export default function CapitalSources() {
         if ('id' in liability && liability.id) {
             updateLiability(liability as Liability);
         } else {
-            // FIX: Cast liability to Liability to safely destructure 'id' property.
-            // The form component always provides a full Liability object, with an empty string for new items.
             const { id, ...newLiability } = liability as Liability;
             addLiability(newLiability);
         }
@@ -532,8 +530,6 @@ export default function CapitalSources() {
         if ('id' in receivable && receivable.id) {
             updateReceivable(receivable as Receivable);
         } else {
-            // FIX: Cast receivable to Receivable to safely destructure 'id' property.
-            // The form component always provides a full Receivable object, with an empty string for new items.
             const { id, ...newReceivable } = receivable as Receivable;
             addReceivable(newReceivable);
         }
@@ -559,8 +555,6 @@ export default function CapitalSources() {
         if ('id' in inflow && inflow.id) {
             updateCapitalInflow(inflow as CapitalInflow);
         } else {
-            // FIX: Cast inflow to CapitalInflow to safely destructure 'id' property.
-            // The form component always provides a full CapitalInflow object, with an empty string for new items.
             const { id, ...newInflow } = inflow as CapitalInflow;
             addCapitalInflow(newInflow);
         }
