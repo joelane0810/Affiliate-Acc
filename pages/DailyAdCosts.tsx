@@ -176,7 +176,8 @@ const AdCostsContent = () => {
         if ('id' in cost && cost.id) {
             updateDailyAdCost(cost as T.DailyAdCost);
         } else {
-            addDailyAdCost(cost);
+            const { id, ...newCost } = cost as T.DailyAdCost;
+            addDailyAdCost(newCost);
         }
         setIsModalOpen(false);
         setEditingCost(undefined);
@@ -566,7 +567,8 @@ const AdDepositsContent = () => {
         if ('id' in deposit && deposit.id) {
             updateAdDeposit(deposit as T.AdDeposit);
         } else {
-            addAdDeposit(deposit);
+            const { id, ...newDeposit } = deposit as T.AdDeposit;
+            addAdDeposit(newDeposit);
         }
         setIsModalOpen(false);
         setEditingDeposit(undefined);

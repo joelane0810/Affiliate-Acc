@@ -99,7 +99,8 @@ export default function AdAccounts() {
         if ('id' in account && account.id) {
             updateAdAccount(account as T.AdAccount);
         } else {
-            addAdAccount(account);
+            const { id, ...newAccount } = account as T.AdAccount;
+            addAdAccount(newAccount);
         }
         setIsModalOpen(false);
     };

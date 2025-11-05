@@ -268,8 +268,14 @@ export default function Assets() {
 
     // Asset handlers
     const handleSaveAsset = (asset: Omit<Asset, 'id'> | Asset) => {
-        if ('id' in asset && asset.id) { updateAsset(asset as Asset); } else { addAsset(asset as Omit<Asset, 'id'>); }
-        setIsAssetModalOpen(false); setEditingAsset(undefined);
+        if ('id' in asset && asset.id) {
+            updateAsset(asset as Asset);
+        } else {
+            const { id, ...newAsset } = asset as Asset;
+            addAsset(newAsset);
+        }
+        setIsAssetModalOpen(false);
+        setEditingAsset(undefined);
     };
     const handleAddAssetType = (assetType: Omit<AssetType, 'id'>) => { addAssetType(assetType); };
     const handleDeleteAssetClick = (asset: Asset) => { setAssetToDelete(asset); };
@@ -277,8 +283,14 @@ export default function Assets() {
 
     // Withdrawal handlers
     const handleSaveWithdrawal = (withdrawal: Omit<Withdrawal, 'id'> | Withdrawal) => {
-        if ('id' in withdrawal && withdrawal.id) { updateWithdrawal(withdrawal as Withdrawal); } else { addWithdrawal(withdrawal); }
-        setIsWithdrawalModalOpen(false); setEditingWithdrawal(undefined);
+        if ('id' in withdrawal && withdrawal.id) {
+            updateWithdrawal(withdrawal as Withdrawal);
+        } else {
+            const { id, ...newWithdrawal } = withdrawal as Withdrawal;
+            addWithdrawal(newWithdrawal);
+        }
+        setIsWithdrawalModalOpen(false);
+        setEditingWithdrawal(undefined);
     };
     const handleDeleteWithdrawalClick = (withdrawal: any) => { setWithdrawalToDelete(withdrawal); };
     const handleConfirmDeleteWithdrawal = () => { if (withdrawalToDelete) { deleteWithdrawal(withdrawalToDelete.id); setWithdrawalToDelete(null); } };

@@ -133,7 +133,8 @@ export default function ExchangeLog() {
     if ('id' in log && log.id) {
         updateExchangeLog(log as ExchangeLog);
     } else {
-        addExchangeLog(log);
+        const { id, ...newLog } = log as ExchangeLog;
+        addExchangeLog(newLog);
     }
     setIsModalOpen(false);
     setEditingLog(undefined);

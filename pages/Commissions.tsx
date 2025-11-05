@@ -110,7 +110,8 @@ export default function Commissions() {
         if ('id' in commission && commission.id) {
             updateCommission(commission as Commission);
         } else {
-            addCommission(commission);
+            const { id, ...newCommission } = commission as Commission;
+            addCommission(newCommission);
         }
         setIsModalOpen(false);
         setEditingCommission(undefined);

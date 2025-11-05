@@ -457,7 +457,8 @@ export default function Projects() {
         if ('id' in project && project.id) {
             updateProject(project as T.Project);
         } else {
-            addProject(project);
+            const { id, period, ...newProject } = project as T.Project;
+            addProject(newProject);
         }
         setIsModalOpen(false);
         setEditingProject(undefined);

@@ -317,7 +317,8 @@ export default function MiscellaneousExpenses() {
         if ('id' in expense && expense.id) {
             updateMiscellaneousExpense(expense as MiscellaneousExpense);
         } else {
-            addMiscellaneousExpense(expense);
+            const { id, ...newExpense } = expense as MiscellaneousExpense;
+            addMiscellaneousExpense(newExpense);
         }
         setIsModalOpen(false);
         setEditingExpense(undefined);
