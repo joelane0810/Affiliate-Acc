@@ -1,4 +1,5 @@
 
+
 import React, { useState } from 'react';
 import { Sidebar } from './components/Sidebar';
 import { DataProvider, useData } from './context/DataContext';
@@ -8,20 +9,20 @@ import { Button } from './components/ui/Button';
 import { Menu } from './components/icons/IconComponents';
 
 // Dynamically import pages
-import Dashboard from './pages/Dashboard';
-import Projects from './pages/Projects';
-import DailyAdCosts from './pages/DailyAdCosts';
-import Commissions from './pages/Commissions';
-import ExchangeLog from './pages/ExchangeLog';
-import MiscellaneousExpenses from './pages/MiscellaneousExpenses';
-import CapitalSources from './pages/CapitalSources';
-import Partners from './pages/Partners';
-import AdAccounts from './pages/AdAccounts';
-import Assets from './pages/Assets';
-import Tax from './pages/Tax';
-import Reports from './pages/Reports';
-import LongReport from './pages/LongReport';
-import Settings from './pages/Settings';
+import Dashboard from './pages/Dashboard.tsx';
+import Projects from './pages/Projects.tsx';
+import DailyAdCosts from './pages/DailyAdCosts.tsx';
+import Commissions from './pages/Commissions.tsx';
+import ExchangeLog from './pages/ExchangeLog.tsx';
+import MiscellaneousExpenses from './pages/MiscellaneousExpenses.tsx';
+import CapitalSources from './pages/CapitalSources.tsx';
+import Partners from './pages/Partners.tsx';
+import AdAccounts from './pages/AdAccounts.tsx';
+import Assets from './pages/Assets.tsx';
+import Tax from './pages/Tax.tsx';
+import Reports from './pages/Reports.tsx';
+import LongReport from './pages/LongReport.tsx';
+import Settings from './pages/Settings.tsx';
 
 const pages: { [key in Page]: React.ComponentType } = {
   Dashboard,
