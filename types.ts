@@ -9,6 +9,7 @@ export type Page =
   | 'MiscellaneousExpenses' 
   | 'CapitalSources' 
   | 'Partners' 
+  | 'AdAccounts'
   | 'Assets' 
   | 'Tax' 
   | 'Reports' 

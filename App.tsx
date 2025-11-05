@@ -16,6 +16,7 @@ import ExchangeLog from './pages/ExchangeLog';
 import MiscellaneousExpenses from './pages/MiscellaneousExpenses';
 import CapitalSources from './pages/CapitalSources';
 import Partners from './pages/Partners';
+import AdAccounts from './pages/AdAccounts';
 import Assets from './pages/Assets';
 import Tax from './pages/Tax';
 import Reports from './pages/Reports';
@@ -31,6 +32,7 @@ const pages: { [key in Page]: React.ComponentType } = {
   MiscellaneousExpenses,
   CapitalSources,
   Partners,
+  AdAccounts,
   Assets,
   Tax,
   Reports,
