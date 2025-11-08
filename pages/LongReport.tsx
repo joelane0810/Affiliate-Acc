@@ -438,20 +438,125 @@ const TrendsContent = () => {
 };
 
 
+type ProjectStat = {
+    id: string;
+    name: string;
+    categoryId?: string;
+    nicheId?: string;
+    categoryName: string;
+    nicheName: string;
+    revenue: number;
+    cost: number;
+    profit: number;
+    roi: number | null;
+    isPartnership: boolean;
+};
+
+
+const ProjectDetailModal: React.FC<{ project: ProjectStat; onClose: () => void; }> = ({ project, onClose }) => {
+    const { projects, commissions, enrichedDailyAdCosts, miscellaneousExpenses } = useData();
+
+    const monthlyData = useMemo(() => {
+        // Find all instances of this project across different periods
+        const projectInstances = projects.filter(p =>
+            p.name === project.name &&
+            p.categoryId === project.categoryId &&
+            p.nicheId === project.nicheId
+        );
+
+        // Create a map of projectId -> project instance for quick lookup
+        const instanceMap = new Map(projectInstances.map(p => [p.id, p]));
+
+        // Group stats by period (month)
+        const statsByMonth: { [period: string]: { revenue: number; cost: number; projectType: T.ProjectType } } = {};
+
+        projectInstances.forEach(instance => {
+            statsByMonth[instance.period] = {
+                revenue: 0,
+                cost: 0,
+                projectType: instance.projectType
+            };
+        });
+
+        commissions.forEach(c => {
+            if (instanceMap.has(c.projectId)) {
+                const period = instanceMap.get(c.projectId)!.period;
+                if (statsByMonth[period]) {
+                    statsByMonth[period].revenue += c.vndAmount;
+                }
+            }
+        });
+
+        enrichedDailyAdCosts.forEach(c => {
+            if (instanceMap.has(c.projectId)) {
+                const period = instanceMap.get(c.projectId)!.period;
+                if (statsByMonth[period]) {
+                    statsByMonth[period].cost += c.vndCost;
+                }
+            }
+        });
+        
+        miscellaneousExpenses.forEach(e => {
+            if (e.projectId && instanceMap.has(e.projectId)) {
+                const period = instanceMap.get(e.projectId)!.period;
+                if (statsByMonth[period]) {
+                    statsByMonth[period].cost += e.vndAmount;
+                }
+            }
+        });
+
+        // Convert map to sorted array
+        return Object.entries(statsByMonth)
+            .map(([period, data]) => {
+                const [year, month] = period.split('-');
+                return {
+                    month: new Date(parseInt(year), parseInt(month) - 1).toLocaleString('vi-VN', { month: 'long', year: 'numeric' }),
+                    period: period,
+                    revenue: data.revenue,
+                    cost: data.cost,
+                    profit: data.revenue - data.cost,
+                    projectType: data.projectType === 'test' ? 'Test' : 'Triển khai'
+                };
+            })
+            .sort((a, b) => a.period.localeCompare(b.period));
+
+    }, [project, projects, commissions, enrichedDailyAdCosts, miscellaneousExpenses]);
+
+    return (
+        <Modal isOpen={true} onClose={onClose} title={`Chi tiết dự án: ${project.name}`} size="4xl">
+            <Table>
+                <TableHead>
+                    <TableRow>
+                        <TableHeader>Tháng</TableHeader>
+                        <TableHeader>Loại dự án</TableHeader>
+                        <TableHeader>Doanh thu</TableHeader>
+                        <TableHeader>Chi phí</TableHeader>
+                        <TableHeader>Lợi nhuận</TableHeader>
+                    </TableRow>
+                </TableHead>
+                <TableBody>
+                    {monthlyData.map(data => (
+                         <TableRow key={data.period}>
+                             <TableCell className="font-medium text-white">{data.month}</TableCell>
+                             <TableCell>{data.projectType}</TableCell>
+                             <TableCell className="text-primary-400">{formatCurrency(data.revenue)}</TableCell>
+                             <TableCell className="text-red-400">{formatCurrency(data.cost)}</TableCell>
+                             <TableCell className={`font-semibold ${data.profit >= 0 ? 'text-green-400' : 'text-red-400'}`}>
+                                 {formatCurrency(data.profit)}
+                             </TableCell>
+                         </TableRow>
+                    ))}
+                </TableBody>
+            </Table>
+        </Modal>
+    );
+};
+
+
 const ProjectArchiveContent = () => {
     const { projects, commissions, enrichedDailyAdCosts, miscellaneousExpenses, categories, niches } = useData();
     const [sortConfig, setSortConfig] = useState<{ key: keyof ProjectStat; direction: 'asc' | 'desc' } | null>({ key: 'profit', direction: 'desc' });
-
-    type ProjectStat = {
-        id: string;
-        name: string;
-        categoryName: string;
-        nicheName: string;
-        revenue: number;
-        cost: number;
-        profit: number;
-        roi: number | null;
-    };
+    const [selectedProject, setSelectedProject] = useState<ProjectStat | null>(null);
 
     const projectStats = useMemo<ProjectStat[]>(() => {
         const masterProjectStats = new Map<string, {
@@ -460,6 +565,7 @@ const ProjectArchiveContent = () => {
             nicheId?: string;
             revenue: number;
             cost: number;
+            isPartnership: boolean;
         }>();
 
         const instanceStats = new Map<string, { revenue: number; cost: number }>();
@@ -493,12 +599,14 @@ const ProjectArchiveContent = () => {
                 nicheId: project.nicheId,
                 revenue: 0,
                 cost: 0,
+                isPartnership: false,
             };
 
             const instancePnl = instanceStats.get(project.id) || { revenue: 0, cost: 0 };
 
             master.revenue += instancePnl.revenue;
             master.cost += instancePnl.cost;
+            master.isPartnership = master.isPartnership || project.isPartnership;
 
             masterProjectStats.set(key, master);
         });
@@ -512,12 +620,15 @@ const ProjectArchiveContent = () => {
             return {
                 id: key,
                 name: master.name,
+                categoryId: master.categoryId,
+                nicheId: master.nicheId,
                 categoryName: master.categoryId ? categoryMap.get(master.categoryId) || '—' : '—',
                 nicheName: master.nicheId ? nicheMap.get(master.nicheId) || '—' : '—',
                 revenue: master.revenue,
                 cost: master.cost,
                 profit,
                 roi,
+                isPartnership: master.isPartnership,
             };
         });
     }, [projects, commissions, enrichedDailyAdCosts, miscellaneousExpenses, categories, niches]);
@@ -581,6 +692,7 @@ const ProjectArchiveContent = () => {
                                 <TableHeader className="cursor-pointer" onClick={() => requestSort('nicheName')}>
                                     Ngách
                                 </TableHeader>
+                                <TableHeader>Loại</TableHeader>
                                 <TableHeader className="cursor-pointer" onClick={() => requestSort('revenue')}>
                                     Tổng Doanh thu
                                 </TableHeader>
@@ -597,10 +709,11 @@ const ProjectArchiveContent = () => {
                         </TableHead>
                         <TableBody>
                             {sortedProjects.map(p => (
-                                <TableRow key={p.id}>
+                                <TableRow key={p.id} className="cursor-pointer" onClick={() => setSelectedProject(p)}>
                                     <TableCell className="font-medium text-white">{p.name}</TableCell>
                                     <TableCell>{p.categoryName}</TableCell>
                                     <TableCell>{p.nicheName}</TableCell>
+                                    <TableCell>{p.isPartnership ? 'Hợp tác' : 'Một mình'}</TableCell>
                                     <TableCell className="text-primary-400">{formatCurrency(p.revenue)}</TableCell>
                                     <TableCell className="text-red-400">{formatCurrency(p.cost)}</TableCell>
                                     <TableCell className={`font-semibold ${p.profit >= 0 ? 'text-green-400' : 'text-red-400'}`}>
@@ -615,6 +728,13 @@ const ProjectArchiveContent = () => {
                     </Table>
                 </CardContent>
             </Card>
+
+            {selectedProject && (
+                <ProjectDetailModal
+                    project={selectedProject}
+                    onClose={() => setSelectedProject(null)}
+                />
+            )}
         </div>
     );
 };

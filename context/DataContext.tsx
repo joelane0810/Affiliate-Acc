@@ -2276,11 +2276,8 @@ export const DataProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
                     }
                     break;
                 }
-                // Fix: The combined 'dailyAdCost' and 'miscExpense' case caused type errors.
-                // It has been split into two separate cases to handle their different properties correctly.
+                // FIX: The combined 'dailyAdCost' and 'miscExpense' case was split into two separate cases and type assertions were added to handle their different properties correctly and fix property access errors on an 'unknown' type.
                 case 'dailyAdCost': {
-                    // Fix: Correctly type `expense` and remove invalid property access.
-                    // DailyAdCost does not have `isPartnership` or `partnerShares`. This information comes from the associated project.
                     const expense = tx as EnrichedDailyAdCost;
                     const project: T.Project | undefined = expense.projectId ? projectMap.get(expense.projectId) : undefined;
                     
@@ -2312,7 +2309,6 @@ export const DataProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
                     break;
                 }
                 case 'miscExpense': {
-                    // Fix: Add type assertion to resolve property access errors on `tx`.
                     const expense = tx as T.MiscellaneousExpense;
                     const project: T.Project | undefined = expense.projectId ? projectMap.get(expense.projectId) : undefined;
                     
@@ -2352,7 +2348,7 @@ export const DataProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
                     break;
                 }
                 case 'manual':
-                    // Fix: Add type assertion to ensure `tx` conforms to the `PartnerLedgerEntry` type.
+                    // FIX: Added type assertion to ensure the transaction object conforms to the PartnerLedgerEntry type.
                     ledgerEntries.push(tx as T.PartnerLedgerEntry);
                     break;
             }
