@@ -1,4 +1,4 @@
-import React, { useState, useMemo, useEffect } from 'react';
+import React, { useState, useMemo, useEffect, useRef } from 'react';
 import { useData } from '../context/DataContext';
 import * as T from '../types';
 import { Header } from '../components/Header';
@@ -8,7 +8,7 @@ import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '.
 import { Modal } from '../components/ui/Modal';
 import { Input, Label } from '../components/ui/Input';
 import { NumberInput } from '../components/ui/NumberInput';
-import { Plus, Edit, Trash2, Users, X } from '../components/icons/IconComponents';
+import { Plus, Edit, Trash2, Users, X, ChevronDown } from '../components/icons/IconComponents';
 import { formatCurrency, isDateInPeriod, formatPercentage, formatDate, formatVietnameseCurrencyShorthand } from '../lib/utils';
 import { ConfirmationModal } from '../components/ui/ConfirmationModal';
 import { ResponsiveContainer, LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, Legend, TooltipProps } from 'recharts';
@@ -303,10 +303,8 @@ const ProjectForm: React.FC<{ project?: T.Project; onSave: (project: Omit<T.Proj
     );
 };
 
-export default function Projects() {
-    const { projects, addProject, updateProject, deleteProject, currentPeriod, isReadOnly, commissions, enrichedDailyAdCosts, miscellaneousExpenses } = useData();
-    const [isModalOpen, setIsModalOpen] = useState(false);
-    const [editingProject, setEditingProject] = useState<T.Project | undefined>(undefined);
+const ProjectListContent: React.FC<{ onEditClick: (project: T.Project) => void; }> = ({ onEditClick }) => {
+    const { projects, deleteProject, currentPeriod, isReadOnly, commissions, enrichedDailyAdCosts, miscellaneousExpenses } = useData();
     const [projectToDelete, setProjectToDelete] = useState<T.Project | null>(null);
 
     const enrichedProjects = useMemo(() => {
@@ -337,16 +335,6 @@ export default function Projects() {
         }).sort((a,b) => b.profit - a.profit);
       }, [projects, commissions, enrichedDailyAdCosts, miscellaneousExpenses, currentPeriod]);
 
-    const handleSave = (project: Omit<T.Project, 'id' | 'period'> | T.Project) => {
-        if ('id' in project && project.id) {
-            updateProject(project as T.Project);
-        } else {
-            addProject(project as Omit<T.Project, 'id' | 'period'>);
-        }
-        setIsModalOpen(false);
-        setEditingProject(undefined);
-    };
-
     const handleDeleteClick = (project: T.Project) => {
         setProjectToDelete(project);
     };
@@ -360,15 +348,7 @@ export default function Projects() {
 
     return (
         <>
-            <Header title="Dự án">
-                {!isReadOnly && (
-                    <Button onClick={() => { setEditingProject(undefined); setIsModalOpen(true); }}>
-                        <span className="flex items-center gap-2"><Plus /> Thêm dự án</span>
-                    </Button>
-                )}
-            </Header>
-
-            <Card>
+             <Card>
                 <CardContent>
                     <Table>
                         <TableHead>
@@ -402,7 +382,7 @@ export default function Projects() {
                                     {!isReadOnly && (
                                         <TableCell>
                                             <div className="flex items-center space-x-3 justify-center">
-                                                <button onClick={() => { setEditingProject(p); setIsModalOpen(true); }} className="text-gray-400 hover:text-primary-400"><Edit /></button>
+                                                <button onClick={() => onEditClick(p)} className="text-gray-400 hover:text-primary-400"><Edit /></button>
                                                 <button onClick={() => handleDeleteClick(p)} className="text-gray-400 hover:text-red-400"><Trash2 /></button>
                                             </div>
                                         </TableCell>
@@ -415,14 +395,6 @@ export default function Projects() {
             </Card>
 
             {!isReadOnly && (
-                <>
-                <Modal isOpen={isModalOpen} onClose={() => setIsModalOpen(false)} title={editingProject ? 'Sửa dự án' : 'Thêm dự án mới'}>
-                    <ProjectForm
-                        project={editingProject}
-                        onSave={handleSave}
-                        onCancel={() => { setIsModalOpen(false); setEditingProject(undefined); }}
-                    />
-                </Modal>
                 <ConfirmationModal
                     isOpen={!!projectToDelete}
                     onClose={() => setProjectToDelete(null)}
@@ -430,7 +402,265 @@ export default function Projects() {
                     title="Xác nhận xóa dự án"
                     message={`Bạn có chắc chắn muốn xóa dự án "${projectToDelete?.name}" không? Tất cả dữ liệu liên quan (chi phí, hoa hồng) cũng sẽ bị xóa.`}
                 />
-                </>
+            )}
+        </>
+    );
+}
+
+const CustomTooltip = ({ active, payload, label }: TooltipProps<ValueType, NameType>) => {
+  if (active && payload && payload.length) {
+    return (
+      <div className="bg-gray-700 p-2 border border-gray-600 rounded">
+        <p className="label text-white font-bold">{label}</p>
+        {payload.map((pld, index) => (
+            <p key={index} style={{ color: pld.color }}>
+                {`${pld.name}: ${formatCurrency(pld.value as number)}`}
+            </p>
+        ))}
+      </div>
+    );
+  }
+  return null;
+};
+
+const getWeekOfYear = (dateString: string): string => {
+    const date = new Date(dateString);
+    date.setHours(0, 0, 0, 0);
+    // Thursday in current week decides the year.
+    date.setDate(date.getDate() + 3 - (date.getDay() + 6) % 7);
+    // January 4 is always in week 1.
+    const week1 = new Date(date.getFullYear(), 0, 4);
+    // Adjust to Thursday in week 1 and count number of weeks from date to week1.
+    const weekNumber = 1 + Math.round(((date.getTime() - week1.getTime()) / 86400000 - 3 + (week1.getDay() + 6) % 7) / 7);
+    return `${date.getFullYear()}-W${String(weekNumber).padStart(2, '0')}`;
+}
+
+const ProjectTrendsContent = () => {
+    const { projects, commissions, enrichedDailyAdCosts, miscellaneousExpenses, currentPeriod } = useData();
+    const [selectedProjectIds, setSelectedProjectIds] = useState<string[]>([]);
+    const [timeGranularity, setTimeGranularity] = useState<'daily' | 'weekly'>('daily');
+    const [visibleMetrics, setVisibleMetrics] = useState(new Set(['revenue', 'cost', 'profit']));
+
+    const projectsForPeriod = useMemo(() => projects.filter(p => p.period === currentPeriod), [projects, currentPeriod]);
+
+    const [isDropdownOpen, setIsDropdownOpen] = useState(false);
+    const dropdownRef = useRef<HTMLDivElement>(null);
+
+     useEffect(() => {
+        const handleClickOutside = (event: MouseEvent) => {
+            if (dropdownRef.current && !dropdownRef.current.contains(event.target as Node)) {
+                setIsDropdownOpen(false);
+            }
+        };
+        document.addEventListener("mousedown", handleClickOutside);
+        return () => document.removeEventListener("mousedown", handleClickOutside);
+    }, []);
+
+    const chartData = useMemo(() => {
+        if (!currentPeriod) return [];
+
+        const projectIdsToFilter = selectedProjectIds.length > 0 ? new Set(selectedProjectIds) : new Set(projectsForPeriod.map(p => p.id));
+        
+        const dataMap = new Map<string, { revenue: number, cost: number }>();
+
+        const getKey = (date: string) => timeGranularity === 'daily' ? date : getWeekOfYear(date);
+
+        commissions.forEach(c => {
+            if (isDateInPeriod(c.date, currentPeriod) && projectIdsToFilter.has(c.projectId)) {
+                const key = getKey(c.date);
+                const entry = dataMap.get(key) || { revenue: 0, cost: 0 };
+                entry.revenue += c.vndAmount;
+                dataMap.set(key, entry);
+            }
+        });
+
+        enrichedDailyAdCosts.forEach(c => {
+            if (isDateInPeriod(c.date, currentPeriod) && projectIdsToFilter.has(c.projectId)) {
+                const key = getKey(c.date);
+                const entry = dataMap.get(key) || { revenue: 0, cost: 0 };
+                entry.cost += c.vndCost;
+                dataMap.set(key, entry);
+            }
+        });
+
+        miscellaneousExpenses.forEach(e => {
+            if (e.projectId && isDateInPeriod(e.date, currentPeriod) && projectIdsToFilter.has(e.projectId)) {
+                const key = getKey(e.date);
+                const entry = dataMap.get(key) || { revenue: 0, cost: 0 };
+                entry.cost += e.vndAmount;
+                dataMap.set(key, entry);
+            }
+        });
+        
+        return Array.from(dataMap.entries())
+            .map(([key, values]) => ({
+                date: key,
+                revenue: values.revenue,
+                cost: values.cost,
+                profit: values.revenue - values.cost,
+            }))
+            .sort((a, b) => a.date.localeCompare(b.date));
+
+    }, [currentPeriod, selectedProjectIds, timeGranularity, projectsForPeriod, commissions, enrichedDailyAdCosts, miscellaneousExpenses]);
+
+    const handleProjectSelection = (projectId: string) => {
+        setSelectedProjectIds(prev => {
+            const newSet = new Set(prev);
+            if (newSet.has(projectId)) {
+                newSet.delete(projectId);
+            } else {
+                newSet.add(projectId);
+            }
+            return Array.from(newSet);
+        });
+    };
+    
+    const handleMetricToggle = (metric: 'revenue' | 'cost' | 'profit') => {
+        setVisibleMetrics(prev => {
+            const newSet = new Set(prev);
+            if(newSet.has(metric)) {
+                newSet.delete(metric);
+            } else {
+                newSet.add(metric);
+            }
+            return newSet;
+        })
+    };
+
+    return (
+        <div className="space-y-6">
+            <Card>
+                <CardContent className="flex flex-wrap items-center justify-between gap-4">
+                    <div className="flex flex-wrap items-center gap-6">
+                        <div ref={dropdownRef} className="relative">
+                            <Button variant="secondary" onClick={() => setIsDropdownOpen(!isDropdownOpen)} className="flex items-center gap-2">
+                                {selectedProjectIds.length === 0 ? 'Tất cả dự án' : `${selectedProjectIds.length} dự án được chọn`}
+                                <ChevronDown />
+                            </Button>
+                            {isDropdownOpen && (
+                                <div className="absolute top-full left-0 mt-2 w-72 bg-gray-800 border border-gray-700 rounded-md shadow-lg z-10 p-2 max-h-60 overflow-y-auto">
+                                    <div className="flex items-center p-2 hover:bg-gray-700 rounded-md">
+                                        <input type="checkbox" id="all-projects" checked={selectedProjectIds.length === 0} onChange={() => setSelectedProjectIds([])} className="h-4 w-4 rounded border-gray-600 bg-gray-900 text-primary-600 focus:ring-primary-500" />
+                                        <label htmlFor="all-projects" className="ml-2 text-white font-semibold">Tất cả dự án</label>
+                                    </div>
+                                    <div className="border-t border-gray-700 my-1"></div>
+                                    {projectsForPeriod.map(p => (
+                                         <div key={p.id} className="flex items-center p-2 hover:bg-gray-700 rounded-md">
+                                            <input type="checkbox" id={`proj-${p.id}`} checked={selectedProjectIds.includes(p.id)} onChange={() => handleProjectSelection(p.id)}  className="h-4 w-4 rounded border-gray-600 bg-gray-900 text-primary-600 focus:ring-primary-500"/>
+                                            <label htmlFor={`proj-${p.id}`} className="ml-2 text-gray-300 truncate">{p.name}</label>
+                                        </div>
+                                    ))}
+                                </div>
+                            )}
+                        </div>
+                        <div className="flex items-center bg-gray-700/50 rounded-md p-1">
+                            <Button variant={timeGranularity === 'daily' ? 'secondary' : 'primary'} size="sm" onClick={() => setTimeGranularity('daily')} className={timeGranularity === 'daily' ? '!bg-primary-600' : '!bg-transparent'}>Theo ngày</Button>
+                            <Button variant={timeGranularity === 'weekly' ? 'secondary' : 'primary'} size="sm" onClick={() => setTimeGranularity('weekly')} className={timeGranularity === 'weekly' ? '!bg-primary-600' : '!bg-transparent'}>Theo tuần</Button>
+                        </div>
+                    </div>
+                     <div className="flex items-center gap-4">
+                        {['revenue', 'cost', 'profit'].map(metric => (
+                             <label key={metric} className="flex items-center space-x-2 cursor-pointer">
+                                <input type="checkbox" checked={visibleMetrics.has(metric as any)} onChange={() => handleMetricToggle(metric as any)} className="h-4 w-4 rounded border-gray-600 bg-gray-900 text-primary-600 focus:ring-primary-500" />
+                                <span className="capitalize">{metric === 'revenue' ? 'Doanh thu' : metric === 'cost' ? 'Chi phí' : 'Lợi nhuận'}</span>
+                            </label>
+                        ))}
+                    </div>
+                </CardContent>
+            </Card>
+
+            <Card>
+                <CardContent className="h-96">
+                    <ResponsiveContainer width="100%" height="100%">
+                        <LineChart data={chartData} margin={{ top: 5, right: 30, left: 50, bottom: 5 }}>
+                            <CartesianGrid strokeDasharray="3 3" stroke="#475569" />
+                            <XAxis dataKey="date" stroke="#94a3b8" />
+                            <YAxis stroke="#94a3b8" tickFormatter={(tick) => formatVietnameseCurrencyShorthand(tick)} />
+                            <Tooltip content={<CustomTooltip />} />
+                            <Legend />
+                            {visibleMetrics.has('revenue') && <Line type="monotone" dataKey="revenue" name="Doanh thu" stroke="#3b82f6" strokeWidth={2} dot={false} activeDot={{ r: 6 }} />}
+                            {visibleMetrics.has('cost') && <Line type="monotone" dataKey="cost" name="Chi phí" stroke="#ef4444" strokeWidth={2} dot={false} activeDot={{ r: 6 }} />}
+                            {visibleMetrics.has('profit') && <Line type="monotone" dataKey="profit" name="Lợi nhuận" stroke="#22c55e" strokeWidth={2} dot={false} activeDot={{ r: 6 }} />}
+                        </LineChart>
+                    </ResponsiveContainer>
+                </CardContent>
+            </Card>
+        </div>
+    );
+}
+
+const TabButton: React.FC<{ active: boolean; onClick: () => void; children: React.ReactNode }> = ({ active, onClick, children }) => (
+  <button
+    onClick={onClick}
+    className={`px-6 py-3 text-sm font-semibold transition-colors focus:outline-none ${
+      active
+        ? 'border-b-2 border-primary-500 text-white'
+        : 'text-gray-400 hover:text-white'
+    }`}
+    role="tab"
+    aria-selected={active}
+  >
+    {children}
+  </button>
+);
+
+export default function Projects() {
+    const { isReadOnly, addProject, updateProject, currentPeriod } = useData();
+    const [activeTab, setActiveTab] = useState<'list' | 'trends'>('list');
+
+    const [isModalOpen, setIsModalOpen] = useState(false);
+    const [editingProject, setEditingProject] = useState<T.Project | undefined>(undefined);
+
+    const handleSave = (project: Omit<T.Project, 'id' | 'period'> | T.Project) => {
+        if ('id' in project && project.id) {
+            updateProject(project as T.Project);
+        } else {
+            addProject(project as Omit<T.Project, 'id' | 'period'>);
+        }
+        setIsModalOpen(false);
+        setEditingProject(undefined);
+    };
+
+    const handleAddClick = () => {
+        setEditingProject(undefined);
+        setIsModalOpen(true);
+    };
+    
+    const handleEditClick = (project: T.Project) => {
+        setEditingProject(project);
+        setIsModalOpen(true);
+    };
+
+    return (
+        <>
+            <Header title="Dự án">
+                {activeTab === 'list' && !isReadOnly && (
+                    <Button onClick={handleAddClick} disabled={!currentPeriod}>
+                        <span className="flex items-center gap-2"><Plus /> Thêm dự án</span>
+                    </Button>
+                )}
+            </Header>
+
+            <div className="flex flex-wrap border-b border-gray-700 mb-6" role="tablist">
+                <TabButton active={activeTab === 'list'} onClick={() => setActiveTab('list')}>
+                    Danh sách dự án
+                </TabButton>
+                <TabButton active={activeTab === 'trends'} onClick={() => setActiveTab('trends')}>
+                    Xu hướng
+                </TabButton>
+            </div>
+            
+            {activeTab === 'list' && <ProjectListContent onEditClick={handleEditClick} />}
+            {activeTab === 'trends' && <ProjectTrendsContent />}
+
+            {!isReadOnly && (
+                <Modal isOpen={isModalOpen} onClose={() => setIsModalOpen(false)} title={editingProject ? 'Sửa dự án' : 'Thêm dự án mới'}>
+                    <ProjectForm
+                        project={editingProject}
+                        onSave={handleSave}
+                        onCancel={() => { setIsModalOpen(false); setEditingProject(undefined); }}
+                    />
+                </Modal>
             )}
         </>
     );

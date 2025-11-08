@@ -1683,27 +1683,66 @@ export const DataProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
   ]);
 
   const enrichedDailyAdCosts = useMemo<EnrichedDailyAdCost[]>(() => {
-      const depositsByAccount = adDeposits.reduce((acc, deposit) => {
-          if (!acc[deposit.adAccountNumber]) {
-              acc[deposit.adAccountNumber] = [];
-          }
-          acc[deposit.adAccountNumber].push(deposit);
-          return acc;
-      }, {} as Record<string, T.AdDeposit[]>);
+    // This function implements a strict FIFO (First-In, First-Out) logic for ad cost calculation.
+    
+    // 1. Create mutable queues for each ad account to track remaining deposit balances.
+    const depositQueues: Record<string, {
+        deposit: T.AdDeposit;
+        remainingUsd: number;
+    }[]> = {};
 
-      for (const acc in depositsByAccount) {
-          depositsByAccount[acc].sort((a, b) => a.date.localeCompare(b.date));
-      }
+    // 2. Group and sort all deposits by account number and date to form the initial queues.
+    const sortedDeposits = [...adDeposits].sort((a, b) => new Date(a.date).getTime() - new Date(b.date).getTime());
+    
+    for (const deposit of sortedDeposits) {
+        if (!depositQueues[deposit.adAccountNumber]) {
+            depositQueues[deposit.adAccountNumber] = [];
+        }
+        depositQueues[deposit.adAccountNumber].push({
+            deposit: deposit,
+            remainingUsd: deposit.usdAmount,
+        });
+    }
 
-      return dailyAdCosts.map(cost => {
-          const depositsForAccount = depositsByAccount[cost.adAccountNumber] || [];
-          const relevantDeposit = [...depositsForAccount].reverse().find(d => d.date <= cost.date);
-          
-          const effectiveRate = relevantDeposit ? relevantDeposit.rate : 25000; // Fallback rate
-          const vndCost = cost.amount * effectiveRate;
-          return { ...cost, vndCost, effectiveRate };
-      });
-  }, [dailyAdCosts, adDeposits]);
+    // 3. Sort all daily costs chronologically. This is crucial for FIFO processing.
+    const sortedCosts = [...dailyAdCosts].sort((a, b) => new Date(a.date).getTime() - new Date(b.date).getTime());
+
+    // 4. Process each cost, consuming from the deposit queues.
+    return sortedCosts.map(cost => {
+        const queue = depositQueues[cost.adAccountNumber] || [];
+        let amountToProcess = cost.amount;
+        let totalVndCost = 0;
+
+        // 5. FIFO loop: Consume from the oldest deposits first.
+        while (amountToProcess > 0 && queue.length > 0) {
+            const currentDeposit = queue[0];
+            const amountToTake = Math.min(amountToProcess, currentDeposit.remainingUsd);
+
+            totalVndCost += amountToTake * currentDeposit.deposit.rate;
+            currentDeposit.remainingUsd -= amountToTake;
+            amountToProcess -= amountToTake;
+
+            // If a deposit is fully used up, remove it from the queue.
+            if (currentDeposit.remainingUsd < 0.001) { // Use a small epsilon for float comparison
+                queue.shift();
+            }
+        }
+        
+        // 6. If costs exceed total deposits, use a fallback rate for the remaining amount.
+        if (amountToProcess > 0) {
+            totalVndCost += amountToProcess * 25000; // Fallback rate
+        }
+
+        // 7. Calculate the final effective rate and return the enriched cost object.
+        const effectiveRate = cost.amount > 0 ? totalVndCost / cost.amount : 0;
+        
+        return {
+            ...cost,
+            vndCost: totalVndCost,
+            effectiveRate: effectiveRate,
+        };
+    });
+}, [dailyAdCosts, adDeposits]);
   
   const { enrichedAdAccounts, adAccountTransactions, partnerAdAccountBalances } = useMemo(() => {
     const projectMap = new Map(projects.map(p => [p.id, p]));
@@ -1943,11 +1982,13 @@ export const DataProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
         }));
         const partnerPnlMap = new Map(partnerPnlDetails.map(p => [p.partnerId, p]));
 
-        const revenueDetails: { name: string, amount: number }[] = [];
+        const revenueDetailsMap = new Map<string, number>();
         commissionsForPeriod.forEach(comm => {
             const project = projectMap.get(comm.projectId);
             if (!project) return;
-            revenueDetails.push({ name: project.name, amount: comm.vndAmount });
+
+            const currentAmount = revenueDetailsMap.get(project.name) || 0;
+            revenueDetailsMap.set(project.name, currentAmount + comm.vndAmount);
 
             if (project.isPartnership && project.partnerShares) {
                 project.partnerShares.forEach(share => {
@@ -1959,6 +2000,7 @@ export const DataProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
                 if (mePnl) mePnl.revenue += comm.vndAmount;
             }
         });
+        const revenueDetails: { name: string, amount: number }[] = Array.from(revenueDetailsMap, ([name, amount]) => ({ name, amount }));
 
         // Calculate Exchange Rate Gain/Loss using FIFO
         let exchangeRateGainLoss = 0;
@@ -2023,13 +2065,15 @@ export const DataProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
             }
         }
         
-        const adCostDetails: { name: string, amount: number }[] = [];
+        const adCostDetailsMap = new Map<string, number>();
         enrichedDailyAdCostsForPeriod.forEach(cost => {
             const project = projectMap.get(cost.projectId);
             if (!project) return;
             const totalVndCost = cost.vndCost;
             const inputVat = totalVndCost * (cost.vatRate || 0) / 100;
-            adCostDetails.push({ name: project.name, amount: totalVndCost });
+
+            const currentAmount = adCostDetailsMap.get(project.name) || 0;
+            adCostDetailsMap.set(project.name, currentAmount + totalVndCost);
 
             if (project.isPartnership && project.partnerShares) {
                 project.partnerShares.forEach(share => {
@@ -2048,13 +2092,17 @@ export const DataProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
                 }
             }
         });
+        const adCostDetails: { name: string, amount: number }[] = Array.from(adCostDetailsMap, ([name, amount]) => ({ name, amount }));
 
-        const miscCostDetails: { name: string, amount: number }[] = [];
+        const miscCostDetailsMap = new Map<string, number>();
         miscExpensesForPeriod.forEach(exp => {
             const project = exp.projectId ? projectMap.get(exp.projectId) : null;
             const totalVndCost = exp.vndAmount;
             const inputVat = totalVndCost * (exp.vatRate || 0) / 100;
-            miscCostDetails.push({ name: exp.description, amount: totalVndCost });
+            
+            const key = project ? project.name : exp.description;
+            const currentAmount = miscCostDetailsMap.get(key) || 0;
+            miscCostDetailsMap.set(key, currentAmount + totalVndCost);
 
             let shares = (project && project.isPartnership && project.partnerShares) ? project.partnerShares :
                          (!project && exp.isPartnership && exp.partnerShares) ? exp.partnerShares : undefined;
@@ -2076,6 +2124,7 @@ export const DataProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
                 }
             }
         });
+        const miscCostDetails: { name: string, amount: number }[] = Array.from(miscCostDetailsMap, ([name, amount]) => ({ name, amount }));
 
         partnerPnlDetails.forEach(p => p.profit = p.revenue - p.cost);
         const totalRevenue = partnerPnlDetails.reduce((sum, p) => sum + p.revenue, 0);
@@ -2230,6 +2279,8 @@ export const DataProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
                 // Fix: The combined 'dailyAdCost' and 'miscExpense' case caused type errors.
                 // It has been split into two separate cases to handle their different properties correctly.
                 case 'dailyAdCost': {
+                    // Fix: Correctly type `expense` and remove invalid property access.
+                    // DailyAdCost does not have `isPartnership` or `partnerShares`. This information comes from the associated project.
                     const expense = tx as EnrichedDailyAdCost;
                     const project: T.Project | undefined = expense.projectId ? projectMap.get(expense.projectId) : undefined;
                     
@@ -2261,6 +2312,7 @@ export const DataProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
                     break;
                 }
                 case 'miscExpense': {
+                    // Fix: Add type assertion to resolve property access errors on `tx`.
                     const expense = tx as T.MiscellaneousExpense;
                     const project: T.Project | undefined = expense.projectId ? projectMap.get(expense.projectId) : undefined;
                     
@@ -2300,6 +2352,7 @@ export const DataProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
                     break;
                 }
                 case 'manual':
+                    // Fix: Add type assertion to ensure `tx` conforms to the `PartnerLedgerEntry` type.
                     ledgerEntries.push(tx as T.PartnerLedgerEntry);
                     break;
             }

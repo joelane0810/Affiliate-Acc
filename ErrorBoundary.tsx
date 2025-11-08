@@ -11,12 +11,16 @@ interface State {
 }
 
 class ErrorBoundary extends Component<Props, State> {
-  // Fix: Initialized state as a class property to ensure correct component instantiation and `this` context.
-  public state: State = {
-    hasError: false,
-    error: undefined,
-    errorInfo: undefined,
-  };
+  // Fix: Reverted to a standard constructor for state initialization to resolve type errors where `this.state`,
+  // `this.props`, and `this.setState` were not being recognized. This is a more robust approach.
+  constructor(props: Props) {
+    super(props);
+    this.state = {
+      hasError: false,
+      error: undefined,
+      errorInfo: undefined,
+    };
+  }
 
   static getDerivedStateFromError(error: Error): Partial<State> {
     // This lifecycle method should return a state update object.
@@ -25,7 +29,6 @@ class ErrorBoundary extends Component<Props, State> {
 
   componentDidCatch(error: Error, errorInfo: ErrorInfo) {
     console.error("Uncaught error:", error, errorInfo);
-    // We ensure `setState` is called on the component instance.
     this.setState({ error, errorInfo });
   }
 
@@ -56,7 +59,6 @@ class ErrorBoundary extends Component<Props, State> {
       );
     }
 
-    // We ensure `props` are accessed on the component instance.
     return this.props.children;
   }
 }
