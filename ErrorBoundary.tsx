@@ -11,8 +11,8 @@ interface State {
 }
 
 class ErrorBoundary extends Component<Props, State> {
-  // Initializing state as a class property.
-  state: State = {
+  // Fix: Initialized state as a class property to ensure correct component instantiation and `this` context.
+  public state: State = {
     hasError: false,
     error: undefined,
     errorInfo: undefined,
@@ -25,9 +25,7 @@ class ErrorBoundary extends Component<Props, State> {
 
   componentDidCatch(error: Error, errorInfo: ErrorInfo) {
     console.error("Uncaught error:", error, errorInfo);
-    // This lifecycle is for side effects like logging. We update the state with the errorInfo here.
-    // Correctly call this.setState, which is inherited from Component.
-    // FIX: Class methods like setState must be called on the component instance using `this`.
+    // We ensure `setState` is called on the component instance.
     this.setState({ error, errorInfo });
   }
 
@@ -58,8 +56,7 @@ class ErrorBoundary extends Component<Props, State> {
       );
     }
 
-    // Correctly access this.props.children to render the component tree.
-    // FIX: Class properties like props must be accessed on the component instance using `this`.
+    // We ensure `props` are accessed on the component instance.
     return this.props.children;
   }
 }

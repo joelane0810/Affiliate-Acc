@@ -36,7 +36,12 @@ const navItems: { page: Page; label: string; icon: React.ReactNode }[] = [
 const alwaysEnabledPages: Page[] = ['AdAccounts', 'SavingsAndInvestments', 'Assets', 'Reports', 'LongReport', 'Settings', 'Partners', 'Guide'];
 
 export const Sidebar: React.FC<SidebarProps> = ({ isExpanded, setIsExpanded, isMobileOpen, setIsMobileOpen }) => {
-  const { activePeriod, viewingPeriod, currentPage, setCurrentPage } = useData();
+  const { 
+      activePeriod, viewingPeriod, currentPage, setCurrentPage, 
+      user, authIsLoading, firebaseConfig 
+  } = useData();
+
+  const needsSetup = !firebaseConfig || (!authIsLoading && !user);
 
   const handleNavigation = (page: Page) => {
     setCurrentPage(page);
@@ -62,6 +67,10 @@ export const Sidebar: React.FC<SidebarProps> = ({ isExpanded, setIsExpanded, isM
       statusLabel = 'Chưa mở';
       statusColor = 'text-gray-400';
       showIndicator = true;
+  }
+  
+  if (needsSetup) {
+      showIndicator = false;
   }
 
   const showText = isExpanded || isMobileOpen;
@@ -92,7 +101,14 @@ export const Sidebar: React.FC<SidebarProps> = ({ isExpanded, setIsExpanded, isM
       <nav className="flex-1 overflow-y-auto overflow-x-hidden">
         <ul className="py-4">
           {navItems.map(item => {
-            const isDisabled = !activePeriod && !viewingPeriod && !alwaysEnabledPages.includes(item.page);
+            let isDisabled;
+            if (needsSetup) {
+                // In setup mode, only Settings and Guide are enabled.
+                isDisabled = item.page !== 'Settings' && item.page !== 'Guide';
+            } else {
+                // Normal operation disabled logic.
+                isDisabled = !activePeriod && !viewingPeriod && !alwaysEnabledPages.includes(item.page);
+            }
             return (
               <li key={item.page}>
                 <button

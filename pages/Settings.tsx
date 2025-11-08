@@ -7,14 +7,24 @@ import { Input, Label } from '../components/ui/Input';
 import { NumberInput } from '../components/ui/NumberInput';
 import { ConfirmationModal } from '../components/ui/ConfirmationModal';
 import { FirebaseConfig } from '../types';
+import { FirebaseError, initializeApp, deleteApp, getApp } from 'firebase/app';
+import { getAuth, signInWithEmailAndPassword, signOut } from 'firebase/auth';
 import { db } from '../lib/firebase';
-import { collection, getDocs, writeBatch, doc, getDoc, setDoc, deleteDoc } from 'firebase/firestore';
+import { collection, getDocs, writeBatch, doc, getDoc, setDoc, deleteDoc, getFirestore } from 'firebase/firestore';
 
 
-const FirebaseSettings: React.FC = () => {
-    const { firebaseConfig, setFirebaseConfig } = useData();
+const ConnectionCard: React.FC = () => {
+    const { user, authIsLoading, firebaseConfig, setFirebaseConfig } = useData();
+    
+    // State for login form
     const [configString, setConfigString] = useState('');
-    const [connectionStatus, setConnectionStatus] = useState<'unknown' | 'connected' | 'not_configured'>('unknown');
+    const [email, setEmail] = useState('');
+    const [password, setPassword] = useState('');
+    const [error, setError] = useState('');
+    const [isLoading, setIsLoading] = useState(false);
+
+    // State for logout confirmation
+    const [isLogoutConfirmOpen, setIsLogoutConfirmOpen] = useState(false);
 
     useEffect(() => {
         if (firebaseConfig && Object.values(firebaseConfig).every(v => v)) {
@@ -27,69 +37,179 @@ const FirebaseSettings: React.FC = () => {
                 `  appId: "${firebaseConfig.appId}"\n` +
                 `};`;
             setConfigString(formattedConfig);
-            setConnectionStatus('connected');
-        } else {
-            setConfigString('');
-            setConnectionStatus('not_configured');
         }
     }, [firebaseConfig]);
 
-    const handleSave = () => {
-        const text = configString;
 
+    const handleConnectAndLogin = async (e: React.FormEvent) => {
+        e.preventDefault();
+        setError('');
+        setIsLoading(true);
+
+        // 1. Parse Config
         const extractValue = (key: string): string | null => {
             const regex = new RegExp(`["']?${key}["']?\\s*:\\s*["']([^"']+)["']`);
-            const match = text.match(regex);
+            const match = configString.match(regex);
             return match ? match[1].trim() : null;
         };
-        
         const configKeys: (keyof FirebaseConfig)[] = ['apiKey', 'authDomain', 'projectId', 'storageBucket', 'messagingSenderId', 'appId'];
-        
-        const extractedConfig = configKeys.reduce((acc, key) => {
+        const parsedConfig = configKeys.reduce((acc, key) => {
             acc[key] = extractValue(key);
             return acc;
         }, {} as Partial<Record<keyof FirebaseConfig, string | null>>);
 
+        if (!Object.values(parsedConfig).every(v => v)) {
+            const missingKeys = configKeys.filter(key => !parsedConfig[key]);
+            setError(`Không thể phân tích cấu hình. Các trường bị thiếu: ${missingKeys.join(', ')}`);
+            setIsLoading(false);
+            return;
+        }
 
-        if (Object.values(extractedConfig).every(v => v)) {
-            const newConfig = extractedConfig as FirebaseConfig;
-            setFirebaseConfig(newConfig);
-            alert('Đã lưu cấu hình Firebase. Trang sẽ được tải lại để áp dụng thay đổi.');
+        // 2. This process will interact with the [DEFAULT] Firebase app instance
+        // to ensure the login session is persisted correctly for the main app.
+        let tempApp;
+        try {
+            // Attempt to get and delete any existing default app to ensure a clean state.
+            try {
+                const existingApp = getApp();
+                await deleteApp(existingApp);
+            } catch (e) {
+                // No default app existed, which is fine.
+            }
+
+            // Initialize the [DEFAULT] app with the new config for testing.
+            tempApp = initializeApp(parsedConfig as FirebaseConfig);
+            const tempAuth = getAuth(tempApp);
+            await signInWithEmailAndPassword(tempAuth, email, password);
+
+            // Pre-flight check for Firestore permissions. This will throw on permission-denied.
+            const tempDb = getFirestore(tempApp);
+            const checkDocRef = doc(tempDb, 'settings', 'periods');
+            await getDoc(checkDocRef); 
+
+            // 3. Success: Save config to localStorage. The session is now persisted for the [DEFAULT] app.
+            setFirebaseConfig(parsedConfig as FirebaseConfig);
+            alert('Kết nối và đăng nhập thành công! Ứng dụng sẽ được tải lại.');
             window.location.reload();
-        } else {
-            const missingKeys = configKeys.filter(key => !extractedConfig[key]);
-            alert(`Không thể phân tích cấu hình. Vui lòng dán đoạn mã cấu hình hợp lệ từ Firebase console. \n\nCác trường bị thiếu: ${missingKeys.join(', ')}`);
+
+        } catch (err) {
+            let errorMessage = 'Đã xảy ra lỗi không xác định. Vui lòng kiểm tra lại cấu hình Firebase và thông tin đăng nhập.';
+            if (err instanceof FirebaseError) {
+                switch (err.code) {
+                    case 'auth/invalid-credential':
+                    case 'auth/user-not-found':
+                    case 'auth/wrong-password':
+                        errorMessage = 'Sai email hoặc mật khẩu.';
+                        break;
+                    case 'auth/invalid-email':
+                        errorMessage = 'Địa chỉ email không hợp lệ.';
+                        break;
+                    case 'auth/network-request-failed':
+                         errorMessage = 'Lỗi mạng hoặc cấu hình Firebase không chính xác (sai authDomain, projectId...).';
+                        break;
+                    case 'permission-denied':
+                        errorMessage = 'Đăng nhập thành công, nhưng không có quyền truy cập Firestore. Vui lòng kiểm tra lại Security Rules của bạn trong Firebase Console và thử lại.';
+                        break;
+                    default:
+                        errorMessage = err.message;
+                        break;
+                }
+            }
+            setError(errorMessage);
+
+            // On failure, clean up the [DEFAULT] app instance we created for the test.
+            if (tempApp) {
+                await deleteApp(tempApp).catch(e => console.error("Error during cleanup:", e));
+            }
+        } finally {
+            setIsLoading(false);
         }
     };
+    
+    const handleLogoutAndReset = async () => {
+        const { auth } = await import('../lib/firebase');
+        if (auth) {
+            await signOut(auth);
+        }
+        setFirebaseConfig(null);
+        setIsLogoutConfirmOpen(false);
+        window.location.reload();
+    };
+
+    if (authIsLoading) {
+        return (
+             <Card>
+                <CardHeader>Kết nối & Xác thực</CardHeader>
+                <CardContent>
+                    <p className="text-gray-400">Đang kiểm tra trạng thái kết nối...</p>
+                </CardContent>
+            </Card>
+        );
+    }
+    
+    if (user) {
+        return (
+            <Card>
+                <CardHeader>Kết nối & Xác thực</CardHeader>
+                <CardContent>
+                     <p className="text-gray-300 mb-4">
+                        Đã kết nối và đăng nhập với tài khoản: <span className="font-semibold text-white">{user.email}</span>
+                    </p>
+                    <p className="text-sm text-gray-400 mb-4">
+                        Đăng xuất sẽ ngắt kết nối khỏi Firebase và xóa cấu hình đã lưu. Bạn sẽ cần cấu hình lại để sử dụng lại ứng dụng.
+                    </p>
+                    <Button variant="danger" onClick={() => setIsLogoutConfirmOpen(true)}>
+                        Đăng xuất & Xóa Cấu hình
+                    </Button>
+                    <ConfirmationModal
+                        isOpen={isLogoutConfirmOpen}
+                        onClose={() => setIsLogoutConfirmOpen(false)}
+                        onConfirm={handleLogoutAndReset}
+                        title="Xác nhận Đăng xuất"
+                        message="Bạn có chắc chắn muốn đăng xuất không? Hành động này sẽ xóa cấu hình Firebase đã lưu trên trình duyệt này."
+                        confirmButtonText="Đăng xuất"
+                        confirmButtonVariant="danger"
+                    />
+                </CardContent>
+            </Card>
+        );
+    }
 
     return (
         <Card>
-            <CardHeader className="flex justify-between items-center">
-                <span>Cấu hình Firebase</span>
-                 <span className={`px-3 py-1 text-xs font-semibold rounded-full ${
-                    connectionStatus === 'connected' ? 'bg-green-500/20 text-green-300' : 'bg-yellow-500/20 text-yellow-300'
-                 }`}>
-                     {connectionStatus === 'connected' ? 'Đã kết nối' : 'Chưa kết nối'}
-                 </span>
-            </CardHeader>
-            <CardContent className="space-y-4">
-                <p className="text-sm text-gray-400">
-                    Dán toàn bộ đoạn mã cấu hình Firebase (biến `firebaseConfig`) của bạn vào ô bên dưới. Hệ thống sẽ tự động trích xuất các thông tin cần thiết.
-                </p>
-                <div>
-                    <Label htmlFor="firebase-config-paste">Đoạn mã cấu hình Firebase</Label>
-                    <textarea
-                        id="firebase-config-paste"
-                        className="w-full h-48 px-3 py-2 bg-gray-900 border border-gray-600 rounded-md placeholder-gray-500 focus:outline-none focus:ring-2 focus:ring-primary-500 focus:border-primary-500 font-mono text-sm"
-                        placeholder={`// Dán vào đây, ví dụ:\nconst firebaseConfig = {\n  apiKey: "...",\n  authDomain: "...",\n  ...\n};`}
-                        value={configString}
-                        onChange={e => setConfigString(e.target.value)}
-                        spellCheck="false"
-                    />
-                </div>
-                 <div className="flex justify-end pt-4 border-t border-gray-700">
-                    <Button onClick={handleSave}>Lưu cấu hình & Tải lại</Button>
-                </div>
+            <CardHeader>Kết nối & Xác thực</CardHeader>
+            <CardContent>
+                <form onSubmit={handleConnectAndLogin} className="space-y-4">
+                     <p className="text-sm text-gray-400">
+                        Dán cấu hình Firebase và nhập thông tin đăng nhập để kết nối với cơ sở dữ liệu của bạn.
+                    </p>
+                    <div>
+                        <Label htmlFor="firebase-config-paste">Đoạn mã cấu hình Firebase</Label>
+                        <textarea
+                            id="firebase-config-paste"
+                            className="w-full h-40 px-3 py-2 bg-gray-900 border border-gray-600 rounded-md placeholder-gray-500 focus:outline-none focus:ring-2 focus:ring-primary-500 focus:border-primary-500 font-mono text-sm"
+                            placeholder={`const firebaseConfig = { ... };`}
+                            value={configString}
+                            onChange={e => setConfigString(e.target.value)}
+                            spellCheck="false"
+                            required
+                        />
+                    </div>
+                     <div>
+                        <Label htmlFor="email">Email</Label>
+                        <Input id="email" type="email" value={email} onChange={(e) => setEmail(e.target.value)} required placeholder="ten@example.com" />
+                    </div>
+                    <div>
+                        <Label htmlFor="password">Mật khẩu</Label>
+                        <Input id="password" type="password" value={password} onChange={(e) => setPassword(e.target.value)} required placeholder="••••••••" />
+                    </div>
+                    {error && <p className="text-sm text-red-400">{error}</p>}
+                    <div className="flex justify-end pt-2 border-t border-gray-700">
+                        <Button type="submit" disabled={isLoading}>
+                            {isLoading ? 'Đang xử lý...' : 'Kết nối & Đăng nhập'}
+                        </Button>
+                    </div>
+                </form>
             </CardContent>
         </Card>
     );
@@ -106,7 +226,7 @@ const COLLECTION_NAMES = [
 
 
 export default function Settings() {
-    const { taxSettings, updateTaxSettings, setFirebaseConfig, seedData, setCurrentPage } = useData();
+    const { taxSettings, updateTaxSettings, seedData, setCurrentPage } = useData();
     const fileInputRef = useRef<HTMLInputElement>(null);
     const [isConfirmDeleteOpen, setIsConfirmDeleteOpen] = useState(false);
     const [isConfirmImportOpen, setIsConfirmImportOpen] = useState(false);
@@ -114,7 +234,6 @@ export default function Settings() {
     const [importData, setImportData] = useState<string | null>(null);
     const [isImporting, setIsImporting] = useState(false);
     const [isDeleting, setIsDeleting] = useState(false);
-    const [isLogoutConfirmOpen, setIsLogoutConfirmOpen] = useState(false);
 
     const [localClosingDay, setLocalClosingDay] = useState(taxSettings.periodClosingDay);
 
@@ -129,15 +248,6 @@ export default function Settings() {
         updateTaxSettings({ ...taxSettings, periodClosingDay: clampedValue });
     };
 
-    const handleLogout = () => {
-        if (setFirebaseConfig) {
-            setFirebaseConfig(null);
-        }
-        setIsLogoutConfirmOpen(false);
-        alert('Đã đăng xuất và xóa cấu hình. Ứng dụng sẽ được tải lại.');
-        window.location.reload();
-    };
-    
     const handleExport = async () => {
         if (!db) {
             alert("Kết nối Firebase không khả dụng.");
@@ -314,8 +424,8 @@ export default function Settings() {
             )}
             <Header title="Cài đặt" />
             <div className="space-y-8">
-                <FirebaseSettings />
-
+                <ConnectionCard />
+                
                 <Card>
                     <CardHeader>Trợ giúp & Hướng dẫn</CardHeader>
                     <CardContent>
@@ -324,19 +434,6 @@ export default function Settings() {
                         </p>
                         <Button variant="secondary" onClick={() => setCurrentPage('Guide')}>
                             Xem hướng dẫn sử dụng
-                        </Button>
-                    </CardContent>
-                </Card>
-                
-                <Card>
-                    <CardHeader>Quản lý Phiên làm việc</CardHeader>
-                    <CardContent>
-                        <p className="text-sm text-gray-400 mb-4">
-                            Đăng xuất khỏi phiên làm việc hiện tại. Hành động này sẽ ngắt kết nối khỏi Firebase và xóa cấu hình API đã lưu khỏi trình duyệt này.
-                            Điều này hữu ích khi bạn muốn chuyển máy tính hoặc tăng cường bảo mật.
-                        </p>
-                        <Button variant="danger" onClick={() => setIsLogoutConfirmOpen(true)}>
-                            Đăng xuất & Xóa Cấu hình
                         </Button>
                     </CardContent>
                 </Card>
@@ -421,15 +518,6 @@ export default function Settings() {
                 message="Bạn có chắc chắn muốn khôi phục dữ liệu mẫu không? Thao tác này sẽ XÓA TẤT CẢ dữ liệu hiện tại và thay thế bằng dữ liệu mẫu ban đầu."
                 confirmButtonText="Khôi phục"
                 confirmButtonVariant="primary"
-            />
-            <ConfirmationModal
-                isOpen={isLogoutConfirmOpen}
-                onClose={() => setIsLogoutConfirmOpen(false)}
-                onConfirm={handleLogout}
-                title="Xác nhận Đăng xuất"
-                message="Bạn có chắc chắn muốn đăng xuất không? Hành động này sẽ xóa cấu hình Firebase đã lưu trên trình duyệt này. Bạn sẽ cần nhập lại cấu hình để có thể sử dụng lại ứng dụng."
-                confirmButtonText="Đăng xuất"
-                confirmButtonVariant="danger"
             />
         </div>
     );

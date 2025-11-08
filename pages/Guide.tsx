@@ -143,6 +143,39 @@ export default function Guide() {
                             <li><strong>Tab Kho dự án:</strong> Thống kê hiệu suất lũy kế của tất cả các dự án bạn đã từng chạy.</li>
                         </ul>
                     </GuideSection>
+
+                    <GuideSection title="Xử lý lỗi phổ biến">
+                        <h3 className="text-xl font-semibold text-primary-300">Lỗi: "Missing or insufficient permissions"</h3>
+                        <p>
+                            <strong>Nguyên nhân:</strong> Lỗi này xảy ra khi Quy tắc Bảo mật (Security Rules) của Firestore không cho phép tài khoản của bạn truy cập vào dữ liệu. Đây là hành vi mặc định và an toàn khi bạn chuyển cơ sở dữ liệu sang chế độ "production".
+                        </p>
+                        <p>
+                            <strong>Cách khắc phục:</strong> Bạn cần cập nhật các quy tắc này trong Firebase Console để cho phép người dùng đã đăng nhập được quyền truy cập.
+                        </p>
+                        <ol className="list-decimal list-inside space-y-3">
+                            <li>Mở <a href="https://console.firebase.google.com/" target="_blank" rel="noopener noreferrer" className="text-primary-400 hover:underline">Firebase Console</a> và chọn dự án của bạn.</li>
+                            <li>Ở menu bên trái, vào mục <strong>Build</strong> &gt; <strong>Firestore Database</strong>.</li>
+                            <li>Phía trên cùng, chọn tab <strong>Rules</strong>.</li>
+                            <li>Xóa toàn bộ nội dung hiện có trong trình soạn thảo và dán đoạn mã sau vào:</li>
+                        </ol>
+                        <pre className="bg-gray-900 p-4 rounded-md border border-gray-600 text-sm whitespace-pre-wrap">
+                            <code className="text-white">
+{`rules_version = '2';
+service cloud.firestore {
+  match /databases/{database}/documents {
+    match /{document=**} {
+      // Cho phép người dùng đã đăng nhập được quyền đọc và ghi tất cả tài liệu
+      allow read, write: if request.auth != null;
+    }
+  }
+}`}
+                            </code>
+                        </pre>
+                        <ol start={5} className="list-decimal list-inside space-y-3">
+                            <li>Nhấn nút <strong>Publish</strong>.</li>
+                            <li>Đợi khoảng một phút để thay đổi có hiệu lực, sau đó tải lại ứng dụng này. Lỗi sẽ được khắc phục.</li>
+                        </ol>
+                    </GuideSection>
                 </CardContent>
             </Card>
         </div>

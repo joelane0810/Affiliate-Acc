@@ -1,10 +1,11 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { Sidebar } from './components/Sidebar';
 import { DataProvider, useData } from './context/DataContext';
-import { Card, CardContent } from './components/ui/Card';
+import { Card, CardContent, CardHeader } from './components/ui/Card';
 import { Page } from './types';
 import { Button } from './components/ui/Button';
 import { Menu } from './components/icons/IconComponents';
+
 
 // Dynamically import pages
 import Dashboard from './pages/Dashboard';
@@ -45,15 +46,59 @@ const pages: { [key in Page]: React.ComponentType } = {
   Guide,
 };
 
-const LoadingSpinner = () => (
+const LoadingSpinner = ({ message = "Đang tải dữ liệu..." }: { message?: string }) => (
     <div className="flex flex-col items-center justify-center h-screen bg-gray-900">
         <svg className="animate-spin h-10 w-10 text-white mb-4" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
             <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle>
             <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
         </svg>
-        <p className="text-white text-lg">Đang tải dữ liệu...</p>
+        <p className="text-white text-lg">{message}</p>
     </div>
 );
+
+const PermissionErrorDisplay = () => {
+    const { setCurrentPage } = useData();
+    return (
+        <div className="flex items-center justify-center h-screen bg-gray-900 text-gray-200 p-8">
+            <Card className="max-w-3xl w-full">
+                <CardHeader className="text-red-400">Lỗi: Missing or insufficient permissions</CardHeader>
+                <CardContent>
+                    <div className="prose prose-invert max-w-none text-gray-300 space-y-4">
+                        <p><strong>Nguyên nhân:</strong> Lỗi này xảy ra khi Quy tắc Bảo mật (Security Rules) của Firestore không cho phép tài khoản của bạn truy cập vào dữ liệu. Đây là hành vi mặc định và an toàn khi bạn chuyển cơ sở dữ liệu sang chế độ "production".</p>
+                        <p><strong>Cách khắc phục:</strong> Bạn cần cập nhật các quy tắc này trong Firebase Console để cho phép người dùng đã đăng nhập được quyền truy cập.</p>
+                        <ol className="list-decimal list-inside space-y-3">
+                            <li>Mở <a href="https://console.firebase.google.com/" target="_blank" rel="noopener noreferrer" className="text-primary-400 hover:underline">Firebase Console</a> và chọn dự án của bạn.</li>
+                            <li>Ở menu bên trái, vào mục <strong>Build</strong> &gt; <strong>Firestore Database</strong>.</li>
+                            <li>Phía trên cùng, chọn tab <strong>Rules</strong>.</li>
+                            <li>Xóa toàn bộ nội dung hiện có trong trình soạn thảo và dán đoạn mã sau vào:</li>
+                        </ol>
+                        <pre className="bg-gray-950 p-4 rounded-md border border-gray-700 text-sm whitespace-pre-wrap">
+                            <code className="text-white">
+{`rules_version = '2';
+service cloud.firestore {
+  match /databases/{database}/documents {
+    match /{document=**} {
+      // Cho phép người dùng đã đăng nhập được quyền đọc và ghi tất cả tài liệu
+      allow read, write: if request.auth != null;
+    }
+  }
+}`}
+                            </code>
+                        </pre>
+                        <ol start={5} className="list-decimal list-inside space-y-3">
+                            <li>Nhấn nút <strong>Publish</strong>.</li>
+                            <li>Đợi khoảng một phút để thay đổi có hiệu lực, sau đó tải lại ứng dụng này.</li>
+                        </ol>
+                    </div>
+                    <div className="mt-8 flex justify-end gap-4">
+                        <Button variant="secondary" onClick={() => setCurrentPage('Guide')}>Đi đến trang Hướng dẫn</Button>
+                        <Button onClick={() => window.location.reload()}>Tải lại trang</Button>
+                    </div>
+                </CardContent>
+            </Card>
+        </div>
+    );
+};
 
 
 const DisabledPagePlaceholder = () => (
@@ -118,11 +163,11 @@ const ViewingModeIndicator = () => {
     );
 };
 
-const AppContent = () => {
+const MainAppLayout = () => {
   const [isSidebarExpanded, setIsSidebarExpanded] = useState(true);
   const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false);
-  const { isLoading, activePeriod, viewingPeriod, currentPage, setCurrentPage, firebaseConfig, closedPeriods } = useData();
-
+  const { isLoading, activePeriod, viewingPeriod, currentPage, setCurrentPage, closedPeriods } = useData();
+  
   if (isLoading) {
     return <LoadingSpinner />;
   }
@@ -147,10 +192,8 @@ const AppContent = () => {
       mainContent = <CurrentPageComponent />;
   }
 
-
   return (
     <div className="relative min-h-screen md:flex bg-gray-900 text-gray-200">
-      {/* Overlay for mobile */}
       {isMobileMenuOpen && (
         <div 
           className="fixed inset-0 bg-black/60 z-30 md:hidden"
@@ -167,13 +210,12 @@ const AppContent = () => {
         setIsMobileOpen={setIsMobileMenuOpen}
       />
       <main className={`flex-1 flex flex-col transition-all duration-300 md:${isSidebarExpanded ? 'ml-64' : 'ml-20'}`}>
-        {/* Mobile Header */}
         <header className="md:hidden flex items-center justify-between p-4 border-b border-gray-800 sticky top-0 bg-gray-900 z-20">
           <button onClick={() => setIsMobileMenuOpen(true)} className="text-gray-300 hover:text-white" aria-label="Mở menu">
             <Menu />
           </button>
           <h1 className="text-lg font-bold text-white capitalize">{currentPage.replace(/([A-Z])/g, ' $1').trim()}</h1>
-          <div className="w-6"></div> {/* Spacer to balance the title */}
+          <div className="w-6"></div>
         </header>
 
         <div className="flex-1 p-4 sm:p-6 lg:p-8 overflow-y-auto">
@@ -183,6 +225,40 @@ const AppContent = () => {
     </div>
   );
 }
+
+
+const AppContent = () => {
+  const { isLoading, authIsLoading, user, firebaseConfig, permissionError, setCurrentPage } = useData();
+  
+  const needsSetup = !firebaseConfig || (!authIsLoading && !user);
+
+  useEffect(() => {
+    // If we're in setup mode, lock the page to Settings.
+    // This is a safety measure in case something else tries to change the page.
+    if (needsSetup) {
+      setCurrentPage('Settings');
+    }
+  }, [needsSetup, setCurrentPage]);
+  
+  // Display loading spinners while authenticating or fetching initial data.
+  if (authIsLoading) {
+    return <LoadingSpinner message={"Đang xác thực..."} />;
+  }
+  // Only show "Loading data" spinner if config exists, otherwise the app is just waiting for setup.
+  if (firebaseConfig && isLoading) {
+    return <LoadingSpinner message={"Đang tải dữ liệu..."} />;
+  }
+
+  // Handle specific permission errors after attempting to fetch data.
+  if (permissionError) {
+      return <PermissionErrorDisplay />;
+  }
+  
+  // All checks passed, render the main application layout.
+  // The layout will now be rendered immediately if not configured.
+  // The sidebar inside will handle locking navigation to enforce the setup flow.
+  return <MainAppLayout />;
+};
 
 export default function App() {
   return (

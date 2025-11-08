@@ -3,7 +3,7 @@ import { useLocalStorage } from '../hooks/useLocalStorage';
 import * as T from '../types';
 import { Page, PeriodAssetDetail, FirebaseConfig, EnrichedAdAccount, AdAccountTransaction, EnrichedPartner, PeriodFinancials } from '../types';
 import { isDateInPeriod, formatCurrency } from '../lib/utils';
-import { initializeFirebase, db } from '../lib/firebase';
+import { initializeFirebase, auth, onAuthStateChanged, User } from '../lib/firebase';
 import { 
     collection, getDocs, addDoc, updateDoc, deleteDoc, doc, 
     query, where, writeBatch, Firestore, setDoc, getDoc
@@ -205,6 +205,9 @@ interface DataContextType {
   updatePartnerLedgerEntry: (entry: T.PartnerLedgerEntry) => Promise<void>;
   deletePartnerLedgerEntry: (id: string) => Promise<void>;
   partnerAssetBalances: Map<string, { assetId: string, assetName: string, balance: number, currency: 'VND' | 'USD' }[]>;
+  user: User | null;
+  authIsLoading: boolean;
+  permissionError: string | null;
 }
 
 const DataContext = createContext<DataContextType | undefined>(undefined);
@@ -429,52 +432,77 @@ export const DataProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
   const [closedPeriods, setClosedPeriods] = useState<T.ClosedPeriod[]>([]);
   const [currentPage, setCurrentPage] = useLocalStorage<Page>('currentPage', 'Dashboard');
 
+  const [user, setUser] = useState<User | null>(null);
+  const [authIsLoading, setAuthIsLoading] = useState(true);
+  const [permissionError, setPermissionError] = useState<string | null>(null);
+
   useEffect(() => {
     if (firebaseConfig) {
-      const dbInstance = initializeFirebase(firebaseConfig);
-      setFirestoreDb(dbInstance);
+      const { db } = initializeFirebase(firebaseConfig);
+      setFirestoreDb(db);
+      
+      if (auth) {
+        const unsubscribe = onAuthStateChanged(auth, (user) => {
+            setUser(user);
+            setAuthIsLoading(false);
+        });
+        return () => unsubscribe();
+      } else {
+        setUser(null);
+        setAuthIsLoading(false);
+      }
     } else {
         setIsLoading(false);
+        setUser(null);
+        setAuthIsLoading(false);
     }
   }, [firebaseConfig]);
   
   useEffect(() => {
-    if (!firestoreDb) return;
+    if (!firestoreDb || authIsLoading) {
+        // Don't do anything if DB is not ready or auth state is not resolved
+        return;
+    }
+    
+    if (!user) {
+        // Auth is resolved but no user is logged in.
+        // The app will show an empty state which directs to settings.
+        setIsLoading(false);
+        return;
+    }
 
     const fetchAllData = async () => {
+        setIsLoading(true);
+        setPermissionError(null);
+
         const fetchCollection = async <T,>(collectionName: string, setter: React.Dispatch<React.SetStateAction<T[]>>) => {
-            try {
-                const dataCollection = collection(firestoreDb, collectionName);
-                const dataSnapshot = await getDocs(dataCollection);
-                const dataList = dataSnapshot.docs.map(doc => ({ ...doc.data(), id: doc.id })) as T[];
-                setter(dataList);
-            } catch (error) { console.error(`Error fetching ${collectionName}:`, error); }
+            // No need for individual try/catch if we have a global one
+            const dataCollection = collection(firestoreDb, collectionName);
+            const dataSnapshot = await getDocs(dataCollection);
+            const dataList = dataSnapshot.docs.map(doc => ({ ...doc.data(), id: doc.id })) as T[];
+            setter(dataList);
         };
         
         const fetchSettings = async () => {
-            try {
-                const taxDocRef = doc(firestoreDb, 'settings', 'tax');
-                const taxDocSnap = await getDoc(taxDocRef);
-                if (taxDocSnap.exists()) {
-                    setTaxSettings(taxDocSnap.data() as T.TaxSettings);
-                } else {
-                    console.log("No tax settings found, using default.");
-                    setTaxSettings(defaultTaxSettings);
-                }
+            const taxDocRef = doc(firestoreDb, 'settings', 'tax');
+            const taxDocSnap = await getDoc(taxDocRef);
+            if (taxDocSnap.exists()) {
+                setTaxSettings(taxDocSnap.data() as T.TaxSettings);
+            } else {
+                console.log("No tax settings found, using default.");
+                setTaxSettings(defaultTaxSettings);
+            }
 
-                const periodsDocRef = doc(firestoreDb, 'settings', 'periods');
-                const periodsDocSnap = await getDoc(periodsDocRef);
-                if (periodsDocSnap.exists()) {
-                    const data = periodsDocSnap.data();
-                    setActivePeriod(data.activePeriod as string || null);
-                    setClosedPeriods(data.closedPeriods as T.ClosedPeriod[] || []);
-                } else {
-                    console.log("No period settings found, using default.");
-                    setActivePeriod(null);
-                    setClosedPeriods([]);
-                }
-            } catch (error) {
-                console.error("Error fetching settings:", error);
+            const periodsDocRef = doc(firestoreDb, 'settings', 'periods');
+            const periodsDocSnap = await getDoc(periodsDocRef);
+            if (periodsDocSnap.exists()) {
+                const data = periodsDocSnap.data();
+                setActivePeriod(data.activePeriod as string || null);
+                setClosedPeriods(data.closedPeriods as T.ClosedPeriod[] || []);
+            } else {
+                console.log("No period settings found, using default.");
+                setActivePeriod(null);
+                setClosedPeriods([]);
             }
         };
 
@@ -511,16 +539,25 @@ export const DataProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
                 fetchCollection<T.PeriodReceivablePayment>('periodReceivablePayments', setPeriodReceivablePayments),
             ]);
             console.log("All data fetched successfully.");
-        } catch (error) {
+        } catch (error: any) {
             console.error("Error during data fetch:", error);
-            alert("Đã xảy ra lỗi khi tải dữ liệu từ Firebase. Vui lòng kiểm tra lại kết nối và cấu hình.");
+            const errorMessage = error.message ? error.message.toLowerCase() : '';
+            if (error.code === 'permission-denied' || errorMessage.includes('permission') || errorMessage.includes('insufficient permissions')) {
+                setPermissionError(
+                    "Lỗi quyền truy cập dữ liệu (permission-denied). " +
+                    "Đây là lỗi phổ biến liên quan đến cài đặt Security Rules trên Firebase. " +
+                    "Vui lòng làm theo hướng dẫn để khắc phục."
+                );
+            } else {
+                alert("Đã xảy ra lỗi khi tải dữ liệu từ Firebase. Vui lòng kiểm tra lại kết nối và cấu hình.");
+            }
         } finally {
             setIsLoading(false);
         }
     };
 
     fetchAllData();
-  }, [firestoreDb]);
+  }, [firestoreDb, user, authIsLoading]);
 
   const seedData = async () => {
     if (!firestoreDb) return;
@@ -2190,13 +2227,14 @@ export const DataProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
                     }
                     break;
                 }
-// FIX: Split combined 'dailyAdCost' and 'miscExpense' case to ensure type safety.
+                // Fix: The combined 'dailyAdCost' and 'miscExpense' case caused type errors.
+                // It has been split into two separate cases to handle their different properties correctly.
                 case 'dailyAdCost': {
                     const expense = tx as EnrichedDailyAdCost;
-                    const project = expense.projectId ? projectMap.get(expense.projectId) : undefined;
+                    const project: T.Project | undefined = expense.projectId ? projectMap.get(expense.projectId) : undefined;
                     
                     let shares: T.PartnerShare[] | undefined | null = null;
-                    if (project?.isPartnership && project.partnerShares) {
+                    if (project?.isPartnership && project?.partnerShares) {
                         shares = project.partnerShares;
                     }
                     
@@ -2210,26 +2248,26 @@ export const DataProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
                             ledgerEntries.push({
                                 id: `cost-${expense.id}-${share.partnerId}`, date: expense.date, partnerId: share.partnerId,
                                 description, type: 'outflow', amount: vndAmount * (share.sharePercentage / 100),
-                                sourceName: sourceName, destinationName
+                                sourceName: sourceName, destinationName: destinationName
                             });
                         });
                     } else {
                         ledgerEntries.push({
                             id: `cost-${expense.id}-default-me`, date: expense.date, partnerId: 'default-me',
                             description, type: 'outflow', amount: vndAmount,
-                            sourceName: sourceName, destinationName
+                            sourceName: sourceName, destinationName: destinationName
                         });
                     }
                     break;
                 }
                 case 'miscExpense': {
                     const expense = tx as T.MiscellaneousExpense;
-                    const project = expense.projectId ? projectMap.get(expense.projectId) : undefined;
+                    const project: T.Project | undefined = expense.projectId ? projectMap.get(expense.projectId) : undefined;
                     
                     let shares: T.PartnerShare[] | undefined | null = null;
-                    if (project?.isPartnership && project.partnerShares) {
+                    if (project?.isPartnership && project?.partnerShares) {
                         shares = project.partnerShares;
-                    } else if (expense.isPartnership) {
+                    } else if (expense.isPartnership && expense.partnerShares) {
                         shares = expense.partnerShares;
                     }
                     
@@ -2243,14 +2281,14 @@ export const DataProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
                             ledgerEntries.push({
                                 id: `cost-${expense.id}-${share.partnerId}`, date: expense.date, partnerId: share.partnerId,
                                 description, type: 'outflow', amount: vndAmount * (share.sharePercentage / 100),
-                                sourceName: sourceName, destinationName
+                                sourceName: sourceName, destinationName: destinationName
                             });
                         });
                     } else {
                         ledgerEntries.push({
                             id: `cost-${expense.id}-default-me`, date: expense.date, partnerId: 'default-me',
                             description, type: 'outflow', amount: vndAmount,
-                            sourceName: sourceName, destinationName
+                            sourceName: sourceName, destinationName: destinationName
                         });
                     }
                     break;
@@ -2262,7 +2300,7 @@ export const DataProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
                     break;
                 }
                 case 'manual':
-                    ledgerEntries.push(tx);
+                    ledgerEntries.push(tx as T.PartnerLedgerEntry);
                     break;
             }
         });
@@ -2475,6 +2513,9 @@ export const DataProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
     allPartnerLedgerEntries,
     addPartnerLedgerEntry, updatePartnerLedgerEntry, deletePartnerLedgerEntry,
     partnerAssetBalances,
+    user,
+    authIsLoading,
+    permissionError,
   };
 
   return <DataContext.Provider value={value}>{children}</DataContext.Provider>;
