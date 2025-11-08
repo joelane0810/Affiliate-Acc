@@ -2,7 +2,7 @@ import React from 'react';
 import type { Page } from '../types';
 import { 
   LayoutDashboard, BarChart3, Target, DollarSign, Repeat, Package, 
-  Handshake, Users, Landmark, Banknote, FileText, CalendarClock, Settings, ChevronLeft, ChevronRight, Book, X, ArrowRightLeft
+  Handshake, Users, Landmark, Banknote, FileText, CalendarClock, Settings, ChevronLeft, ChevronRight, Book, X, ArrowRightLeft, PiggyBank, HelpCircle
 } from './icons/IconComponents';
 import { useData } from '../context/DataContext';
 
@@ -22,16 +22,18 @@ const navItems: { page: Page; label: string; icon: React.ReactNode }[] = [
   { page: 'MiscellaneousExpenses', label: 'Chi phí phát sinh', icon: <Package /> },
   { page: 'DebtsReceivables', label: 'Công nợ & Phải thu', icon: <ArrowRightLeft /> },
   { page: 'AdAccounts', label: 'Quản lý & Sổ Ads', icon: <Book /> },
+  { page: 'SavingsAndInvestments', label: 'Tiết kiệm & Đầu tư', icon: <PiggyBank /> },
   { page: 'Assets', label: 'Tài sản', icon: <Landmark /> },
-  { page: 'CapitalSources', label: 'Nguồn vốn', icon: <Handshake /> },
+  { page: 'CapitalSources', label: 'Công nợ Dài hạn', icon: <Handshake /> },
   { page: 'Partners', label: 'Đối tác', icon: <Users /> },
   { page: 'Tax', label: 'Thuế', icon: <Banknote /> },
   { page: 'Reports', label: 'Báo cáo tháng', icon: <FileText /> },
   { page: 'LongReport', label: 'Tổng hợp báo cáo', icon: <CalendarClock /> },
+  { page: 'Guide', label: 'Hướng dẫn', icon: <HelpCircle /> },
   { page: 'Settings', label: 'Cài đặt', icon: <Settings /> },
 ];
 
-const alwaysEnabledPages: Page[] = ['AdAccounts', 'Assets', 'Reports', 'LongReport', 'Settings'];
+const alwaysEnabledPages: Page[] = ['AdAccounts', 'SavingsAndInvestments', 'Assets', 'Reports', 'LongReport', 'Settings', 'Partners', 'Guide'];
 
 export const Sidebar: React.FC<SidebarProps> = ({ isExpanded, setIsExpanded, isMobileOpen, setIsMobileOpen }) => {
   const { activePeriod, viewingPeriod, currentPage, setCurrentPage } = useData();

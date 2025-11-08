@@ -106,7 +106,7 @@ const COLLECTION_NAMES = [
 
 
 export default function Settings() {
-    const { taxSettings, updateTaxSettings, setFirebaseConfig, seedData } = useData();
+    const { taxSettings, updateTaxSettings, setFirebaseConfig, seedData, setCurrentPage } = useData();
     const fileInputRef = useRef<HTMLInputElement>(null);
     const [isConfirmDeleteOpen, setIsConfirmDeleteOpen] = useState(false);
     const [isConfirmImportOpen, setIsConfirmImportOpen] = useState(false);
@@ -315,6 +315,18 @@ export default function Settings() {
             <Header title="Cài đặt" />
             <div className="space-y-8">
                 <FirebaseSettings />
+
+                <Card>
+                    <CardHeader>Trợ giúp & Hướng dẫn</CardHeader>
+                    <CardContent>
+                        <p className="text-sm text-gray-400 mb-4">
+                            Nếu bạn là người dùng mới hoặc cần xem lại quy trình làm việc, hãy truy cập trang hướng dẫn chi tiết của chúng tôi.
+                        </p>
+                        <Button variant="secondary" onClick={() => setCurrentPage('Guide')}>
+                            Xem hướng dẫn sử dụng
+                        </Button>
+                    </CardContent>
+                </Card>
                 
                 <Card>
                     <CardHeader>Quản lý Phiên làm việc</CardHeader>

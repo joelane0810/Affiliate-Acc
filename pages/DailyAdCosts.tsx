@@ -282,7 +282,7 @@ const AdDepositForm: React.FC<{
     assets: T.Asset[];
     assetTypes: T.AssetType[];
     projectsForPeriod: T.Project[];
-    onSave: (deposit: Omit<T.AdDeposit, 'id'> | T.AdDeposit) => void;
+    onSave: (deposit: (Omit<T.AdDeposit, 'id'> | T.AdDeposit) | (Omit<T.AdDeposit, 'id'>)[]) => void;
     onCancel: () => void;
     adAccounts: T.AdAccount[];
 }> = ({ deposit, assets, assetTypes, projectsForPeriod, onSave, onCancel, adAccounts }) => {
@@ -297,20 +297,53 @@ const AdDepositForm: React.FC<{
     const [rate, setRate] = useState(deposit?.rate || 0);
     const [status, setStatus] = useState<T.AdDeposit['status']>(deposit?.status || 'running');
     
-    const assetTypeMap = useMemo(() => new Map(assetTypes.map(at => [at.id, at])), [assetTypes]);
+    const [isBulkMode, setIsBulkMode] = useState(false);
+    const [selectedAccounts, setSelectedAccounts] = useState<Set<string>>(new Set());
+    const [bulkProjectAssignments, setBulkProjectAssignments] = useState<Record<string, string>>({});
 
     const availableAdAccounts = useMemo(() => {
-        return adAccounts.filter(acc => acc.adsPlatform === adsPlatform);
-    }, [adAccounts, adsPlatform]);
+        // Filter out cancelled accounts first
+        let accounts = adAccounts.filter(acc => acc.status !== 'cancelled');
+        
+        // In bulk mode, only filter by platform
+        if (isBulkMode) {
+            return accounts.filter(acc => acc.adsPlatform === adsPlatform);
+        }
+        // In single mode, filter by project if selected, otherwise by platform
+        const selectedProject = projectId ? projectsForPeriod.find(p => p.id === projectId) : null;
+        if (selectedProject) {
+            accounts = accounts.filter(acc => selectedProject.adsPlatforms.includes(acc.adsPlatform));
+        } else {
+            accounts = accounts.filter(acc => acc.adsPlatform === adsPlatform);
+        }
+        return accounts;
+    }, [adAccounts, adsPlatform, projectId, projectsForPeriod, isBulkMode]);
 
     useEffect(() => {
-        // If the selected account is not in the new list of available accounts, reset it.
         if (adAccountNumber && !availableAdAccounts.some(acc => acc.accountNumber === adAccountNumber)) {
-            setAdAccountNumber('');
+            setAdAccountNumber(availableAdAccounts[0]?.accountNumber || '');
         }
-    }, [adsPlatform, availableAdAccounts, adAccountNumber]);
+    }, [availableAdAccounts, adAccountNumber]);
 
+    const handleAccountSelection = (accountNumber: string) => {
+        setSelectedAccounts(prev => {
+            const newSet = new Set(prev);
+            if (newSet.has(accountNumber)) {
+                newSet.delete(accountNumber);
+            } else {
+                newSet.add(accountNumber);
+            }
+            return newSet;
+        });
+    };
 
+    const handleBulkProjectChange = (accountNumber: string, projectId: string) => {
+        setBulkProjectAssignments(prev => ({
+            ...prev,
+            [accountNumber]: projectId,
+        }));
+    };
+    
     const groupedVndAssets = useMemo(() => {
         const vndAssets = assets.filter(a => a.currency === 'VND');
         const grouped: { [typeId: string]: T.Asset[] } = {};
@@ -337,23 +370,41 @@ const AdDepositForm: React.FC<{
 
     const handleSubmit = (e: React.FormEvent) => {
         e.preventDefault();
-        if (!assetId || !adAccountNumber) {
-            alert("Vui lòng chọn tài khoản Ads và tài sản chi trả.");
+        if (!assetId) {
+            alert("Vui lòng chọn tài sản chi trả.");
             return;
         }
         const vndAmount = usdAmount * rate;
-        
-        const selectedAsset = assets.find(a => a.id === assetId);
-        const selectedAssetType = selectedAsset ? assetTypeMap.get(selectedAsset.typeId) : undefined;
-        const agencyName = (selectedAssetType?.id === 'agency') ? selectedAsset?.name : undefined;
 
-        onSave({ ...deposit, id: deposit?.id || '', date, adsPlatform, adAccountNumber, agency: agencyName, projectId: projectId || undefined, assetId, usdAmount, rate, vndAmount, status });
+        if (isBulkMode) {
+            if (selectedAccounts.size === 0) {
+                alert("Vui lòng chọn ít nhất một tài khoản Ads.");
+                return;
+            }
+            const depositsToSave = Array.from(selectedAccounts).map(accNum => ({
+                date, adsPlatform, adAccountNumber: accNum, projectId: bulkProjectAssignments[accNum] || undefined, assetId, usdAmount, rate, vndAmount, status
+            }));
+            onSave(depositsToSave);
+        } else {
+            if (!adAccountNumber) {
+                alert("Vui lòng chọn tài khoản Ads.");
+                return;
+            }
+            onSave({ ...deposit, id: deposit?.id || '', date, adsPlatform, adAccountNumber, projectId: projectId || undefined, assetId, usdAmount, rate, vndAmount, status });
+        }
     };
 
     const selectClassName = "w-full px-3 py-2 bg-gray-900 border border-gray-600 rounded-md focus:outline-none focus:ring-2 focus:ring-primary-500";
 
     return (
         <form onSubmit={handleSubmit} className="space-y-4">
+            {!deposit && (
+                <div className="flex justify-end">
+                    <Button type="button" variant="secondary" size="sm" onClick={() => setIsBulkMode(!isBulkMode)}>
+                        {isBulkMode ? 'Chuyển sang nạp một tài khoản' : 'Nạp nhiều tài khoản'}
+                    </Button>
+                </div>
+            )}
             <div>
                 <Label htmlFor="date">Ngày nạp</Label>
                 <Input id="date" type="date" value={date} onChange={e => setDate(e.target.value)} required />
@@ -363,13 +414,49 @@ const AdDepositForm: React.FC<{
                     <Label htmlFor="adsPlatform">Nền tảng Ads</Label>
                     <select id="adsPlatform" value={adsPlatform} onChange={e => {
                         setAdsPlatform(e.target.value as T.AdsPlatform);
-                        setAdAccountNumber(''); // Reset account when platform changes
+                        setAdAccountNumber('');
                         setProjectId('');
                     }} className={selectClassName}>
                         {Object.entries(adsPlatformLabels).map(([key, label]) => <option key={key} value={key}>{label}</option>)}
                     </select>
                 </div>
+                {!isBulkMode && (
+                    <div>
+                        <Label htmlFor="project">Dự án (Tùy chọn)</Label>
+                        <select id="project" value={projectId} onChange={e => setProjectId(e.target.value)} className={selectClassName}>
+                            <option value="">-- Không có --</option>
+                            {filteredProjects.map(p => <option key={p.id} value={p.id}>{p.name}</option>)}
+                        </select>
+                    </div>
+                )}
+            </div>
+
+            {isBulkMode ? (
                 <div>
+                    <Label>Chọn tài khoản và gán dự án ({selectedAccounts.size} đã chọn)</Label>
+                    <div className="max-h-48 overflow-y-auto border border-gray-600 rounded-md p-2 space-y-1 bg-gray-900">
+                        {availableAdAccounts.map(acc => {
+                            const projectsForThisAccount = projectsForPeriod.filter(p => p.adsPlatforms.includes(acc.adsPlatform));
+                            return (
+                                <div key={acc.id} className="flex items-center space-x-3 p-1.5 rounded-md hover:bg-gray-800">
+                                    <input type="checkbox" checked={selectedAccounts.has(acc.accountNumber)} onChange={() => handleAccountSelection(acc.accountNumber)} className="h-4 w-4 rounded border-gray-500 bg-gray-700 text-primary-600 focus:ring-primary-500" />
+                                    <span className="text-gray-200 flex-1">{acc.accountNumber}</span>
+                                    <select 
+                                        value={bulkProjectAssignments[acc.accountNumber] || ''}
+                                        onChange={(e) => handleBulkProjectChange(acc.accountNumber, e.target.value)}
+                                        className="px-2 py-1 text-xs bg-gray-700 border border-gray-600 rounded-md focus:outline-none focus:ring-1 focus:ring-primary-500"
+                                        onClick={(e) => e.stopPropagation()}
+                                    >
+                                        <option value="">-- Gán dự án (tùy chọn) --</option>
+                                        {projectsForThisAccount.map(p => <option key={p.id} value={p.id}>{p.name}</option>)}
+                                    </select>
+                                </div>
+                            )
+                        })}
+                    </div>
+                </div>
+            ) : (
+                 <div>
                     <Label htmlFor="adAccountNumber">Số tài khoản Ads</Label>
                     <select 
                         id="adAccountNumber" 
@@ -382,13 +469,9 @@ const AdDepositForm: React.FC<{
                         {availableAdAccounts.map(acc => <option key={acc.id} value={acc.accountNumber}>{acc.accountNumber}</option>)}
                     </select>
                 </div>
-                <div>
-                    <Label htmlFor="project">Dự án (Tùy chọn)</Label>
-                    <select id="project" value={projectId} onChange={e => setProjectId(e.target.value)} className={selectClassName}>
-                        <option value="">-- Không có --</option>
-                        {filteredProjects.map(p => <option key={p.id} value={p.id}>{p.name}</option>)}
-                    </select>
-                </div>
+            )}
+
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                  <div>
                     <Label htmlFor="asset">Nguồn tiền chi trả</Label>
                      <select id="asset" value={assetId} onChange={e => setAssetId(e.target.value)} className={selectClassName} required>
@@ -563,12 +646,18 @@ const AdDepositsContent = () => {
             .sort((a,b) => new Date(b.date).getTime() - new Date(a.date).getTime());
     }, [adDeposits, projects, assets, currentPeriod]);
 
-    const handleSave = (deposit: Omit<T.AdDeposit, 'id'> | T.AdDeposit) => {
-        if ('id' in deposit && deposit.id) {
-            updateAdDeposit(deposit as T.AdDeposit);
+    const handleSave = (depositOrDeposits: (Omit<T.AdDeposit, 'id'> | T.AdDeposit) | (Omit<T.AdDeposit, 'id'>)[]) => {
+        if (Array.isArray(depositOrDeposits)) {
+            depositOrDeposits.forEach(dep => {
+                addAdDeposit(dep);
+            });
         } else {
-            const { id, ...newDeposit } = deposit as T.AdDeposit;
-            addAdDeposit(newDeposit);
+            const deposit = depositOrDeposits;
+            if ('id' in deposit && deposit.id) {
+                updateAdDeposit(deposit as T.AdDeposit);
+            } else {
+                addAdDeposit(deposit as Omit<T.AdDeposit, 'id'>);
+            }
         }
         setIsModalOpen(false);
         setEditingDeposit(undefined);
@@ -614,7 +703,6 @@ const AdDepositsContent = () => {
                                 <TableHeader>Ngày</TableHeader>
                                 <TableHeader>Số tài khoản</TableHeader>
                                 <TableHeader>Nền tảng</TableHeader>
-                                <TableHeader>Agency</TableHeader>
                                 <TableHeader>Nguồn tiền chi trả</TableHeader>
                                 <TableHeader>Dự án</TableHeader>
                                 <TableHeader>Số tiền (USD)</TableHeader>
@@ -630,7 +718,6 @@ const AdDepositsContent = () => {
                                     <TableCell>{formatDate(d.date)}</TableCell>
                                     <TableCell className="font-medium text-white">{d.adAccountNumber}</TableCell>
                                     <TableCell>{adsPlatformLabels[d.adsPlatform]}</TableCell>
-                                    <TableCell>{d.agency || '—'}</TableCell>
                                     <TableCell className="font-medium text-white">{d.assetName}</TableCell>
                                     <TableCell>{d.projectName}</TableCell>
                                     <TableCell>{formatCurrency(d.usdAmount, 'USD')}</TableCell>

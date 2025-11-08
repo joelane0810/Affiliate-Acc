@@ -10,11 +10,13 @@ export type Page =
   | 'CapitalSources' 
   | 'Partners' 
   | 'AdAccounts'
+  | 'SavingsAndInvestments'
   | 'Assets' 
   | 'Tax' 
   | 'Reports' 
   | 'LongReport'
   | 'DebtsReceivables'
+  | 'Guide'
   | 'Settings';
 
 export type AdsPlatform = 'google' | 'youtube' | 'tiktok' | 'facebook' | 'other';
@@ -61,8 +63,7 @@ export interface AdDeposit {
     adsPlatform: AdsPlatform;
     adAccountNumber: string;
     projectId?: string;
-    agency?: string;
-    assetId: string; // The asset (bank account, etc.) used to pay
+    assetId: string; // The asset (bank, cash, OR agency) used to pay
     usdAmount: number;
     rate: number;
     vndAmount: number;
@@ -204,6 +205,31 @@ export interface CapitalInflow {
     externalInvestorName?: string;
 }
 
+export interface Saving {
+    id:string;
+    description: string;
+    assetId: string;
+    principalAmount: number;
+    startDate: string;
+    endDate: string;
+    interestRate: number;
+    status: 'active' | 'matured';
+    currency: 'VND' | 'USD';
+}
+
+export interface Investment {
+    id: string;
+    description: string;
+    assetId: string; // The asset used to invest
+    investmentAmount: number;
+    date: string;
+    status: 'ongoing' | 'liquidated';
+    currency: 'VND' | 'USD';
+    liquidationDate?: string;
+    liquidationAmount?: number;
+    liquidationAssetId?: string; // The asset that receives the liquidated amount
+}
+
 export interface TaxSettings {
     method: 'revenue' | 'profit_vat';
     revenueRate: number;
@@ -257,6 +283,7 @@ export interface PeriodFinancials {
     myProfit: number;
     myInputVat: number;
     exchangeRateGainLoss: number;
+    investmentGainLoss: number;
     profitBeforeTax: number;
     netProfit: number;
     tax: TaxCalculationResult;
@@ -312,7 +339,6 @@ export interface FirebaseConfig {
     appId: string;
 }
 
-// FIX: Add missing type definitions for period-specific debts and receivables
 export interface PeriodLiability {
     id: string;
     period: string;
@@ -345,4 +371,34 @@ export interface PeriodReceivablePayment {
     date: string;
     amount: number;
     assetId: string;
+}
+
+export interface PartnerLedgerEntry {
+    id: string;
+    date: string;
+    partnerId: string;
+    description: string;
+    type: 'inflow' | 'outflow';
+    amount: number; // Always positive
+    sourceName?: string;
+    destinationName?: string;
+}
+export interface EnrichedPartner extends Partner {
+    totalInflow: number;
+    totalOutflow: number;
+    balance: number;
+}
+
+export interface EnrichedAdAccount extends AdAccount {
+    balance: number;
+}
+
+export interface AdAccountTransaction {
+    id: string;
+    date: string;
+    adAccountNumber: string;
+    description: string;
+    deposit: number; // USD
+    spent: number; // USD
+    balance: number; // USD
 }

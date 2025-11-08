@@ -27,42 +27,89 @@ const adAccountStatusLabels: Record<T.AdAccount['status'], string> = {
 
 const AdAccountForm: React.FC<{
     account?: T.AdAccount;
-    onSave: (account: Omit<T.AdAccount, 'id'> | T.AdAccount) => void;
+    onSave: (account: (Omit<T.AdAccount, 'id'> | T.AdAccount) | Omit<T.AdAccount, 'id'>[]) => void;
     onCancel: () => void;
 }> = ({ account, onSave, onCancel }) => {
     const [accountNumber, setAccountNumber] = useState(account?.accountNumber || '');
     const [adsPlatform, setAdsPlatform] = useState<T.AdsPlatform>(account?.adsPlatform || 'google');
     const [status, setStatus] = useState<T.AdAccount['status']>(account?.status || 'running');
 
+    const [isBulkMode, setIsBulkMode] = useState(false);
+    const [bulkAccountNumbers, setBulkAccountNumbers] = useState('');
+
     const handleSubmit = (e: React.FormEvent) => {
         e.preventDefault();
-        if (!accountNumber.trim()) {
-            alert("Vui lòng nhập số tài khoản.");
-            return;
+        
+        if (isBulkMode) {
+            const accountsToSave = bulkAccountNumbers
+                .split('\n')
+                .map(line => line.trim())
+                .filter(Boolean)
+                .map(accNum => ({
+                    accountNumber: accNum,
+                    adsPlatform,
+                    status,
+                }));
+            
+            if (accountsToSave.length > 0) {
+                onSave(accountsToSave);
+            } else {
+                alert("Vui lòng nhập ít nhất một số tài khoản.");
+            }
+        } else {
+            if (!accountNumber.trim()) {
+                alert("Vui lòng nhập số tài khoản.");
+                return;
+            }
+            onSave({ ...account, id: account?.id || '', accountNumber, adsPlatform, status });
         }
-        onSave({ ...account, id: account?.id || '', accountNumber, adsPlatform, status });
     };
 
     const selectClassName = "w-full px-3 py-2 bg-gray-900 border border-gray-600 rounded-md focus:outline-none focus:ring-2 focus:ring-primary-500";
 
     return (
         <form onSubmit={handleSubmit} className="space-y-4">
-            <div>
-                <Label htmlFor="accountNumber">Số tài khoản</Label>
-                <Input id="accountNumber" value={accountNumber} onChange={e => setAccountNumber(e.target.value)} required />
+            {!account && (
+                <div className="flex justify-end">
+                    <Button type="button" variant="secondary" size="sm" onClick={() => setIsBulkMode(!isBulkMode)}>
+                        {isBulkMode ? 'Chuyển sang tạo một tài khoản' : 'Tạo nhiều tài khoản'}
+                    </Button>
+                </div>
+            )}
+            
+            {isBulkMode ? (
+                <div>
+                    <Label htmlFor="bulkAccountNumbers">Danh sách số tài khoản (mỗi số một dòng)</Label>
+                    <textarea
+                        id="bulkAccountNumbers"
+                        value={bulkAccountNumbers}
+                        onChange={e => setBulkAccountNumbers(e.target.value)}
+                        className="w-full h-32 px-3 py-2 bg-gray-900 border border-gray-600 rounded-md placeholder-gray-500 focus:outline-none focus:ring-2 focus:ring-primary-500"
+                        placeholder="625-608-7597&#10;FB-ACC-002&#10;TIKTOK-ACC-003"
+                    />
+                </div>
+            ) : (
+                <div>
+                    <Label htmlFor="accountNumber">Số tài khoản</Label>
+                    <Input id="accountNumber" value={accountNumber} onChange={e => setAccountNumber(e.target.value)} required />
+                </div>
+            )}
+
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                <div>
+                    <Label htmlFor="adsPlatform">Nền tảng</Label>
+                    <select id="adsPlatform" value={adsPlatform} onChange={e => setAdsPlatform(e.target.value as T.AdsPlatform)} className={selectClassName}>
+                        {Object.entries(adsPlatformLabels).map(([key, label]) => <option key={key} value={key}>{label}</option>)}
+                    </select>
+                </div>
+                <div>
+                    <Label htmlFor="status">Trạng thái</Label>
+                    <select id="status" value={status} onChange={e => setStatus(e.target.value as T.AdAccount['status'])} className={selectClassName}>
+                        {Object.entries(adAccountStatusLabels).map(([key, label]) => <option key={key} value={key}>{label}</option>)}
+                    </select>
+                </div>
             </div>
-            <div>
-                <Label htmlFor="adsPlatform">Nền tảng</Label>
-                <select id="adsPlatform" value={adsPlatform} onChange={e => setAdsPlatform(e.target.value as T.AdsPlatform)} className={selectClassName}>
-                    {Object.entries(adsPlatformLabels).map(([key, label]) => <option key={key} value={key}>{label}</option>)}
-                </select>
-            </div>
-            <div>
-                <Label htmlFor="status">Trạng thái</Label>
-                <select id="status" value={status} onChange={e => setStatus(e.target.value as T.AdAccount['status'])} className={selectClassName}>
-                    {Object.entries(adAccountStatusLabels).map(([key, label]) => <option key={key} value={key}>{label}</option>)}
-                </select>
-            </div>
+            
             <div className="mt-6 flex justify-end space-x-3">
                 <Button type="button" variant="secondary" onClick={onCancel}>Hủy</Button>
                 <Button type="submit">Lưu</Button>
@@ -77,19 +124,24 @@ export default function AdAccounts() {
         adAccountTransactions, enrichedAdAccounts
     } = useData();
     
-    // This page should be independent of period, so isReadOnly is not based on viewingPeriod
     const isReadOnly = false; 
 
     const [isModalOpen, setIsModalOpen] = useState(false);
     const [editingAccount, setEditingAccount] = useState<T.AdAccount | undefined>(undefined);
     const [accountToDelete, setAccountToDelete] = useState<T.AdAccount | null>(null);
 
-    const handleSaveAccount = (account: Omit<T.AdAccount, 'id'> | T.AdAccount) => {
-        if ('id' in account && account.id) {
-            updateAdAccount(account as T.AdAccount);
+    const handleSaveAccount = (accountOrAccounts: (Omit<T.AdAccount, 'id'> | T.AdAccount) | Omit<T.AdAccount, 'id'>[]) => {
+        if (Array.isArray(accountOrAccounts)) {
+            accountOrAccounts.forEach(acc => {
+                addAdAccount(acc);
+            });
         } else {
-            const { id, ...newAccount } = account as T.AdAccount;
-            addAdAccount(newAccount);
+            const account = accountOrAccounts;
+            if ('id' in account && account.id) {
+                updateAdAccount(account as T.AdAccount);
+            } else {
+                addAdAccount(account as Omit<T.AdAccount, 'id'>);
+            }
         }
         setIsModalOpen(false);
     };
@@ -105,7 +157,6 @@ export default function AdAccounts() {
         }
     };
 
-    // The ledger now shows all transactions, sorted by date.
     const ledgerData = useMemo(() => {
         return adAccountTransactions;
     }, [adAccountTransactions]);
@@ -134,9 +185,7 @@ export default function AdAccounts() {
                         </TableHead>
                         <TableBody>
                             {enrichedAdAccounts.length > 0 ? enrichedAdAccounts.map(acc => (
-                                <TableRow 
-                                    key={acc.id} 
-                                >
+                                <TableRow key={acc.id}>
                                     <TableCell className="font-medium text-white">{acc.accountNumber}</TableCell>
                                     <TableCell>{adsPlatformLabels[acc.adsPlatform]}</TableCell>
                                     <TableCell className="font-semibold text-primary-400">{formatCurrency(acc.balance, 'USD')}</TableCell>
@@ -186,7 +235,7 @@ export default function AdAccounts() {
                             </TableHead>
                             <TableBody>
                                 {ledgerData.length > 0 ? ledgerData.map((row, index) => (
-                                    <TableRow key={index}>
+                                    <TableRow key={row.id}>
                                         <TableCell>{formatDate(row.date)}</TableCell>
                                         <TableCell className="font-medium text-white">{row.adAccountNumber}</TableCell>
                                         <TableCell className="text-left">{row.description}</TableCell>

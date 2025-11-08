@@ -16,12 +16,14 @@ import MiscellaneousExpenses from './pages/MiscellaneousExpenses';
 import CapitalSources from './pages/CapitalSources';
 import Partners from './pages/Partners';
 import AdAccounts from './pages/AdAccounts';
+import SavingsAndInvestments from './pages/SavingsAndInvestments';
 import Assets from './pages/Assets';
 import Tax from './pages/Tax';
 import Reports from './pages/Reports';
 import LongReport from './pages/LongReport';
 import Settings from './pages/Settings';
 import DebtsReceivables from './pages/DebtsReceivables';
+import Guide from './pages/Guide';
 
 const pages: { [key in Page]: React.ComponentType } = {
   Dashboard,
@@ -33,12 +35,14 @@ const pages: { [key in Page]: React.ComponentType } = {
   CapitalSources,
   Partners,
   AdAccounts,
+  SavingsAndInvestments,
   Assets,
   Tax,
   Reports,
   LongReport,
   Settings,
   DebtsReceivables,
+  Guide,
 };
 
 const LoadingSpinner = () => (
@@ -127,7 +131,7 @@ const AppContent = () => {
 
   const disabledWithoutPeriod: Page[] = [
     'Dashboard', 'Projects', 'DailyAdCosts', 'Commissions',
-    'ExchangeLog', 'MiscellaneousExpenses', 'CapitalSources', 'Partners', 'Tax',
+    'ExchangeLog', 'MiscellaneousExpenses', 'CapitalSources', 'Tax',
     'DebtsReceivables'
   ];
   
@@ -135,7 +139,7 @@ const AppContent = () => {
   const CurrentPageComponent = pages[currentPage];
 
   let mainContent;
-  if (isAppEmpty && currentPage !== 'Settings' && currentPage !== 'LongReport' && currentPage !== 'Reports') {
+  if (isAppEmpty && currentPage !== 'Settings' && currentPage !== 'LongReport' && currentPage !== 'Reports' && currentPage !== 'Guide') {
       mainContent = <EmptyStatePlaceholder />;
   } else if (isPageDisabled) {
       mainContent = <DisabledPagePlaceholder />;

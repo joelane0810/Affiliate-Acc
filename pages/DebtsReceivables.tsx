@@ -120,74 +120,52 @@ const PeriodReceivableForm: React.FC<{
 
 // #endregion
 
-// #region --- Liabilities (Nợ Phải Trả) Components ---
+type EnrichedPeriodLiability = PeriodLiability & { paidAmount: number; remainingAmount: number; };
+type EnrichedPeriodReceivable = PeriodReceivable & { paidAmount: number; remainingAmount: number; };
 
-type DebtItem = {
-    liability: Liability;
-    creationDate: string;
-    inflowAssetName: string;
-    dueThisPeriod: number;
-    paidThisPeriod: number;
-    totalRemaining: number;
-    isPaid: boolean;
-    completionDate?: string;
-};
-
-const DebtPaymentModal: React.FC<{
-    debtItem: DebtItem;
+const PeriodDebtPaymentModal: React.FC<{
+    liability: EnrichedPeriodLiability;
     assets: Asset[];
     onClose: () => void;
-    onSave: (payment: { liabilityId: string; amount: number; assetId: string, date: string }) => void;
-}> = ({ debtItem, assets, onClose, onSave }) => {
-    const { currentPeriod } = useData();
-    const payableAssets = useMemo(() => assets.filter(a => a.currency === debtItem.liability.currency), [assets, debtItem]);
+    onSave: (paymentInfo: Omit<T.PeriodDebtPayment, 'id'>) => void;
+}> = ({ liability, assets, onClose, onSave }) => {
+    const payableAssets = useMemo(() => assets.filter(a => a.currency === liability.currency), [assets, liability]);
+    const [paymentDate, setPaymentDate] = useState(new Date().toISOString().split('T')[0]);
+    const [paymentAssetId, setPaymentAssetId] = useState(payableAssets[0]?.id || '');
+    const [amount, setAmount] = useState(liability.remainingAmount);
     
-    const amountLeftToPayThisPeriod = Math.max(0, debtItem.dueThisPeriod - debtItem.paidThisPeriod);
-    const defaultAmount = Math.min(amountLeftToPayThisPeriod, debtItem.totalRemaining);
-
-    const [amount, setAmount] = useState(defaultAmount);
-    const [assetId, setAssetId] = useState(payableAssets[0]?.id || '');
-    const [date, setDate] = useState(currentPeriod ? `${currentPeriod}-01` : new Date().toISOString().split('T')[0]);
-
     const handleSubmit = (e: React.FormEvent) => {
         e.preventDefault();
-        if (!assetId || amount <= 0) {
-            alert("Vui lòng chọn tài sản và nhập số tiền hợp lệ.");
+        if(!paymentAssetId) {
+            alert("Vui lòng chọn tài sản thanh toán.");
             return;
         }
-        if (amount > debtItem.totalRemaining) {
-            alert(`Số tiền trả không thể lớn hơn tổng nợ còn lại (${formatCurrency(debtItem.totalRemaining, debtItem.liability.currency)}).`);
+        if (amount <= 0 || amount > liability.remainingAmount) {
+            alert(`Số tiền thanh toán phải lớn hơn 0 và không vượt quá số nợ còn lại (${formatCurrency(liability.remainingAmount, liability.currency)}).`);
             return;
         }
-        onSave({ liabilityId: debtItem.liability.id, amount, assetId, date });
+        onSave({ periodLiabilityId: liability.id, date: paymentDate, amount, assetId: paymentAssetId });
+        onClose();
     };
-
+    
     const selectClassName = "w-full px-3 py-2 bg-gray-900 border border-gray-600 rounded-md focus:outline-none focus:ring-2 focus:ring-primary-500";
     
     return (
-        <Modal isOpen={true} onClose={onClose} title={`Trả nợ: ${debtItem.liability.description}`}>
-            <form onSubmit={handleSubmit} className="space-y-4">
+        <Modal isOpen={true} onClose={onClose} title={`Trả nợ trong kỳ: ${liability.description}`}>
+             <form onSubmit={handleSubmit} className="space-y-4">
                 <div>
-                    <Label>Công nợ</Label>
-                    <Input value={debtItem.liability.description} readOnly className="bg-gray-700" />
+                    <Label htmlFor="pdp-date">Ngày trả</Label>
+                    <Input id="pdp-date" type="date" value={paymentDate} onChange={e => setPaymentDate(e.target.value)} required />
                 </div>
                 <div>
-                    <Label htmlFor="paymentDate">Ngày trả</Label>
-                    <Input id="paymentDate" type="date" value={date} onChange={e => setDate(e.target.value)} required />
+                    <Label htmlFor="pdp-amount">Số tiền trả ({liability.currency})</Label>
+                    <NumberInput id="pdp-amount" value={amount} onValueChange={setAmount} />
                 </div>
-                <div>
-                    <Label htmlFor="paymentAmount">Số tiền trả ({debtItem.liability.currency})</Label>
-                    <NumberInput id="paymentAmount" value={amount} onValueChange={setAmount} />
-                    <div className="text-xs text-gray-400 mt-1 flex flex-col gap-1 sm:flex-row sm:justify-between">
-                        <span>Kỳ này: {formatCurrency(debtItem.dueThisPeriod, debtItem.liability.currency)}</span>
-                        <span>Tổng còn lại: {formatCurrency(debtItem.totalRemaining, debtItem.liability.currency)}</span>
-                    </div>
-                </div>
-                <div>
-                    <Label htmlFor="paymentAsset">Nguồn tiền</Label>
-                    <select id="paymentAsset" value={assetId} onChange={e => setAssetId(e.target.value)} className={selectClassName} required>
+                 <div>
+                    <Label htmlFor="pdp-asset">Nguồn tiền</Label>
+                    <select id="pdp-asset" value={paymentAssetId} onChange={e => setPaymentAssetId(e.target.value)} className={selectClassName} required>
                         <option value="" disabled>-- Chọn tài sản --</option>
-                        {payableAssets.map(a => <option key={a.id} value={a.id}>{a.name} ({formatCurrency(a.balance, a.currency)})</option>)}
+                        {payableAssets.map(a => <option key={a.id} value={a.id}>{a.name}</option>)}
                     </select>
                 </div>
                 <div className="mt-6 flex justify-end space-x-3">
@@ -199,802 +177,255 @@ const DebtPaymentModal: React.FC<{
     );
 };
 
-const LiabilitiesContent = () => {
+const PeriodReceivablePaymentModal: React.FC<{
+    receivable: EnrichedPeriodReceivable;
+    assets: Asset[];
+    onClose: () => void;
+    onSave: (paymentInfo: Omit<T.PeriodReceivablePayment, 'id'>) => void;
+}> = ({ receivable, assets, onClose, onSave }) => {
+    const receivableAssets = useMemo(() => assets.filter(a => a.currency === receivable.currency), [assets, receivable]);
+    const [paymentDate, setPaymentDate] = useState(new Date().toISOString().split('T')[0]);
+    const [paymentAssetId, setPaymentAssetId] = useState(receivableAssets[0]?.id || '');
+    const [amount, setAmount] = useState(receivable.remainingAmount);
+    
+    const handleSubmit = (e: React.FormEvent) => {
+        e.preventDefault();
+        if(!paymentAssetId) {
+            alert("Vui lòng chọn tài sản nhận tiền.");
+            return;
+        }
+        if (amount <= 0 || amount > receivable.remainingAmount) {
+            alert(`Số tiền thu phải lớn hơn 0 và không vượt quá số tiền còn lại (${formatCurrency(receivable.remainingAmount, receivable.currency)}).`);
+            return;
+        }
+        onSave({ periodReceivableId: receivable.id, date: paymentDate, amount, assetId: paymentAssetId });
+        onClose();
+    };
+    
+    const selectClassName = "w-full px-3 py-2 bg-gray-900 border border-gray-600 rounded-md focus:outline-none focus:ring-2 focus:ring-primary-500";
+    
+    return (
+        <Modal isOpen={true} onClose={onClose} title={`Thu nợ trong kỳ: ${receivable.description}`}>
+             <form onSubmit={handleSubmit} className="space-y-4">
+                <div>
+                    <Label htmlFor="prp-date">Ngày thu</Label>
+                    <Input id="prp-date" type="date" value={paymentDate} onChange={e => setPaymentDate(e.target.value)} required />
+                </div>
+                <div>
+                    <Label htmlFor="prp-amount">Số tiền thu ({receivable.currency})</Label>
+                    <NumberInput id="prp-amount" value={amount} onValueChange={setAmount} />
+                </div>
+                 <div>
+                    <Label htmlFor="prp-asset">Tài sản nhận</Label>
+                    <select id="prp-asset" value={paymentAssetId} onChange={e => setPaymentAssetId(e.target.value)} className={selectClassName} required>
+                        <option value="" disabled>-- Chọn tài sản --</option>
+                        {receivableAssets.map(a => <option key={a.id} value={a.id}>{a.name}</option>)}
+                    </select>
+                </div>
+                <div className="mt-6 flex justify-end space-x-3">
+                    <Button type="button" variant="secondary" onClick={onClose}>Hủy</Button>
+                    <Button type="submit">Xác nhận thu</Button>
+                </div>
+            </form>
+        </Modal>
+    );
+};
+
+
+const TabButton: React.FC<{ active: boolean; onClick: () => void; children: React.ReactNode }> = ({ active, onClick, children }) => (
+    <button
+      onClick={onClick}
+      className={`px-6 py-3 text-sm font-semibold transition-colors focus:outline-none ${
+        active
+          ? 'border-b-2 border-primary-500 text-white'
+          : 'text-gray-400 hover:text-white'
+      }`}
+      role="tab"
+      aria-selected={active}
+    >
+      {children}
+    </button>
+  );
+
+export default function DebtsReceivables() {
     const { 
-        liabilities, debtPayments, assets, addDebtPayment, updateLiability, currentPeriod, isReadOnly,
-        periodLiabilities, periodDebtPayments, addPeriodDebtPayment, updatePeriodLiability, deletePeriodLiability
+        periodLiabilities, addPeriodLiability, updatePeriodLiability, deletePeriodLiability,
+        periodDebtPayments, addPeriodDebtPayment,
+        periodReceivables, addPeriodReceivable, updatePeriodReceivable, deletePeriodReceivable,
+        periodReceivablePayments, addPeriodReceivablePayment,
+        assets, isReadOnly, currentPeriod
     } = useData();
-    const [payingDebtItem, setPayingDebtItem] = useState<DebtItem | null>(null);
-    const [editingPeriodLiability, setEditingPeriodLiability] = useState<PeriodLiability | undefined>(undefined);
-    const [deletingPeriodLiability, setDeletingPeriodLiability] = useState<PeriodLiability | null>(null);
+
+    const [activeTab, setActiveTab] = useState<'debts' | 'receivables'>('debts');
+
+    const [isLiabilityModalOpen, setIsLiabilityModalOpen] = useState(false);
+    const [editingLiability, setEditingLiability] = useState<PeriodLiability | undefined>(undefined);
+    const [liabilityToDelete, setLiabilityToDelete] = useState<PeriodLiability | null>(null);
+    const [payingLiability, setPayingLiability] = useState<EnrichedPeriodLiability | null>(null);
     
-    type EnrichedPeriodLiability = PeriodLiability & { paidAmount: number; remainingAmount: number; };
-    const [payingPeriodLiability, setPayingPeriodLiability] = useState<EnrichedPeriodLiability | null>(null);
-
-    const PeriodDebtPaymentModal: React.FC<{
-        liability: EnrichedPeriodLiability;
-        assets: Asset[];
-        onClose: () => void;
-        onSave: (paymentInfo: Omit<T.PeriodDebtPayment, 'id'>) => void;
-    }> = ({ liability, assets, onClose, onSave }) => {
-        const payableAssets = useMemo(() => assets.filter(a => a.currency === liability.currency), [assets, liability]);
-        const [paymentDate, setPaymentDate] = useState(new Date().toISOString().split('T')[0]);
-        const [paymentAssetId, setPaymentAssetId] = useState(payableAssets[0]?.id || '');
-        const [amount, setAmount] = useState(liability.remainingAmount);
-        
-        const handleSubmit = (e: React.FormEvent) => {
-            e.preventDefault();
-            if(!paymentAssetId) {
-                alert("Vui lòng chọn tài sản thanh toán.");
-                return;
-            }
-            if (amount <= 0 || amount > liability.remainingAmount) {
-                alert(`Số tiền thanh toán phải lớn hơn 0 và không vượt quá số nợ còn lại (${formatCurrency(liability.remainingAmount, liability.currency)}).`);
-                return;
-            }
-            onSave({ periodLiabilityId: liability.id, date: paymentDate, assetId: paymentAssetId, amount });
-        };
+    const [isReceivableModalOpen, setIsReceivableModalOpen] = useState(false);
+    const [editingReceivable, setEditingReceivable] = useState<PeriodReceivable | undefined>(undefined);
+    const [receivableToDelete, setReceivableToDelete] = useState<PeriodReceivable | null>(null);
+    const [collectingReceivable, setCollectingReceivable] = useState<EnrichedPeriodReceivable | null>(null);
     
-        return (
-            <Modal isOpen={true} onClose={onClose} title={`Thanh toán nợ: ${liability.description}`}>
-                <form onSubmit={handleSubmit} className="space-y-4">
-                    <div>
-                        <Label htmlFor="pl-payment-date">Ngày thanh toán</Label>
-                        <Input id="pl-payment-date" type="date" value={paymentDate} onChange={e => setPaymentDate(e.target.value)} required />
-                    </div>
-                    <div>
-                        <Label htmlFor="pl-payment-amount">Số tiền thanh toán ({liability.currency})</Label>
-                        <NumberInput id="pl-payment-amount" value={amount} onValueChange={setAmount} />
-                    </div>
-                    <div>
-                        <Label htmlFor="pl-payment-asset">Tài sản thanh toán</Label>
-                        <select id="pl-payment-asset" value={paymentAssetId} onChange={e => setPaymentAssetId(e.target.value)} className="w-full px-3 py-2 bg-gray-900 border border-gray-600 rounded-md focus:outline-none focus:ring-2 focus:ring-primary-500" required>
-                            <option value="" disabled>-- Chọn tài sản --</option>
-                            {payableAssets.map(a => <option key={a.id} value={a.id}>{a.name}</option>)}
-                        </select>
-                    </div>
-                    <div className="mt-6 flex justify-end space-x-3">
-                        <Button type="button" variant="secondary" onClick={onClose}>Hủy</Button>
-                        <Button type="submit">Xác nhận</Button>
-                    </div>
-                </form>
-            </Modal>
-        );
-    };
-
-    const assetMap = useMemo(() => new Map(assets.map(a => [a.id, a])), [assets]);
-
-    const monthlyDebtItems = useMemo<DebtItem[]>(() => {
-        if (!currentPeriod) return [];
-        
-        const debtItems: DebtItem[] = [];
-        const periodPayments = debtPayments.filter(p => isDateInPeriod(p.date, currentPeriod));
-
-        for (const liability of liabilities) {
-            const totalPaid = debtPayments
-                .filter(p => p.liabilityId === liability.id)
-                .reduce((acc, p) => acc + p.amount, 0);
-
-            const totalRemaining = liability.totalAmount - totalPaid;
-            const isPaid = totalRemaining <= 0.001;
-            
-            const paidThisPeriod = periodPayments
-                .filter(p => p.liabilityId === liability.id)
-                .reduce((acc, p) => acc + p.amount, 0);
-
-            const inflowAssetName = liability.inflowAssetId ? (assetMap.get(liability.inflowAssetId)?.name || 'N/A') : '—';
-            
-            let dueThisPeriod = 0;
-
-            if (liability.isInstallment) {
-                if (!liability.startDate || liability.startDate.trim() === '' || !liability.numberOfInstallments || liability.numberOfInstallments <= 0) {
-                     dueThisPeriod = 0;
-                } else {
-                    const monthlyInstallment = liability.totalAmount / liability.numberOfInstallments;
-                    const [startYear, startMonth] = liability.startDate.split('-').map(Number);
-                    const startDateObj = new Date(startYear, startMonth - 1, 1);
-
-                    let totalDueUpToThisMonth = 0;
-                    for (let i = 0; i < liability.numberOfInstallments; i++) {
-                        const installmentDate = new Date(startDateObj);
-                        installmentDate.setMonth(installmentDate.getMonth() + i);
-
-                        const year = installmentDate.getFullYear();
-                        const month = (installmentDate.getMonth() + 1).toString().padStart(2, '0');
-                        const installmentPeriod = `${year}-${month}`;
-
-                        if (installmentPeriod <= currentPeriod) {
-                            totalDueUpToThisMonth += monthlyInstallment;
-                        }
-                    }
-                    
-                    const totalPaidBeforeThisMonth = totalPaid - paidThisPeriod;
-                    dueThisPeriod = Math.max(0, totalDueUpToThisMonth - totalPaidBeforeThisMonth);
-                }
-            } else { 
-                dueThisPeriod = totalRemaining + paidThisPeriod;
-            }
-            
-            debtItems.push({
-                liability,
-                creationDate: liability.creationDate,
-                inflowAssetName,
-                dueThisPeriod,
-                paidThisPeriod,
-                totalRemaining,
-                isPaid,
-                completionDate: liability.completionDate,
-            });
-        }
-
-        return debtItems
-            .filter(item => item.dueThisPeriod > 0 || item.paidThisPeriod > 0)
-            .sort((a,b) => new Date(b.creationDate).getTime() - new Date(a.creationDate).getTime());
-
-    }, [liabilities, debtPayments, currentPeriod, assetMap]);
-    
-    const handleSaveLongTermPayment = (payment: { liabilityId: string; amount: number; assetId: string, date: string }) => {
-        addDebtPayment(payment);
-
-        const liability = liabilities.find(l => l.id === payment.liabilityId);
-        if (!liability) return;
-
-        const allPaymentsForDebt = [...debtPayments, payment];
-        const totalPaid = allPaymentsForDebt
-            .filter(p => p.liabilityId === liability.id)
-            .reduce((acc, p) => acc + p.amount, 0);
-
-        if (totalPaid >= liability.totalAmount) {
-            updateLiability({ ...liability, completionDate: payment.date });
-        }
-
-        setPayingDebtItem(null);
-    };
-
-    const periodLiabilitiesForCurrentPeriod = useMemo<EnrichedPeriodLiability[]>(() => {
-        if (!currentPeriod) return [];
-        
-        const paymentsByLiabilityId = periodDebtPayments.reduce((acc, p) => {
-            if (p.periodLiabilityId) {
-                acc[p.periodLiabilityId] = (acc[p.periodLiabilityId] || 0) + p.amount;
-            }
+    const enrichedPeriodLiabilities: EnrichedPeriodLiability[] = useMemo(() => {
+        const paymentsByLiability = periodDebtPayments.reduce((acc: Record<string, number>, p) => {
+            acc[p.periodLiabilityId] = (acc[p.periodLiabilityId] || 0) + p.amount;
             return acc;
-        }, {} as Record<string, number>);
-    
+        }, {});
         return periodLiabilities
             .filter(l => l.period === currentPeriod)
             .map(l => {
-                const paidAmount = paymentsByLiabilityId[l.id] || 0;
-                const remainingAmount = l.amount - paidAmount;
-                return {
-                    ...l,
-                    paidAmount,
-                    remainingAmount
-                };
+                const paidAmount = paymentsByLiability[l.id] || 0;
+                return { ...l, paidAmount, remainingAmount: l.amount - paidAmount };
             })
             .sort((a,b) => new Date(b.date).getTime() - new Date(a.date).getTime());
     }, [periodLiabilities, periodDebtPayments, currentPeriod]);
 
-    const handleSavePeriodPayment = (payment: Omit<T.PeriodDebtPayment, 'id'>) => {
-        // Fix: Call addPeriodDebtPayment to save a payment for a period-specific liability.
-        addPeriodDebtPayment(payment);
-        setPayingPeriodLiability(null);
-    };
-    
-    const isActionDisabled = isReadOnly || !currentPeriod;
-
-    return (
-        <div className="space-y-6">
-             <Card>
-                <CardHeader>Nợ phát sinh trong kỳ</CardHeader>
-                <CardContent>
-                     <Table>
-                        <TableHead>
-                            <TableRow>
-                                <TableHeader>Mô tả</TableHeader>
-                                <TableHeader>Ngày</TableHeader>
-                                <TableHeader>Tổng nợ</TableHeader>
-                                <TableHeader>Đã trả</TableHeader>
-                                <TableHeader>Còn lại</TableHeader>
-                                <TableHeader>Trạng thái</TableHeader>
-                                {!isReadOnly && <TableHeader>Hành động</TableHeader>}
-                            </TableRow>
-                        </TableHead>
-                        <TableBody>
-                            {periodLiabilitiesForCurrentPeriod.length > 0 ? periodLiabilitiesForCurrentPeriod.map(item => (
-                                <TableRow key={item.id}>
-                                    <TableCell className="font-medium text-white">{item.description}</TableCell>
-                                    <TableCell>{formatDate(item.date)}</TableCell>
-                                    <TableCell className="font-semibold text-yellow-400">{formatCurrency(item.amount, item.currency)}</TableCell>
-                                    <TableCell className="font-semibold text-green-400">{formatCurrency(item.paidAmount, item.currency)}</TableCell>
-                                    <TableCell className="font-semibold text-yellow-400">{formatCurrency(item.remainingAmount, item.currency)}</TableCell>
-                                    <TableCell>
-                                        {item.remainingAmount <= 0 ? (
-                                            <span className="px-2 inline-flex text-xs leading-5 font-semibold rounded-full bg-green-200 text-green-800">
-                                                Đã trả
-                                            </span>
-                                        ) : (
-                                            <span className="px-2 inline-flex text-xs leading-5 font-semibold rounded-full bg-yellow-200 text-yellow-800">
-                                                Chưa trả
-                                            </span>
-                                        )}
-                                    </TableCell>
-                                    {!isReadOnly && (
-                                        <TableCell>
-                                            <div className="flex items-center space-x-3 justify-center">
-                                                {item.remainingAmount > 0 && <Button size="sm" onClick={() => setPayingPeriodLiability(item)}>Thanh toán</Button>}
-                                                <button onClick={() => setEditingPeriodLiability(item)} className="text-gray-400 hover:text-primary-400"><Edit /></button>
-                                                <button onClick={() => setDeletingPeriodLiability(item)} className="text-gray-400 hover:text-red-400"><Trash2 /></button>
-                                            </div>
-                                        </TableCell>
-                                    )}
-                                </TableRow>
-                            )) : (
-                                <TableRow>
-                                    <TableCell colSpan={!isReadOnly ? 7 : 6} className="text-center text-gray-500 py-8">
-                                        Không có khoản nợ nào phát sinh trong kỳ.
-                                    </TableCell>
-                                </TableRow>
-                            )}
-                        </TableBody>
-                    </Table>
-                </CardContent>
-            </Card>
-
-            <Card>
-                <CardHeader>Nợ dài hạn &amp; trả góp</CardHeader>
-                <CardContent>
-                    <Table>
-                        <TableHead>
-                            <TableRow>
-                                <TableHeader>Mô tả</TableHeader>
-                                <TableHeader>Tài sản nhận (nếu có)</TableHeader>
-                                <TableHeader>Cần trả kỳ này</TableHeader>
-                                <TableHeader>Đã trả trong kỳ</TableHeader>
-                                <TableHeader>Tổng còn lại</TableHeader>
-                                <TableHeader>Trạng thái</TableHeader>
-                            </TableRow>
-                        </TableHead>
-                        <TableBody>
-                            {monthlyDebtItems.length > 0 ? monthlyDebtItems.map(item => (
-                                <TableRow key={item.liability.id}>
-                                    <TableCell className="font-medium text-white">{item.liability.description}</TableCell>
-                                    <TableCell>{item.inflowAssetName}</TableCell>
-                                    <TableCell className="text-yellow-400 font-semibold">{formatCurrency(item.dueThisPeriod, item.liability.currency)}</TableCell>
-                                    <TableCell className="text-green-400">{formatCurrency(item.paidThisPeriod, item.liability.currency)}</TableCell>
-                                    <TableCell>{formatCurrency(item.totalRemaining, item.liability.currency)}</TableCell>
-                                    <TableCell>
-                                        {item.isPaid ? (
-                                            <span className="px-2 inline-flex text-xs leading-5 font-semibold rounded-full bg-green-200 text-green-800">
-                                                Đã hoàn tất
-                                            </span>
-                                        ) : item.dueThisPeriod > item.paidThisPeriod ? (
-                                            !isActionDisabled && (
-                                                <Button size="sm" onClick={() => setPayingDebtItem(item)}>Thanh toán</Button>
-                                            )
-                                        ) : (
-                                            <span className="text-xs text-gray-400 italic">
-                                                Đã trả đủ kỳ này
-                                            </span>
-                                        )}
-                                    </TableCell>
-                                </TableRow>
-                            )) : (
-                                <TableRow>
-                                    <TableCell colSpan={6} className="text-center text-gray-500 py-8">
-                                        Không có công nợ dài hạn nào đến hạn trong kỳ này.
-                                    </TableCell>
-                                </TableRow>
-                            )}
-                        </TableBody>
-                    </Table>
-                </CardContent>
-            </Card>
-
-            {payingDebtItem && (
-                <DebtPaymentModal
-                    debtItem={payingDebtItem}
-                    assets={assets}
-                    onClose={() => setPayingDebtItem(null)}
-                    onSave={handleSaveLongTermPayment}
-                />
-            )}
-            
-            {payingPeriodLiability && (
-                <PeriodDebtPaymentModal 
-                    liability={payingPeriodLiability}
-                    assets={assets}
-                    onClose={() => setPayingPeriodLiability(null)}
-                    onSave={handleSavePeriodPayment}
-                />
-            )}
-
-            {deletingPeriodLiability && (
-                <ConfirmationModal 
-                    isOpen={true}
-                    onClose={() => setDeletingPeriodLiability(null)}
-                    onConfirm={() => {
-                        if (deletingPeriodLiability) {
-                            deletePeriodLiability(deletingPeriodLiability.id);
-                            setDeletingPeriodLiability(null);
-                        }
-                    }}
-                    title="Xác nhận xóa"
-                    message={`Bạn có chắc muốn xóa khoản nợ "${deletingPeriodLiability?.description}" không?`}
-                />
-            )}
-        </div>
-    );
-}
-
-// #endregion
-
-// #region --- Receivables (Nợ Phải Thu) Components ---
-
-type ReceivableItem = {
-    receivable: Receivable;
-    paidAmount: number;
-    paidThisPeriod: number;
-    remainingAmount: number;
-    isPaid: boolean;
-    outflowAssetName: string;
-    dueThisPeriod: number;
-};
-
-const ReceivablesContent = () => {
-    const { 
-        assets, receivables, receivablePayments, updateReceivable, addReceivablePayment, isReadOnly, currentPeriod,
-        periodReceivables, periodReceivablePayments, addPeriodReceivablePayment, deletePeriodReceivable
-    } = useData();
-    const [receivableToPay, setReceivableToPay] = useState<ReceivableItem | null>(null);
-    const [editingPeriodReceivable, setEditingPeriodReceivable] = useState<PeriodReceivable | undefined>(undefined);
-    const [deletingPeriodReceivable, setDeletingPeriodReceivable] = useState<PeriodReceivable | null>(null);
-    
-    type EnrichedPeriodReceivable = PeriodReceivable & { receivedAmount: number; remainingAmount: number; };
-    const [receivingPeriodReceivable, setReceivingPeriodReceivable] = useState<EnrichedPeriodReceivable | null>(null);
-
-    const PeriodReceivablePaymentModal: React.FC<{
-        receivable: EnrichedPeriodReceivable;
-        assets: Asset[];
-        onClose: () => void;
-        onSave: (receiptInfo: Omit<T.PeriodReceivablePayment, 'id'>) => void;
-    }> = ({ receivable, assets, onClose, onSave }) => {
-        const receivableAssets = useMemo(() => assets.filter(a => a.currency === receivable.currency), [assets, receivable]);
-        const [receiptDate, setReceiptDate] = useState(new Date().toISOString().split('T')[0]);
-        const [receiptAssetId, setReceiptAssetId] = useState(receivableAssets[0]?.id || '');
-        const [amount, setAmount] = useState(receivable.remainingAmount);
-
-        const handleSubmit = (e: React.FormEvent) => {
-            e.preventDefault();
-            if(!receiptAssetId) {
-                alert("Vui lòng chọn tài sản nhận tiền.");
-                return;
-            }
-            if(amount <= 0 || amount > receivable.remainingAmount) {
-                alert(`Số tiền nhận phải lớn hơn 0 và không vượt quá số còn lại (${formatCurrency(receivable.remainingAmount, receivable.currency)}).`);
-                return;
-            }
-            onSave({ periodReceivableId: receivable.id, date: receiptDate, assetId: receiptAssetId, amount });
-        };
-    
-        return (
-            <Modal isOpen={true} onClose={onClose} title={`Thu tiền: ${receivable.description}`}>
-                <form onSubmit={handleSubmit} className="space-y-4">
-                    <div>
-                        <Label htmlFor="pr-receipt-date">Ngày nhận</Label>
-                        <Input id="pr-receipt-date" type="date" value={receiptDate} onChange={e => setReceiptDate(e.target.value)} required />
-                    </div>
-                    <div>
-                        <Label htmlFor="pr-receipt-amount">Số tiền nhận ({receivable.currency})</Label>
-                        <NumberInput id="pr-receipt-amount" value={amount} onValueChange={setAmount} />
-                    </div>
-                    <div>
-                        <Label htmlFor="pr-receipt-asset">Tài sản nhận</Label>
-                        <select id="pr-receipt-asset" value={receiptAssetId} onChange={e => setReceiptAssetId(e.target.value)} className="w-full px-3 py-2 bg-gray-900 border border-gray-600 rounded-md focus:outline-none focus:ring-2 focus:ring-primary-500" required>
-                            <option value="" disabled>-- Chọn tài sản --</option>
-                            {receivableAssets.map(a => <option key={a.id} value={a.id}>{a.name}</option>)}
-                        </select>
-                    </div>
-                    <div className="mt-6 flex justify-end space-x-3">
-                        <Button type="button" variant="secondary" onClick={onClose}>Hủy</Button>
-                        <Button type="submit">Xác nhận</Button>
-                    </div>
-                </form>
-            </Modal>
-        );
-    };
-
-    const ReceivablePaymentModal: React.FC<{
-        receivableItem: ReceivableItem;
-        assets: Asset[];
-        onClose: () => void;
-        onSave: (payment: Omit<ReceivablePayment, 'id'>) => void;
-    }> = ({ receivableItem, assets, onClose, onSave }) => {
-        const { currentPeriod } = useData();
-        const receivable = receivableItem.receivable;
-        const receivableAssets = useMemo(() => assets.filter(a => a.currency === receivable.currency), [assets, receivable]);
-        
-        const amountLeftToReceiveThisPeriod = Math.max(0, receivableItem.dueThisPeriod - receivableItem.paidThisPeriod);
-        const defaultAmount = Math.min(amountLeftToReceiveThisPeriod, receivableItem.remainingAmount);
-
-        const [amount, setAmount] = useState(defaultAmount);
-        const [assetId, setAssetId] = useState(receivableAssets.find(a => a.currency === receivable.currency)?.id || '');
-        const [date, setDate] = useState(currentPeriod ? `${currentPeriod}-01` : new Date().toISOString().split('T')[0]);
-
-        const handleSubmit = (e: React.FormEvent) => {
-            e.preventDefault();
-            if (!assetId || amount <= 0) {
-                alert("Vui lòng chọn tài sản và nhập số tiền hợp lệ.");
-                return;
-            }
-            if (amount > receivableItem.remainingAmount) {
-                alert(`Số tiền nhận không thể lớn hơn số tiền còn lại (${formatCurrency(receivableItem.remainingAmount, receivable.currency)}).`);
-                return;
-            }
-            onSave({ receivableId: receivable.id, amount, assetId, date });
-        };
-
-        const selectClassName = "w-full px-3 py-2 bg-gray-900 border border-gray-600 rounded-md focus:outline-none focus:ring-2 focus:ring-primary-500";
-        
-        return (
-            <Modal isOpen={true} onClose={onClose} title={`Thu nợ: ${receivable.description}`}>
-                <form onSubmit={handleSubmit} className="space-y-4">
-                    <div>
-                        <Label htmlFor="rec-paymentDate">Ngày nhận</Label>
-                        <Input id="rec-paymentDate" type="date" value={date} onChange={e => setDate(e.target.value)} required />
-                    </div>
-                    <div>
-                        <Label htmlFor="rec-paymentAmount">Số tiền nhận ({receivable.currency})</Label>
-                        <NumberInput id="rec-paymentAmount" value={amount} onValueChange={setAmount} />
-                        <div className="text-xs text-gray-400 mt-1 flex flex-col gap-1 sm:flex-row sm:justify-between">
-                            <span>Cần thu kỳ này: {formatCurrency(receivableItem.dueThisPeriod, receivable.currency)}</span>
-                            <span>Tổng còn lại: {formatCurrency(receivableItem.remainingAmount, receivable.currency)}</span>
-                        </div>
-                    </div>
-                    <div>
-                        <Label htmlFor="rec-paymentAsset">Tài sản nhận</Label>
-                        <select id="rec-paymentAsset" value={assetId} onChange={e => setAssetId(e.target.value)} className={selectClassName} required>
-                            <option value="" disabled>-- Chọn tài sản --</option>
-                            {receivableAssets.map(a => <option key={a.id} value={a.id}>{a.name}</option>)}
-                        </select>
-                    </div>
-                    <div className="mt-6 flex justify-end space-x-3">
-                        <Button type="button" variant="secondary" onClick={onClose}>Hủy</Button>
-                        <Button type="submit">Xác nhận</Button>
-                    </div>
-                </form>
-            </Modal>
-        );
-    };
-    const assetMap = useMemo(() => new Map(assets.map(a => [a.id, a.name])), [assets]);
-    
-    const enrichedReceivables = useMemo<ReceivableItem[]>(() => {
-        if (!currentPeriod) return [];
-        return receivables.map(r => {
-            const allPayments = receivablePayments.filter(p => p.receivableId === r.id);
-            const paidAmount = allPayments.reduce((sum, p) => sum + p.amount, 0);
-            const remainingAmount = r.totalAmount - paidAmount;
-            const isPaid = remainingAmount <= 0.001;
-            const paidThisPeriod = allPayments
-                .filter(p => isDateInPeriod(p.date, currentPeriod))
-                .reduce((sum, p) => sum + p.amount, 0);
-
-            let dueThisPeriod = 0;
-            if (r.isInstallment) {
-                if (!r.startDate || r.startDate.trim() === '' || !r.numberOfInstallments || r.numberOfInstallments <= 0) {
-                    dueThisPeriod = 0;
-                } else {
-                    const monthlyInstallment = r.totalAmount / r.numberOfInstallments;
-                    const [startYear, startMonth] = r.startDate.split('-').map(Number);
-                    const startDateObj = new Date(startYear, startMonth - 1, 1);
-
-                    let totalDueUpToThisMonth = 0;
-                    for (let i = 0; i < r.numberOfInstallments; i++) {
-                        const installmentDate = new Date(startDateObj);
-                        installmentDate.setMonth(installmentDate.getMonth() + i);
-                        const year = installmentDate.getFullYear();
-                        const month = (installmentDate.getMonth() + 1).toString().padStart(2, '0');
-                        const installmentPeriod = `${year}-${month}`;
-
-                        if (installmentPeriod <= currentPeriod) {
-                            totalDueUpToThisMonth += monthlyInstallment;
-                        }
-                    }
-                    const totalPaidBeforeThisMonth = paidAmount - paidThisPeriod;
-                    dueThisPeriod = Math.max(0, totalDueUpToThisMonth - totalPaidBeforeThisMonth);
-                }
-            } else {
-                dueThisPeriod = remainingAmount + paidThisPeriod;
-            }
-
-            return {
-                receivable: r,
-                paidAmount,
-                paidThisPeriod,
-                remainingAmount,
-                isPaid,
-                outflowAssetName: assetMap.get(r.outflowAssetId) || 'N/A',
-                dueThisPeriod,
-            };
-        }).filter(item => item.dueThisPeriod > 0 || item.paidThisPeriod > 0)
-          .sort((a,b) => new Date(b.receivable.creationDate).getTime() - new Date(a.receivable.creationDate).getTime());
-    }, [receivables, receivablePayments, assetMap, currentPeriod]);
-    
-    const handleSaveLongTermPayment = (payment: Omit<ReceivablePayment, 'id'>) => {
-        addReceivablePayment(payment);
-
-        const receivable = receivables.find(r => r.id === payment.receivableId);
-        if (!receivable) return;
-
-        const allPaymentsForReceivable = [...receivablePayments, payment];
-        const totalPaid = allPaymentsForReceivable
-            .filter(p => p.receivableId === receivable.id)
-            .reduce((acc, p) => acc + p.amount, 0);
-
-        if (totalPaid >= receivable.totalAmount) {
-            updateReceivable({ ...receivable, completionDate: payment.date });
-        }
-        setReceivableToPay(null);
-    };
-
-     const periodReceivablesForCurrentPeriod = useMemo<EnrichedPeriodReceivable[]>(() => {
-        if (!currentPeriod) return [];
-        const paymentsByReceivableId = periodReceivablePayments.reduce((acc, p) => {
-            if (p.periodReceivableId) {
-                acc[p.periodReceivableId] = (acc[p.periodReceivableId] || 0) + p.amount;
-            }
+    const enrichedPeriodReceivables: EnrichedPeriodReceivable[] = useMemo(() => {
+        const paymentsByReceivable = periodReceivablePayments.reduce((acc: Record<string, number>, p) => {
+            acc[p.periodReceivableId] = (acc[p.periodReceivableId] || 0) + p.amount;
             return acc;
-        }, {} as Record<string, number>);
-    
+        }, {});
         return periodReceivables
             .filter(r => r.period === currentPeriod)
             .map(r => {
-                const receivedAmount = paymentsByReceivableId[r.id] || 0;
-                const remainingAmount = r.amount - receivedAmount;
-                return {
-                    ...r,
-                    receivedAmount,
-                    remainingAmount
-                };
+                const paidAmount = paymentsByReceivable[r.id] || 0;
+                return { ...r, paidAmount, remainingAmount: r.amount - paidAmount };
             })
             .sort((a,b) => new Date(b.date).getTime() - new Date(a.date).getTime());
     }, [periodReceivables, periodReceivablePayments, currentPeriod]);
 
-    const handleSavePeriodReceipt = (payment: Omit<T.PeriodReceivablePayment, 'id'>) => {
-        addPeriodReceivablePayment(payment);
-        setReceivingPeriodReceivable(null);
-    };
-
-    return (
-        <div className="space-y-8">
-            <Card>
-                <CardHeader>Khoản phải thu trong kỳ</CardHeader>
-                <CardContent>
-                     <Table>
-                        <TableHead>
-                            <TableRow>
-                                <TableHeader>Mô tả</TableHeader>
-                                <TableHeader>Ngày</TableHeader>
-                                <TableHeader>Tổng phải thu</TableHeader>
-                                <TableHeader>Đã thu</TableHeader>
-                                <TableHeader>Còn lại</TableHeader>
-                                <TableHeader>Trạng thái</TableHeader>
-                                {!isReadOnly && <TableHeader>Hành động</TableHeader>}
-                            </TableRow>
-                        </TableHead>
-                        <TableBody>
-                            {periodReceivablesForCurrentPeriod.length > 0 ? periodReceivablesForCurrentPeriod.map(item => (
-                                <TableRow key={item.id}>
-                                    <TableCell className="font-medium text-white">{item.description}</TableCell>
-                                    <TableCell>{formatDate(item.date)}</TableCell>
-                                    <TableCell className="font-semibold text-green-400">{formatCurrency(item.amount, item.currency)}</TableCell>
-                                    <TableCell className="font-semibold text-green-400">{formatCurrency(item.receivedAmount, item.currency)}</TableCell>
-                                    <TableCell className="font-semibold text-yellow-400">{formatCurrency(item.remainingAmount, item.currency)}</TableCell>
-                                    <TableCell>
-                                        {item.remainingAmount <= 0 ? (
-                                            <span className="px-2 inline-flex text-xs leading-5 font-semibold rounded-full bg-green-200 text-green-800">
-                                                Đã thu
-                                            </span>
-                                        ) : (
-                                            <span className="px-2 inline-flex text-xs leading-5 font-semibold rounded-full bg-yellow-200 text-yellow-800">
-                                                Chưa thu
-                                            </span>
-                                        )}
-                                    </TableCell>
-                                    {!isReadOnly && (
-                                        <TableCell>
-                                            <div className="flex items-center space-x-3 justify-center">
-                                                {item.remainingAmount > 0 && <Button size="sm" onClick={() => setReceivingPeriodReceivable(item)}>Thu tiền</Button>}
-                                                <button onClick={() => setEditingPeriodReceivable(item)} className="text-gray-400 hover:text-primary-400"><Edit /></button>
-                                                <button onClick={() => setDeletingPeriodReceivable(item)} className="text-gray-400 hover:text-red-400"><Trash2 /></button>
-                                            </div>
-                                        </TableCell>
-                                    )}
-                                </TableRow>
-                            )) : (
-                                <TableRow>
-                                    <TableCell colSpan={!isReadOnly ? 7 : 6} className="text-center text-gray-500 py-8">
-                                        Không có khoản phải thu nào trong kỳ.
-                                    </TableCell>
-                                </TableRow>
-                            )}
-                        </TableBody>
-                    </Table>
-                </CardContent>
-            </Card>
-
-             <Card>
-                <CardHeader>Khoản phải thu dài hạn</CardHeader>
-                <CardContent>
-                    <Table>
-                        <TableHead>
-                            <TableRow>
-                                <TableHeader>Mô tả</TableHeader>
-                                <TableHeader>Nguồn đã chi</TableHeader>
-                                <TableHeader>Cần thu kỳ này</TableHeader>
-                                <TableHeader>Đã thu trong kỳ</TableHeader>
-                                <TableHeader>Tổng còn lại</TableHeader>
-                                <TableHeader>Trạng thái</TableHeader>
-                            </TableRow>
-                        </TableHead>
-                        <TableBody>
-                            {enrichedReceivables.length > 0 ? enrichedReceivables.map(item => (
-                                <TableRow key={item.receivable.id}>
-                                    <TableCell className="font-medium text-white">{item.receivable.description}</TableCell>
-                                    <TableCell>{item.outflowAssetName}</TableCell>
-                                    <TableCell className="font-semibold text-yellow-400">{formatCurrency(item.dueThisPeriod, item.receivable.currency)}</TableCell>
-                                    <TableCell className="text-green-400">{formatCurrency(item.paidThisPeriod, item.receivable.currency)}</TableCell>
-                                    <TableCell>{formatCurrency(item.remainingAmount, item.receivable.currency)}</TableCell>
-                                    <TableCell>
-                                        {item.isPaid ? (
-                                            <span className="px-2 inline-flex text-xs leading-5 font-semibold rounded-full bg-green-200 text-green-800">
-                                                Đã hoàn tất
-                                            </span>
-                                        ) : item.dueThisPeriod > item.paidThisPeriod ? (
-                                            !isReadOnly && (
-                                                <Button size="sm" onClick={() => setReceivableToPay(item)}>Thu nợ</Button>
-                                            )
-                                        ) : (
-                                            <span className="text-xs text-gray-400 italic">
-                                                Đã thu đủ kỳ này
-                                            </span>
-                                        )}
-                                    </TableCell>
-                                </TableRow>
-                            )) : (
-                                <TableRow>
-                                    <TableCell colSpan={6} className="text-center text-gray-500 py-8">Chưa có khoản phải thu dài hạn nào đến hạn trong kỳ.</TableCell>
-                                </TableRow>
-                            )}
-                        </TableBody>
-                    </Table>
-                </CardContent>
-            </Card>
-
-            {!isReadOnly && receivableToPay && (
-                <ReceivablePaymentModal
-                    receivableItem={receivableToPay}
-                    assets={assets}
-                    onClose={() => setReceivableToPay(null)}
-                    onSave={handleSaveLongTermPayment}
-                />
-            )}
-            {!isReadOnly && receivingPeriodReceivable && (
-                <PeriodReceivablePaymentModal
-                    receivable={receivingPeriodReceivable}
-                    assets={assets}
-                    onClose={() => setReceivingPeriodReceivable(null)}
-                    onSave={handleSavePeriodReceipt}
-                />
-            )}
-
-            {deletingPeriodReceivable && (
-                <ConfirmationModal 
-                    isOpen={true}
-                    onClose={() => setDeletingPeriodReceivable(null)}
-                    onConfirm={() => {
-                        if (deletingPeriodReceivable) {
-                            deletePeriodReceivable(deletingPeriodReceivable.id);
-                            setDeletingPeriodReceivable(null);
-                        }
-                    }}
-                    title="Xác nhận xóa"
-                    message={`Bạn có chắc muốn xóa khoản phải thu "${deletingPeriodReceivable?.description}" không?`}
-                />
-            )}
-        </div>
-    );
-};
-
-// #endregion
-
-
-const DebtsReceivablesTabButton: React.FC<{ active: boolean; onClick: () => void; children: React.ReactNode }> = ({ active, onClick, children }) => (
-  <button
-    onClick={onClick}
-    className={`px-6 py-3 text-sm font-semibold transition-colors focus:outline-none ${
-      active
-        ? 'border-b-2 border-primary-500 text-white'
-        : 'text-gray-400 hover:text-white'
-    }`}
-    role="tab"
-    aria-selected={active}
-  >
-    {children}
-  </button>
-);
-
-export default function DebtsReceivables() {
-    const { isReadOnly, addPeriodLiability, addPeriodReceivable, updatePeriodLiability, updatePeriodReceivable } = useData();
-    const [activeTab, setActiveTab] = useState<'payable' | 'receivable'>('payable');
-    const [isLiabilityModalOpen, setLiabilityModalOpen] = useState(false);
-    const [isReceivableModalOpen, setReceivableModalOpen] = useState(false);
-    const [editingLiability, setEditingLiability] = useState<PeriodLiability | undefined>(undefined);
-    const [editingReceivable, setEditingReceivable] = useState<PeriodReceivable | undefined>(undefined);
-    
-    const handleSavePeriodLiability = (data: Omit<PeriodLiability, 'id' | 'period'>) => {
-        if (editingLiability) {
-            updatePeriodLiability({ ...editingLiability, ...data });
-        } else {
-            addPeriodLiability(data);
-        }
-        setLiabilityModalOpen(false);
-        setEditingLiability(undefined);
-    };
-
-    const handleSavePeriodReceivable = (data: Omit<PeriodReceivable, 'id' | 'period'>) => {
-        if (editingReceivable) {
-            updatePeriodReceivable({ ...editingReceivable, ...data });
-        } else {
-            addPeriodReceivable(data);
-        }
-        setReceivableModalOpen(false);
-        setEditingReceivable(undefined);
-    };
-
 
     return (
         <div>
-            <Header title="Công nợ & Phải thu trong kỳ">
-                {activeTab === 'payable' && !isReadOnly && (
-                    <Button onClick={() => { setEditingLiability(undefined); setLiabilityModalOpen(true); }}>
-                        <span className="flex items-center gap-2"><Plus /> Thêm nợ tháng</span>
-                    </Button>
-                )}
-                {activeTab === 'receivable' && !isReadOnly && (
-                    <Button onClick={() => { setEditingReceivable(undefined); setReceivableModalOpen(true); }}>
-                        <span className="flex items-center gap-2"><Plus /> Thêm khoản phải thu tháng</span>
-                    </Button>
-                )}
-            </Header>
-             <div className="flex flex-wrap border-b border-gray-700 mb-6" role="tablist">
-                <DebtsReceivablesTabButton active={activeTab === 'payable'} onClick={() => setActiveTab('payable')}>
-                    Nợ phải trả
-                </DebtsReceivablesTabButton>
-                <DebtsReceivablesTabButton active={activeTab === 'receivable'} onClick={() => setActiveTab('receivable')}>
-                    Nợ phải thu
-                </DebtsReceivablesTabButton>
-            </div>
-             <div>
-                {activeTab === 'payable' && <LiabilitiesContent />}
-                {activeTab === 'receivable' && <ReceivablesContent />}
+            <Header title="Công nợ & Phải thu trong kỳ" />
+            <div className="flex flex-wrap border-b border-gray-700 mb-6" role="tablist">
+                <TabButton active={activeTab === 'debts'} onClick={() => setActiveTab('debts')}>Công nợ Phải trả</TabButton>
+                <TabButton active={activeTab === 'receivables'} onClick={() => setActiveTab('receivables')}>Công nợ Phải thu</TabButton>
             </div>
 
-            <Modal isOpen={isLiabilityModalOpen} onClose={() => setLiabilityModalOpen(false)} title={editingLiability ? "Sửa nợ trong kỳ" : "Thêm nợ trong kỳ"}>
-                <PeriodLiabilityForm 
-                    liability={editingLiability}
-                    onSave={handleSavePeriodLiability}
-                    onCancel={() => { setLiabilityModalOpen(false); setEditingLiability(undefined); }}
-                />
-            </Modal>
-            
-             <Modal isOpen={isReceivableModalOpen} onClose={() => setReceivableModalOpen(false)} title={editingReceivable ? "Sửa khoản phải thu trong kỳ" : "Thêm khoản phải thu trong kỳ"}>
-                <PeriodReceivableForm
-                    receivable={editingReceivable}
-                    onSave={handleSavePeriodReceivable}
-                    onCancel={() => { setReceivableModalOpen(false); setEditingReceivable(undefined); }}
-                />
-            </Modal>
+            {activeTab === 'debts' && (
+                <Card>
+                    <CardHeader className="flex justify-between items-center">
+                        <span>Công nợ phải trả trong kỳ</span>
+                        {!isReadOnly && <Button onClick={() => { setEditingLiability(undefined); setIsLiabilityModalOpen(true); }}><span className="flex items-center gap-2"><Plus /> Thêm Công nợ</span></Button>}
+                    </CardHeader>
+                    <CardContent>
+                        <Table>
+                            <TableHead><TableRow>
+                                <TableHeader>Ngày</TableHeader>
+                                <TableHeader>Mô tả</TableHeader>
+                                <TableHeader>Số tiền</TableHeader>
+                                <TableHeader>Đã trả</TableHeader>
+                                <TableHeader>Còn lại</TableHeader>
+                                {!isReadOnly && <TableHeader>Hành động</TableHeader>}
+                            </TableRow></TableHead>
+                            <TableBody>
+                                {enrichedPeriodLiabilities.map(l => (
+                                    <TableRow key={l.id}>
+                                        <TableCell>{formatDate(l.date)}</TableCell>
+                                        <TableCell className="font-medium text-white">{l.description}</TableCell>
+                                        <TableCell>{formatCurrency(l.amount, l.currency)}</TableCell>
+                                        <TableCell className="text-primary-400">{formatCurrency(l.paidAmount, l.currency)}</TableCell>
+                                        <TableCell className="font-semibold text-yellow-400">{formatCurrency(l.remainingAmount, l.currency)}</TableCell>
+                                        {!isReadOnly && (
+                                             <TableCell>
+                                                 <div className="flex items-center space-x-3 justify-center">
+                                                    {l.remainingAmount > 0 && <Button size="sm" onClick={() => setPayingLiability(l)}>Trả nợ</Button>}
+                                                    <button onClick={() => { setEditingLiability(l); setIsLiabilityModalOpen(true); }} className="text-gray-400 hover:text-primary-400"><Edit /></button>
+                                                    <button onClick={() => setLiabilityToDelete(l)} className="text-gray-400 hover:text-red-400"><Trash2 /></button>
+                                                </div>
+                                             </TableCell>
+                                        )}
+                                    </TableRow>
+                                ))}
+                            </TableBody>
+                        </Table>
+                    </CardContent>
+                </Card>
+            )}
+
+            {activeTab === 'receivables' && (
+                <Card>
+                    <CardHeader className="flex justify-between items-center">
+                        <span>Công nợ phải thu trong kỳ</span>
+                        {!isReadOnly && <Button onClick={() => { setEditingReceivable(undefined); setIsReceivableModalOpen(true); }}><span className="flex items-center gap-2"><Plus /> Thêm Khoản phải thu</span></Button>}
+                    </CardHeader>
+                    <CardContent>
+                        <Table>
+                            <TableHead><TableRow>
+                                <TableHeader>Ngày</TableHeader>
+                                <TableHeader>Mô tả</TableHeader>
+                                <TableHeader>Số tiền</TableHeader>
+                                <TableHeader>Đã thu</TableHeader>
+                                <TableHeader>Còn lại</TableHeader>
+                                {!isReadOnly && <TableHeader>Hành động</TableHeader>}
+                            </TableRow></TableHead>
+                            <TableBody>
+                                {enrichedPeriodReceivables.map(r => (
+                                    <TableRow key={r.id}>
+                                        <TableCell>{formatDate(r.date)}</TableCell>
+                                        <TableCell className="font-medium text-white">{r.description}</TableCell>
+                                        <TableCell>{formatCurrency(r.amount, r.currency)}</TableCell>
+                                        <TableCell className="text-primary-400">{formatCurrency(r.paidAmount, r.currency)}</TableCell>
+                                        <TableCell className="font-semibold text-yellow-400">{formatCurrency(r.remainingAmount, r.currency)}</TableCell>
+                                        {!isReadOnly && (
+                                            <TableCell>
+                                                <div className="flex items-center space-x-3 justify-center">
+                                                    {r.remainingAmount > 0 && <Button size="sm" onClick={() => setCollectingReceivable(r)}>Thu nợ</Button>}
+                                                    <button onClick={() => { setEditingReceivable(r); setIsReceivableModalOpen(true); }} className="text-gray-400 hover:text-primary-400"><Edit /></button>
+                                                    <button onClick={() => setReceivableToDelete(r)} className="text-gray-400 hover:text-red-400"><Trash2 /></button>
+                                                </div>
+                                            </TableCell>
+                                        )}
+                                    </TableRow>
+                                ))}
+                            </TableBody>
+                        </Table>
+                    </CardContent>
+                </Card>
+            )}
+
+            {!isReadOnly && (
+                <>
+                    {/* Liability Modals */}
+                    <Modal isOpen={isLiabilityModalOpen} onClose={() => setIsLiabilityModalOpen(false)} title={editingLiability ? 'Sửa công nợ' : 'Thêm công nợ'}>
+                        <PeriodLiabilityForm liability={editingLiability} onSave={(data) => {
+                            if(editingLiability) { updatePeriodLiability({ ...editingLiability, ...data }); }
+                            else { addPeriodLiability(data); }
+                            setIsLiabilityModalOpen(false);
+                        }} onCancel={() => setIsLiabilityModalOpen(false)} />
+                    </Modal>
+                    <ConfirmationModal isOpen={!!liabilityToDelete} onClose={() => setLiabilityToDelete(null)} onConfirm={() => { if(liabilityToDelete) { deletePeriodLiability(liabilityToDelete.id); setLiabilityToDelete(null); }}} title="Xác nhận xóa" message="Bạn có chắc muốn xóa công nợ này?" />
+                    {payingLiability && (
+                        <PeriodDebtPaymentModal 
+                            liability={payingLiability} 
+                            assets={assets} 
+                            onClose={() => setPayingLiability(null)} 
+                            onSave={addPeriodDebtPayment} 
+                        />
+                    )}
+
+                    {/* Receivable Modals */}
+                    <Modal isOpen={isReceivableModalOpen} onClose={() => setIsReceivableModalOpen(false)} title={editingReceivable ? 'Sửa khoản phải thu' : 'Thêm khoản phải thu'}>
+                        <PeriodReceivableForm receivable={editingReceivable} onSave={(data) => {
+                            if(editingReceivable) { updatePeriodReceivable({ ...editingReceivable, ...data }); }
+                            else { addPeriodReceivable(data); }
+                            setIsReceivableModalOpen(false);
+                        }} onCancel={() => setIsReceivableModalOpen(false)} />
+                    </Modal>
+                    <ConfirmationModal isOpen={!!receivableToDelete} onClose={() => setReceivableToDelete(null)} onConfirm={() => { if(receivableToDelete) { deletePeriodReceivable(receivableToDelete.id); setReceivableToDelete(null); }}} title="Xác nhận xóa" message="Bạn có chắc muốn xóa khoản phải thu này?" />
+                    {collectingReceivable && (
+                        <PeriodReceivablePaymentModal 
+                            receivable={collectingReceivable} 
+                            assets={assets} 
+                            onClose={() => setCollectingReceivable(null)} 
+                            onSave={addPeriodReceivablePayment} 
+                        />
+                    )}
+                </>
+            )}
         </div>
     );
 }

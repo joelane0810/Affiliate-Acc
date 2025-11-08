@@ -1,7 +1,7 @@
 import React, { createContext, useContext, ReactNode, useMemo, useState, useEffect } from 'react';
 import { useLocalStorage } from '../hooks/useLocalStorage';
 import * as T from '../types';
-import { Page, PeriodAssetDetail, FirebaseConfig } from '../types';
+import { Page, PeriodAssetDetail, FirebaseConfig, EnrichedAdAccount, AdAccountTransaction, EnrichedPartner, PeriodFinancials } from '../types';
 import { isDateInPeriod, formatCurrency } from '../lib/utils';
 import { initializeFirebase, db } from '../lib/firebase';
 import { 
@@ -29,8 +29,8 @@ type MasterProject = {
     nicheId?: string;
 };
 
-// FIX: Define a unified transaction type for the transaction history feature.
-type EnrichedTransaction = {
+// Define a unified transaction type for the transaction history feature.
+export type EnrichedTransaction = {
     id: string;
     date: string;
     asset: T.Asset;
@@ -38,25 +38,9 @@ type EnrichedTransaction = {
     description: string;
     inflow: number;
     outflow: number;
-    // FIX: Add optional sender and receiver properties to align with usage in Assets.tsx
     sender?: string;
     receiver?: string;
 };
-
-// FIX: Define types for ad account ledger.
-type EnrichedAdAccount = T.AdAccount & {
-  balance: number;
-};
-
-type AdAccountTransaction = {
-    date: string;
-    adAccountNumber: string;
-    description: string;
-    deposit: number; // USD
-    spent: number; // USD
-    balance: number; // USD
-};
-
 
 interface DataContextType {
   isLoading: boolean;
@@ -83,7 +67,6 @@ interface DataContextType {
   adFundTransfers: T.AdFundTransfer[];
   addAdFundTransfer: (transfer: Omit<T.AdFundTransfer, 'id'>) => Promise<void>;
   updateAdFundTransfer: (transfer: T.AdFundTransfer) => Promise<void>;
-  // FIX: Changed parameter type from T.AdFundTransfer to string to match implementation.
   deleteAdFundTransfer: (id: string) => Promise<void>;
 
   commissions: T.Commission[];
@@ -187,7 +170,7 @@ interface DataContextType {
   firebaseConfig: T.FirebaseConfig | null;
   setFirebaseConfig: React.Dispatch<React.SetStateAction<T.FirebaseConfig | null>>;
 
-  // FIX: Add properties for period-specific debts and receivables
+  // Add full support for period-specific debts/receivables.
   periodLiabilities: T.PeriodLiability[];
   addPeriodLiability: (liability: Omit<T.PeriodLiability, 'id' | 'period'>) => Promise<void>;
   updatePeriodLiability: (liability: T.PeriodLiability) => Promise<void>;
@@ -201,16 +184,32 @@ interface DataContextType {
   deletePeriodReceivable: (id: string) => Promise<void>;
   periodReceivablePayments: T.PeriodReceivablePayment[];
   addPeriodReceivablePayment: (payment: Omit<T.PeriodReceivablePayment, 'id'>) => Promise<void>;
-  // FIX: Add a new property to hold the aggregated transaction history.
   allTransactions: EnrichedTransaction[];
-  // FIX: Add properties for ad account ledger.
   enrichedAdAccounts: EnrichedAdAccount[];
   adAccountTransactions: AdAccountTransaction[];
+
+  savings: T.Saving[];
+  addSaving: (saving: Omit<T.Saving, 'id'>) => Promise<void>;
+  updateSaving: (saving: T.Saving) => Promise<void>;
+  deleteSaving: (id: string) => Promise<void>;
+
+  investments: T.Investment[];
+  addInvestment: (investment: Omit<T.Investment, 'id'>) => Promise<void>;
+  updateInvestment: (investment: T.Investment) => Promise<void>;
+  deleteInvestment: (id: string) => Promise<void>;
+
+  enrichedPartners: EnrichedPartner[];
+  partnerLedgerEntries: T.PartnerLedgerEntry[];
+  allPartnerLedgerEntries: T.PartnerLedgerEntry[];
+  addPartnerLedgerEntry: (entry: Omit<T.PartnerLedgerEntry, 'id'>) => Promise<void>;
+  updatePartnerLedgerEntry: (entry: T.PartnerLedgerEntry) => Promise<void>;
+  deletePartnerLedgerEntry: (id: string) => Promise<void>;
+  partnerAssetBalances: Map<string, { assetId: string, assetName: string, balance: number, currency: 'VND' | 'USD' }[]>;
 }
 
 const DataContext = createContext<DataContextType | undefined>(undefined);
 
-// Fix: Export a 'useData' hook to allow components to consume the context.
+// Export a useData hook for cleaner consumption.
 export const useData = (): DataContextType => {
   const context = useContext(DataContext);
   if (context === undefined) {
@@ -230,8 +229,7 @@ const COLLECTION_NAMES_FOR_SEED = [
     'assetTypes', 'assets', 'liabilities', 'receivables', 'receivablePayments', 
     'exchangeLogs', 'miscellaneousExpenses', 'partners', 'withdrawals', 
     'debtPayments', 'taxPayments', 'capitalInflows', 'categories', 'niches',
-    'adAccounts',
-    // FIX: Add period-specific collections to be wiped during seeding.
+    'adAccounts', 'savings', 'investments', 'partnerLedger',
     'periodLiabilities', 'periodDebtPayments', 'periodReceivables', 'periodReceivablePayments',
 ];
 
@@ -416,7 +414,10 @@ export const DataProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
   const [capitalInflows, setCapitalInflows] = useState<T.CapitalInflow[]>([]);
   const [categories, setCategories] = useState<T.Category[]>([]);
   const [niches, setNiches] = useState<T.Niche[]>([]);
-  // FIX: Add state for period-specific debts and receivables
+  const [savings, setSavings] = useState<T.Saving[]>([]);
+  const [investments, setInvestments] = useState<T.Investment[]>([]);
+  const [partnerLedgerEntries, setPartnerLedgerEntries] = useState<T.PartnerLedgerEntry[]>([]);
+  // Add state for period-specific debts/receivables.
   const [periodLiabilities, setPeriodLiabilities] = useState<T.PeriodLiability[]>([]);
   const [periodDebtPayments, setPeriodDebtPayments] = useState<T.PeriodDebtPayment[]>([]);
   const [periodReceivables, setPeriodReceivables] = useState<T.PeriodReceivable[]>([]);
@@ -465,8 +466,8 @@ export const DataProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
                 const periodsDocSnap = await getDoc(periodsDocRef);
                 if (periodsDocSnap.exists()) {
                     const data = periodsDocSnap.data();
-                    setActivePeriod(data.activePeriod || null);
-                    setClosedPeriods(data.closedPeriods || []);
+                    setActivePeriod(data.activePeriod as string || null);
+                    setClosedPeriods(data.closedPeriods as T.ClosedPeriod[] || []);
                 } else {
                     console.log("No period settings found, using default.");
                     setActivePeriod(null);
@@ -500,7 +501,10 @@ export const DataProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
                 fetchCollection<T.AssetType>('assetTypes', setAssetTypes),
                 fetchCollection<T.Category>('categories', setCategories),
                 fetchCollection<T.Niche>('niches', setNiches),
-                // FIX: Fetch period-specific collections.
+                fetchCollection<T.Saving>('savings', setSavings),
+                fetchCollection<T.Investment>('investments', setInvestments),
+                fetchCollection<T.PartnerLedgerEntry>('partnerLedger', setPartnerLedgerEntries),
+                // Fetch period-specific data.
                 fetchCollection<T.PeriodLiability>('periodLiabilities', setPeriodLiabilities),
                 fetchCollection<T.PeriodDebtPayment>('periodDebtPayments', setPeriodDebtPayments),
                 fetchCollection<T.PeriodReceivable>('periodReceivables', setPeriodReceivables),
@@ -536,7 +540,7 @@ export const DataProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
 
   const addProject = async (project: Omit<T.Project, 'id' | 'period'>) => {
     if (!activePeriod || !firestoreDb) return;
-    if (projects.some(p => p.name.trim().toLowerCase() === project.name.trim().toLowerCase() && p.period === activePeriod)) {
+    if (projects.some((p: T.Project) => p.name.trim().toLowerCase() === project.name.trim().toLowerCase() && p.period === activePeriod)) {
       alert('Tên dự án đã tồn tại trong kỳ này. Vui lòng chọn tên khác.'); return;
     }
     const newProjectData = { ...project, period: activePeriod };
@@ -547,7 +551,7 @@ export const DataProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
   };
   const updateProject = async (updatedProject: T.Project) => {
     if (!firestoreDb) return;
-    if (projects.some(p => p.id !== updatedProject.id && p.name.trim().toLowerCase() === updatedProject.name.trim().toLowerCase() && p.period === updatedProject.period)) {
+    if (projects.some((p: T.Project) => p.id !== updatedProject.id && p.name.trim().toLowerCase() === updatedProject.name.trim().toLowerCase() && p.period === updatedProject.period)) {
       alert('Tên dự án đã tồn tại trong kỳ này. Vui lòng chọn tên khác.'); return;
     }
     const { id, ...projectData } = updatedProject;
@@ -932,9 +936,17 @@ export const DataProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
         try {
             const defaultPartnerData = { name: 'Tôi' };
             await setDoc(doc(firestoreDb, 'partners', 'default-me'), defaultPartnerData);
-            setPartners([{ ...defaultPartnerData, id: 'default-me' }]);
+            
+            // ALSO add the new partner
+            const docRef = await addDoc(collection(firestoreDb, 'partners'), partner);
+
+            // Set state with both
+            setPartners([
+                { ...defaultPartnerData, id: 'default-me' },
+                { ...partner, id: docRef.id }
+            ]);
         } catch (e) {
-            console.error("Error adding default partner: ", e);
+            console.error("Error adding partner: ", e);
         }
     } else {
         // Normal behavior for subsequent partners
@@ -957,7 +969,7 @@ export const DataProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
   const deletePartner = async (id: string) => {
         if (!firestoreDb) return;
         if (id === 'default-me') { alert("Không thể xóa đối tác mặc định 'Tôi'."); return; }
-        const isPartnerInProject = projects.some(p => p.isPartnership && p.partnerShares?.some(s => s.partnerId === id));
+        const isPartnerInProject = projects.some((p: T.Project) => p.isPartnership && p.partnerShares?.some(s => s.partnerId === id));
         if (isPartnerInProject) {
             alert('Không thể xóa đối tác này vì họ đang được liên kết với một hoặc nhiều dự án hợp tác.'); return;
         }
@@ -965,7 +977,7 @@ export const DataProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
         if (isPartnerInWithdrawal) {
             alert('Không thể xóa đối tác này vì họ có giao dịch rút tiền liên quan.'); return;
         }
-        const isPartnerInMiscExpense = miscellaneousExpenses.some(e => e.isPartnership && e.partnerShares?.some(s => s.partnerId === id));
+        const isPartnerInMiscExpense = miscellaneousExpenses.some((e: T.MiscellaneousExpense) => e.isPartnership && e.partnerShares?.some(s => s.partnerId === id));
         if (isPartnerInMiscExpense) {
             alert('Không thể xóa đối tác này vì họ được phân bổ trong một chi phí hợp tác.'); return;
         }
@@ -1042,7 +1054,7 @@ export const DataProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
         const { id, ...data } = updatedInflow;
         try {
             await updateDoc(doc(firestoreDb, 'capitalInflows', id), data);
-            setCapitalInflows(prev => prev.map(i => (i.id === updatedInflow.id ? updatedInflow : i)));
+            setCapitalInflows(prev => prev.map(i => (i.id === id ? updatedInflow : i)));
         } catch (e) { console.error("Error updating capital inflow: ", e); }
     };
   const deleteCapitalInflow = async (id: string) => {
@@ -1052,879 +1064,1418 @@ export const DataProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
             setCapitalInflows(prev => prev.filter(i => i.id !== id));
         } catch (e) { console.error("Error deleting capital inflow: ", e); }
     };
-  
-    const updateTaxSettings = async (settings: T.TaxSettings) => {
-        if (!firestoreDb) return;
-        try {
-            await setDoc(doc(firestoreDb, 'settings', 'tax'), settings);
-            setTaxSettings(settings);
-        } catch (e) { console.error("Error updating tax settings: ", e); }
-    };
-  
+
   const addCategory = async (category: Omit<T.Category, 'id'>) => {
-    if (!firestoreDb) return;
-    if (categories.some(c => c.name.trim().toLowerCase() === category.name.trim().toLowerCase())) {
-      alert('Tên hạng mục đã tồn tại.'); return;
-    }
+    if(!firestoreDb) return;
     try {
-      const docRef = await addDoc(collection(firestoreDb, 'categories'), category);
-      setCategories(prev => [...prev, { ...category, id: docRef.id }]);
-    } catch (e) { console.error("Error adding category: ", e); }
+        const docRef = await addDoc(collection(firestoreDb, 'categories'), category);
+        setCategories(prev => [...prev, { ...category, id: docRef.id}]);
+    } catch(e) { console.error("Error adding category:", e); }
   };
-  const updateCategory = async (updatedCategory: T.Category) => {
-    if (!firestoreDb) return;
-    if (categories.some(c => c.id !== updatedCategory.id && c.name.trim().toLowerCase() === updatedCategory.name.trim().toLowerCase())) {
-      alert('Tên hạng mục đã tồn tại.'); return;
-    }
-    const { id, ...categoryData } = updatedCategory;
+
+  const updateCategory = async (category: T.Category) => {
+    if(!firestoreDb) return;
+    const {id, ...data} = category;
     try {
-      await setDoc(doc(firestoreDb, 'categories', id), categoryData);
-      setCategories(prev => prev.map(c => c.id === id ? updatedCategory : c));
-    } catch (e) { console.error("Error updating category: ", e); }
+        await updateDoc(doc(firestoreDb, 'categories', id), data);
+        setCategories(prev => prev.map(c => c.id === id ? category : c));
+    } catch(e) { console.error("Error updating category:", e); }
   };
-  const deleteCategory = async (id: string): Promise<boolean> => {
-    if (!firestoreDb) return false;
-    if (niches.some(n => n.categoryId === id) || projects.some(p => p.categoryId === id)) {
-      alert('Không thể xóa hạng mục đang được sử dụng.'); return false;
+  
+  const deleteCategory = async (id: string) => {
+    if(!firestoreDb) return false;
+    if(niches.some(n => n.categoryId === id)) {
+        alert("Không thể xóa hạng mục này vì vẫn còn ngách trực thuộc.");
+        return false;
+    }
+    if(projects.some(p => p.categoryId === id)) {
+        alert("Không thể xóa hạng mục này vì nó đang được sử dụng trong các dự án.");
+        return false;
     }
     try {
-      await deleteDoc(doc(firestoreDb, 'categories', id));
-      setCategories(prev => prev.filter(c => c.id !== id));
-      return true;
-    } catch (e) {
-      console.error("Error deleting category: ", e);
-      return false;
+        await deleteDoc(doc(firestoreDb, 'categories', id));
+        setCategories(prev => prev.filter(c => c.id !== id));
+        return true;
+    } catch(e) { 
+        console.error("Error deleting category:", e);
+        return false;
     }
   };
 
   const addNiche = async (niche: Omit<T.Niche, 'id'>) => {
-    if (!firestoreDb) return;
-    if (niches.some(n => n.name.trim().toLowerCase() === niche.name.trim().toLowerCase() && n.categoryId === niche.categoryId)) {
-      alert('Tên ngách đã tồn tại trong hạng mục này.'); return;
-    }
+    if(!firestoreDb) return;
     try {
-      const docRef = await addDoc(collection(firestoreDb, 'niches'), niche);
-      setNiches(prev => [...prev, { ...niche, id: docRef.id }]);
-    } catch (e) { console.error("Error adding niche: ", e); }
-  };
-  const updateNiche = async (updatedNiche: T.Niche) => {
-    if (!firestoreDb) return;
-    if (niches.some(n => n.id !== updatedNiche.id && n.name.trim().toLowerCase() === updatedNiche.name.trim().toLowerCase() && n.categoryId === updatedNiche.categoryId)) {
-      alert('Tên ngách đã tồn tại trong hạng mục này.'); return;
-    }
-    const { id, ...nicheData } = updatedNiche;
-    try {
-      await setDoc(doc(firestoreDb, 'niches', id), nicheData);
-      setNiches(prev => prev.map(n => n.id === id ? updatedNiche : n));
-    } catch (e) { console.error("Error updating niche: ", e); }
-  };
-  const deleteNiche = async (id: string): Promise<boolean> => {
-    if (!firestoreDb) return false;
-    if (projects.some(p => p.nicheId === id)) {
-      alert('Không thể xóa ngách đang được sử dụng.'); return false;
-    }
-    try {
-      await deleteDoc(doc(firestoreDb, 'niches', id));
-      setNiches(prev => prev.filter(n => n.id !== id));
-      return true;
-    } catch (e) {
-      console.error("Error deleting niche: ", e);
-      return false;
-    }
+        const docRef = await addDoc(collection(firestoreDb, 'niches'), niche);
+        setNiches(prev => [...prev, { ...niche, id: docRef.id }]);
+    } catch(e) { console.error("Error adding niche:", e); }
   };
 
-    // FIX: Add CRUD functions for period-specific debts and receivables
-    const addPeriodLiability = async (liability: Omit<T.PeriodLiability, 'id' | 'period'>) => {
-        if (!activePeriod || !firestoreDb) return;
-        const newLiabilityData = { ...liability, period: activePeriod };
-        try {
-            const docRef = await addDoc(collection(firestoreDb, 'periodLiabilities'), newLiabilityData);
-            setPeriodLiabilities(prev => [...prev, { ...newLiabilityData, id: docRef.id }]);
-        } catch (e) { console.error("Error adding period liability: ", e); }
-    };
-    const updatePeriodLiability = async (updatedLiability: T.PeriodLiability) => {
-        if (!firestoreDb) return;
-        const { id, ...data } = updatedLiability;
-        try {
-            await updateDoc(doc(firestoreDb, 'periodLiabilities', id), data);
-            setPeriodLiabilities(prev => prev.map(l => l.id === id ? updatedLiability : l));
-        } catch (e) { console.error("Error updating period liability: ", e); }
-    };
-    const deletePeriodLiability = async (id: string) => {
-        if (!firestoreDb) return;
-        try {
-            const batch = writeBatch(firestoreDb);
-            batch.delete(doc(firestoreDb, "periodLiabilities", id));
-            const paymentsQuery = query(collection(firestoreDb, "periodDebtPayments"), where("periodLiabilityId", "==", id));
-            const paymentsSnapshot = await getDocs(paymentsQuery);
-            paymentsSnapshot.forEach(doc => batch.delete(doc.ref));
-            await batch.commit();
-            setPeriodLiabilities(prev => prev.filter(l => l.id !== id));
-            setPeriodDebtPayments(prev => prev.filter(p => p.periodLiabilityId !== id));
-        } catch (e) { console.error("Error deleting period liability and payments: ", e); }
-    };
-    const addPeriodDebtPayment = async (payment: Omit<T.PeriodDebtPayment, 'id'>) => {
-        if (!firestoreDb) return;
-        try {
-            const docRef = await addDoc(collection(firestoreDb, 'periodDebtPayments'), payment);
-            setPeriodDebtPayments(prev => [...prev, { ...payment, id: docRef.id }]);
-        } catch (e) { console.error("Error adding period debt payment: ", e); }
-    };
-
-    const addPeriodReceivable = async (receivable: Omit<T.PeriodReceivable, 'id' | 'period'>) => {
-        if (!activePeriod || !firestoreDb) return;
-        const newReceivableData = { ...receivable, period: activePeriod };
-        try {
-            const docRef = await addDoc(collection(firestoreDb, 'periodReceivables'), newReceivableData);
-            setPeriodReceivables(prev => [...prev, { ...newReceivableData, id: docRef.id }]);
-        } catch (e) { console.error("Error adding period receivable: ", e); }
-    };
-    const updatePeriodReceivable = async (updatedReceivable: T.PeriodReceivable) => {
-        if (!firestoreDb) return;
-        const { id, ...data } = updatedReceivable;
-        try {
-            await updateDoc(doc(firestoreDb, 'periodReceivables', id), data);
-            setPeriodReceivables(prev => prev.map(r => r.id === id ? updatedReceivable : r));
-        } catch (e) { console.error("Error updating period receivable: ", e); }
-    };
-    const deletePeriodReceivable = async (id: string) => {
-        if (!firestoreDb) return;
-        try {
-            const batch = writeBatch(firestoreDb);
-            batch.delete(doc(firestoreDb, "periodReceivables", id));
-            const paymentsQuery = query(collection(firestoreDb, "periodReceivablePayments"), where("periodReceivableId", "==", id));
-            const paymentsSnapshot = await getDocs(paymentsQuery);
-            paymentsSnapshot.forEach(doc => batch.delete(doc.ref));
-            await batch.commit();
-            setPeriodReceivables(prev => prev.filter(r => r.id !== id));
-            setPeriodReceivablePayments(prev => prev.filter(p => p.periodReceivableId !== id));
-        } catch (e) { console.error("Error deleting period receivable and payments: ", e); }
-    };
-    const addPeriodReceivablePayment = async (payment: Omit<T.PeriodReceivablePayment, 'id'>) => {
-        if (!firestoreDb) return;
-        try {
-            const docRef = await addDoc(collection(firestoreDb, 'periodReceivablePayments'), payment);
-            setPeriodReceivablePayments(prev => [...prev, { ...payment, id: docRef.id }]);
-        } catch (e) { console.error("Error adding period receivable payment: ", e); }
-    };
-
-
-    const updatePeriodsInFirestore = async (newActivePeriod: string | null, newClosedPeriods: T.ClosedPeriod[]) => {
-        if (!firestoreDb) return;
-        try {
-            const periodsDocRef = doc(firestoreDb, 'settings', 'periods');
-            await setDoc(periodsDocRef, { activePeriod: newActivePeriod, closedPeriods: newClosedPeriods });
-        } catch (e) { console.error("Error updating period settings: ", e); }
-    };
+  const updateNiche = async (niche: T.Niche) => {
+    if(!firestoreDb) return;
+    const { id, ...data } = niche;
+    try {
+        await updateDoc(doc(firestoreDb, 'niches', id), data);
+        setNiches(prev => prev.map(n => n.id === id ? niche : n));
+    } catch(e) { console.error("Error updating niche:", e); }
+  };
   
-    const openPeriod = async (period: string) => {
-        const newActivePeriod = period;
-        await updatePeriodsInFirestore(newActivePeriod, closedPeriods);
-        setActivePeriod(newActivePeriod);
-        setViewingPeriodInternal(null);
-    };
+  const deleteNiche = async (id: string) => {
+    if(!firestoreDb) return false;
+    if(projects.some(p => p.nicheId === id)) {
+        alert("Không thể xóa ngách này vì nó đang được sử dụng trong các dự án.");
+        return false;
+    }
+    try {
+        await deleteDoc(doc(firestoreDb, 'niches', id));
+        setNiches(prev => prev.filter(n => n.id !== id));
+        return true;
+    } catch(e) { 
+        console.error("Error deleting niche:", e);
+        return false;
+    }
+  };
 
-    const closePeriod = async (period: string) => {
-        const newClosedPeriods = [...closedPeriods, { period, closedAt: new Date().toISOString() }];
-        const newActivePeriod = null;
-        await updatePeriodsInFirestore(newActivePeriod, newClosedPeriods);
-        setClosedPeriods(newClosedPeriods);
-        setActivePeriod(newActivePeriod);
-        setViewingPeriodInternal(null);
-    };
 
-  const setViewingPeriod = (period: string) => { setViewingPeriodInternal(period); };
-  const clearViewingPeriod = () => { setViewingPeriodInternal(null); };
+  const addSaving = async (saving: Omit<T.Saving, 'id'>) => {
+    if(!firestoreDb) return;
+    try {
+      const docRef = await addDoc(collection(firestoreDb, 'savings'), saving);
+      setSavings(prev => [...prev, { ...saving, id: docRef.id }]);
+    } catch(e) { console.error("Error adding saving:", e); }
+  };
+  const updateSaving = async (saving: T.Saving) => {
+    if(!firestoreDb) return;
+    const { id, ...data } = saving;
+    try {
+      await updateDoc(doc(firestoreDb, 'savings', id), data);
+      setSavings(prev => prev.map(s => s.id === id ? saving : s));
+    } catch(e) { console.error("Error updating saving:", e); }
+  };
+  const deleteSaving = async (id: string) => {
+    if(!firestoreDb) return;
+    try {
+      await deleteDoc(doc(firestoreDb, 'savings', id));
+      setSavings(prev => prev.filter(s => s.id !== id));
+    } catch(e) { console.error("Error deleting saving:", e); }
+  };
   
+  const addInvestment = async (investment: Omit<T.Investment, 'id'>) => {
+    if(!firestoreDb) return;
+    try {
+      const docRef = await addDoc(collection(firestoreDb, 'investments'), investment);
+      setInvestments(prev => [...prev, { ...investment, id: docRef.id }]);
+    } catch(e) { console.error("Error adding investment:", e); }
+  };
+  const updateInvestment = async (investment: T.Investment) => {
+    if(!firestoreDb) return;
+    const { id, ...data } = investment;
+    try {
+      await updateDoc(doc(firestoreDb, 'investments', id), data);
+      setInvestments(prev => prev.map(i => i.id === id ? investment : i));
+    } catch(e) { console.error("Error updating investment:", e); }
+  };
+  const deleteInvestment = async (id: string) => {
+    if(!firestoreDb) return;
+    try {
+      await deleteDoc(doc(firestoreDb, 'investments', id));
+      setInvestments(prev => prev.filter(i => i.id !== id));
+    } catch(e) { console.error("Error deleting investment:", e); }
+  };
+  
+  const addPartnerLedgerEntry = async (entry: Omit<T.PartnerLedgerEntry, 'id'>) => {
+    if(!firestoreDb) return;
+    try {
+      const docRef = await addDoc(collection(firestoreDb, 'partnerLedger'), entry);
+      setPartnerLedgerEntries(prev => [...prev, { ...entry, id: docRef.id }]);
+    } catch(e) { console.error("Error adding partner ledger entry:", e); }
+  };
+  const updatePartnerLedgerEntry = async (entry: T.PartnerLedgerEntry) => {
+    if(!firestoreDb) return;
+    const { id, ...data } = entry;
+    try {
+      await updateDoc(doc(firestoreDb, 'partnerLedger', id), data);
+      setPartnerLedgerEntries(prev => prev.map(e => e.id === id ? entry : e));
+    } catch(e) { console.error("Error updating partner ledger entry:", e); }
+  };
+  const deletePartnerLedgerEntry = async (id: string) => {
+    if(!firestoreDb) return;
+    try {
+      await deleteDoc(doc(firestoreDb, 'partnerLedger', id));
+      setPartnerLedgerEntries(prev => prev.filter(e => e.id !== id));
+    } catch(e) { console.error("Error deleting partner ledger entry:", e); }
+  };
+
+  const addPeriodLiability = async (liability: Omit<T.PeriodLiability, 'id' | 'period'>) => {
+    if (!activePeriod || !firestoreDb) return;
+    const newLiability = { ...liability, period: activePeriod };
+    try {
+        const docRef = await addDoc(collection(firestoreDb, 'periodLiabilities'), newLiability);
+        setPeriodLiabilities(prev => [...prev, { ...newLiability, id: docRef.id }]);
+    } catch (e) { console.error("Error adding period liability: ", e); }
+  };
+  const updatePeriodLiability = async (liability: T.PeriodLiability) => {
+    if (!firestoreDb) return;
+    const {id, ...data} = liability;
+    try {
+        await updateDoc(doc(firestoreDb, 'periodLiabilities', id), data);
+        setPeriodLiabilities(prev => prev.map(l => l.id === id ? liability : l));
+    } catch (e) { console.error("Error updating period liability: ", e); }
+  };
+  const deletePeriodLiability = async (id: string) => {
+    if (!firestoreDb) return;
+    try {
+        await deleteDoc(doc(firestoreDb, 'periodLiabilities', id));
+        // Also delete related payments
+        const paymentsToDelete = periodDebtPayments.filter(p => p.periodLiabilityId === id);
+        const batch = writeBatch(firestoreDb);
+        paymentsToDelete.forEach(p => batch.delete(doc(firestoreDb, 'periodDebtPayments', p.id)));
+        await batch.commit();
+        setPeriodLiabilities(prev => prev.filter(l => l.id !== id));
+        setPeriodDebtPayments(prev => prev.filter(p => p.periodLiabilityId !== id));
+    } catch (e) { console.error("Error deleting period liability: ", e); }
+  };
+  const addPeriodDebtPayment = async (payment: Omit<T.PeriodDebtPayment, 'id'>) => {
+    if (!firestoreDb) return;
+    try {
+        const docRef = await addDoc(collection(firestoreDb, 'periodDebtPayments'), payment);
+        setPeriodDebtPayments(prev => [...prev, { ...payment, id: docRef.id }]);
+    } catch (e) { console.error("Error adding period debt payment: ", e); }
+  };
+  
+  const addPeriodReceivable = async (receivable: Omit<T.PeriodReceivable, 'id' | 'period'>) => {
+    if (!activePeriod || !firestoreDb) return;
+    const newReceivable = { ...receivable, period: activePeriod };
+    try {
+        const docRef = await addDoc(collection(firestoreDb, 'periodReceivables'), newReceivable);
+        setPeriodReceivables(prev => [...prev, { ...newReceivable, id: docRef.id }]);
+    } catch (e) { console.error("Error adding period receivable: ", e); }
+  };
+  const updatePeriodReceivable = async (receivable: T.PeriodReceivable) => {
+    if (!firestoreDb) return;
+    const {id, ...data} = receivable;
+    try {
+        await updateDoc(doc(firestoreDb, 'periodReceivables', id), data);
+        setPeriodReceivables(prev => prev.map(r => r.id === id ? receivable : r));
+    } catch (e) { console.error("Error updating period receivable: ", e); }
+  };
+  const deletePeriodReceivable = async (id: string) => {
+    if (!firestoreDb) return;
+    try {
+        await deleteDoc(doc(firestoreDb, 'periodReceivables', id));
+        // Also delete related payments
+        const paymentsToDelete = periodReceivablePayments.filter(p => p.periodReceivableId === id);
+        const batch = writeBatch(firestoreDb);
+        paymentsToDelete.forEach(p => batch.delete(doc(firestoreDb, 'periodReceivablePayments', p.id)));
+        await batch.commit();
+        setPeriodReceivables(prev => prev.filter(r => r.id !== id));
+        setPeriodReceivablePayments(prev => prev.filter(p => p.periodReceivableId !== id));
+    } catch (e) { console.error("Error deleting period receivable: ", e); }
+  };
+  const addPeriodReceivablePayment = async (payment: Omit<T.PeriodReceivablePayment, 'id'>) => {
+    if (!firestoreDb) return;
+    try {
+        const docRef = await addDoc(collection(firestoreDb, 'periodReceivablePayments'), payment);
+        setPeriodReceivablePayments(prev => [...prev, { ...payment, id: docRef.id }]);
+    } catch (e) { console.error("Error adding period receivable payment: ", e); }
+  };
+
+
   const currentPeriod = viewingPeriod || activePeriod;
-  
   const isReadOnly = !!viewingPeriod;
+
+  const enrichedAssets = useMemo(() => {
+    // Add explicit types to Map constructors to prevent type inference failures.
+    const assetMap = new Map<string, T.Asset>(assets.map(a => [a.id, a]));
+    const projectMap = new Map<string, T.Project>(projects.map(p => [p.id, p]));
+    // Add explicit types to Map constructors to prevent type inference failures.
+    const partnerMap = new Map<string, string>(partners.map(p => [p.id, p.name]));
+    // Add explicit types to Map constructors to prevent type inference failures.
+    const liabilityMap = new Map<string, T.Liability>(liabilities.map(l => [l.id, l]));
+    // Add explicit types to Map constructors to prevent type inference failures.
+    const receivableMap = new Map<string, T.Receivable>(receivables.map(r => [r.id, r]));
+
+    const transactions: Record<string, {
+        inflows: { date: string, amount: number, description: string }[];
+        outflows: { date: string, amount: number, description: string }[];
+    }> = {};
+
+    const ownerBalances: Record<string, Record<string, { received: number, withdrawn: number }>> = {};
+
+    assets.forEach(asset => {
+        transactions[asset.id] = { inflows: [], outflows: [] };
+        ownerBalances[asset.id] = {};
+        if (asset.balance > 0) {
+            transactions[asset.id].inflows.push({
+                date: 'N/A',
+                amount: asset.balance,
+                description: 'Số dư ban đầu',
+            });
+            if (!ownerBalances[asset.id]['default-me']) {
+                ownerBalances[asset.id]['default-me'] = { received: 0, withdrawn: 0 };
+            }
+            ownerBalances[asset.id]['default-me'].received += asset.balance;
+        }
+    });
+
+    const getAssetName = (assetId: string) => assetMap.get(assetId)?.name || 'Không rõ';
+
+    capitalInflows.forEach(inflow => {
+      if (transactions[inflow.assetId]) {
+        transactions[inflow.assetId].inflows.push({ date: inflow.date, amount: inflow.amount, description: `Vốn góp: ${inflow.description}`});
+        const partnerId = inflow.contributedByPartnerId || 'default-me';
+        if (!ownerBalances[inflow.assetId][partnerId]) {
+            ownerBalances[inflow.assetId][partnerId] = { received: 0, withdrawn: 0 };
+        }
+        ownerBalances[inflow.assetId][partnerId].received += inflow.amount;
+      }
+    });
+
+    commissions.forEach(comm => {
+        const project = projectMap.get(comm.projectId);
+        if (transactions[comm.assetId] && project) {
+            const amount = assetMap.get(comm.assetId)?.currency === 'USD' ? comm.usdAmount : comm.vndAmount;
+            transactions[comm.assetId].inflows.push({ date: comm.date, amount, description: `Hoa hồng dự án ${project.name}` });
+
+            const assetOwners = ownerBalances[comm.assetId];
+            if (!assetOwners) return;
+
+            if (project.isPartnership && project.partnerShares) {
+                project.partnerShares.forEach(share => {
+                    if (!assetOwners[share.partnerId]) {
+                        assetOwners[share.partnerId] = { received: 0, withdrawn: 0 };
+                    }
+                    assetOwners[share.partnerId].received += amount * (share.sharePercentage / 100);
+                });
+            } else {
+                const me = assetOwners['default-me'] || (assetOwners['default-me'] = { received: 0, withdrawn: 0 });
+                me.received += amount;
+            }
+        }
+    });
+    
+    exchangeLogs.forEach(log => {
+      if (transactions[log.sellingAssetId]) {
+        transactions[log.sellingAssetId].outflows.push({
+          date: log.date,
+          amount: log.usdAmount,
+          description: `Bán USD nhận vào ${getAssetName(log.receivingAssetId)}`
+        });
+      }
+      if (transactions[log.receivingAssetId]) {
+        transactions[log.receivingAssetId].inflows.push({
+          date: log.date,
+          amount: log.vndAmount,
+          description: `Nhận tiền từ bán ${formatCurrency(log.usdAmount, 'USD')} tại ${getAssetName(log.sellingAssetId)}`
+        });
+      }
+
+      const sellingAssetOwners = ownerBalances[log.sellingAssetId];
+      const receivingAssetOwners = ownerBalances[log.receivingAssetId];
+
+      if (sellingAssetOwners && receivingAssetOwners) {
+        const totalBalanceInSellingAsset = Object.values(sellingAssetOwners).reduce((sum, owner) => sum + (owner.received - owner.withdrawn), 0);
+        
+        if (totalBalanceInSellingAsset > 0.01) { 
+            Object.keys(sellingAssetOwners).forEach(partnerId => {
+                const partner = sellingAssetOwners[partnerId];
+                const partnerBalance = partner.received - partner.withdrawn;
+                const share = partnerBalance > 0 ? partnerBalance / totalBalanceInSellingAsset : 0;
+
+                if (share > 0) {
+                    partner.withdrawn += log.usdAmount * share;
+                    if (!receivingAssetOwners[partnerId]) {
+                        receivingAssetOwners[partnerId] = { received: 0, withdrawn: 0 };
+                    }
+                    receivingAssetOwners[partnerId].received += log.vndAmount * share;
+                }
+            });
+        } else {
+            const meSelling = sellingAssetOwners['default-me'] || (sellingAssetOwners['default-me'] = { received: 0, withdrawn: 0 });
+            meSelling.withdrawn += log.usdAmount;
+            
+            const meReceiving = receivingAssetOwners['default-me'] || (receivingAssetOwners['default-me'] = { received: 0, withdrawn: 0 });
+            meReceiving.received += log.vndAmount;
+        }
+      }
+    });
+
+    miscellaneousExpenses.forEach(exp => {
+      if (transactions[exp.assetId]) {
+          const project = exp.projectId ? projectMap.get(exp.projectId) : null;
+          transactions[exp.assetId].outflows.push({ date: exp.date, amount: exp.amount, description: `Chi phí: ${exp.description}` });
+          
+          const assetOwners = ownerBalances[exp.assetId];
+          if (!assetOwners) return;
+
+          let shares: T.PartnerShare[] | undefined;
+          let isShared = false;
+
+          if(project && project.isPartnership && project.partnerShares) {
+              shares = project.partnerShares;
+              isShared = true;
+          } else if (!project && exp.isPartnership && exp.partnerShares) {
+              shares = exp.partnerShares;
+              isShared = true;
+          }
+          if (isShared && shares) {
+              shares.forEach((share: T.PartnerShare) => {
+                  if (!assetOwners[share.partnerId]) {
+                      assetOwners[share.partnerId] = { received: 0, withdrawn: 0 };
+                  }
+                  assetOwners[share.partnerId].withdrawn += exp.amount * (share.sharePercentage / 100);
+              });
+          } else {
+              const me = assetOwners['default-me'] || (assetOwners['default-me'] = { received: 0, withdrawn: 0 });
+              me.withdrawn += exp.amount;
+          }
+      }
+    });
+
+    adDeposits.forEach(deposit => {
+      if (transactions[deposit.assetId]) {
+        const project = projectMap.get(deposit.projectId || '');
+        const description = `Nạp tiền Ads: TK ${deposit.adAccountNumber}` + (project ? ` cho dự án ${project.name}` : '');
+        transactions[deposit.assetId].outflows.push({ date: deposit.date, amount: deposit.vndAmount, description });
+        
+        const assetOwners = ownerBalances[deposit.assetId];
+        if (!assetOwners) return;
+
+        let shares: T.PartnerShare[] | undefined;
+        if(project && project.isPartnership && project.partnerShares) {
+            shares = project.partnerShares;
+        }
+
+        if (shares) {
+            shares.forEach(share => {
+                if (!assetOwners[share.partnerId]) {
+                    assetOwners[share.partnerId] = { received: 0, withdrawn: 0 };
+                }
+                assetOwners[share.partnerId].withdrawn += deposit.vndAmount * (share.sharePercentage / 100);
+            });
+        } else {
+            const me = assetOwners['default-me'] || (assetOwners['default-me'] = { received: 0, withdrawn: 0 });
+            me.withdrawn += deposit.vndAmount;
+        }
+      }
+    });
+
+    withdrawals.forEach(withdrawal => {
+        if (transactions[withdrawal.assetId]) {
+            const partnerName = partnerMap.get(withdrawal.withdrawnBy) || 'Không rõ';
+            transactions[withdrawal.assetId].outflows.push({ date: withdrawal.date, amount: withdrawal.amount, description: `Đối tác ${partnerName} rút tiền: ${withdrawal.description}` });
+            
+            const partnerId = withdrawal.withdrawnBy;
+            const assetOwners = ownerBalances[withdrawal.assetId];
+            if (assetOwners) {
+                if (!assetOwners[partnerId]) {
+                    assetOwners[partnerId] = { received: 0, withdrawn: 0 };
+                }
+                assetOwners[partnerId].withdrawn += withdrawal.amount;
+            }
+        }
+    });
+
+    const allDebtPayments = [...debtPayments, ...periodDebtPayments];
+    allDebtPayments.forEach(p => {
+        const liability = liabilities.find(l => l.id === ('liabilityId' in p ? p.liabilityId : null)) || periodLiabilities.find(l => l.id === ('periodLiabilityId' in p ? p.periodLiabilityId : null));
+        if (transactions[p.assetId]) {
+            transactions[p.assetId].outflows.push({ date: p.date, amount: p.amount, description: `Trả nợ: ${liability?.description || 'Không rõ'}` });
+            const me = ownerBalances[p.assetId]['default-me'] || (ownerBalances[p.assetId]['default-me'] = { received: 0, withdrawn: 0 });
+            me.withdrawn += p.amount;
+        }
+    });
+
+    const allReceivablePayments = [...receivablePayments, ...periodReceivablePayments];
+    allReceivablePayments.forEach(p => {
+        const receivable = receivables.find(r => r.id === ('receivableId' in p ? p.receivableId : null)) || periodReceivables.find(r => r.id === ('periodReceivableId' in p ? p.periodReceivableId : null));
+        if (transactions[p.assetId]) {
+            transactions[p.assetId].inflows.push({ date: p.date, amount: p.amount, description: `Thu nợ: ${receivable?.description || 'Không rõ'}` });
+            const me = ownerBalances[p.assetId]['default-me'] || (ownerBalances[p.assetId]['default-me'] = { received: 0, withdrawn: 0 });
+            me.received += p.amount;
+        }
+    });
+
+    taxPayments.forEach(p => {
+        if (transactions[p.assetId]) {
+            transactions[p.assetId].outflows.push({ date: p.date, amount: p.amount, description: `Thanh toán thuế kỳ ${p.period}` });
+            const me = ownerBalances[p.assetId]['default-me'] || (ownerBalances[p.assetId]['default-me'] = { received: 0, withdrawn: 0 });
+            me.withdrawn += p.amount;
+        }
+    });
+
+    investments.forEach(i => {
+        if(transactions[i.assetId]) {
+            transactions[i.assetId].outflows.push({date: i.date, amount: i.investmentAmount, description: `Đầu tư: ${i.description}`});
+            const me = ownerBalances[i.assetId]['default-me'] || (ownerBalances[i.assetId]['default-me'] = { received: 0, withdrawn: 0 });
+            me.withdrawn += i.investmentAmount;
+        }
+        if(i.status === 'liquidated' && i.liquidationAssetId && transactions[i.liquidationAssetId]) {
+            transactions[i.liquidationAssetId].inflows.push({date: i.liquidationDate!, amount: i.liquidationAmount!, description: `Thanh lý đầu tư: ${i.description}`});
+            const me = ownerBalances[i.liquidationAssetId]['default-me'] || (ownerBalances[i.liquidationAssetId]['default-me'] = { received: 0, withdrawn: 0 });
+            me.received += i.liquidationAmount!;
+        }
+    });
+
+    savings.forEach(s => {
+        if(transactions[s.assetId]) {
+            transactions[s.assetId].outflows.push({date: s.startDate, amount: s.principalAmount, description: `Gửi tiết kiệm: ${s.description}`});
+             const me = ownerBalances[s.assetId]['default-me'] || (ownerBalances[s.assetId]['default-me'] = { received: 0, withdrawn: 0 });
+            me.withdrawn += s.principalAmount;
+        }
+    });
+
+
+    return assets.map(asset => {
+        const assetTransactions = transactions[asset.id];
+        const totalReceived = assetTransactions.inflows.reduce((sum, t) => sum + t.amount, 0);
+        const totalWithdrawn = assetTransactions.outflows.reduce((sum, t) => sum + t.amount, 0);
+        const balance = totalReceived - totalWithdrawn;
+        
+        const assetOwners = ownerBalances[asset.id];
+        const owners = Object.keys(assetOwners)
+            .map(partnerId => {
+                const partner = assetOwners[partnerId];
+                const partnerName = partnerMap.get(partnerId);
+                if (!partnerName) return null;
+                return {
+                    id: partnerId,
+                    name: partnerName,
+                    received: partner.received,
+                    withdrawn: partner.withdrawn,
+                };
+            })
+            .filter((owner): owner is { id: string; name: string; received: number; withdrawn: number; } => owner !== null && (owner.received > 0.01 || owner.withdrawn > 0.01));
+
+        return {
+            ...asset,
+            balance,
+            totalReceived,
+            totalWithdrawn,
+            owners,
+            isExpandable: owners.length > 1 || (owners.length === 1 && owners[0].id !== 'default-me'),
+        };
+    });
+  }, [
+    assets, projects, partners, capitalInflows, commissions, exchangeLogs, miscellaneousExpenses, 
+    adDeposits, debtPayments, receivablePayments, withdrawals, taxPayments, investments, savings,
+    liabilities, receivables, periodLiabilities, periodReceivables, periodDebtPayments, periodReceivablePayments
+  ]);
   
-  const adAccountMap = useMemo(() => new Map(adAccounts.map(acc => [acc.accountNumber, acc])), [adAccounts]);
+  const allTransactions = useMemo<EnrichedTransaction[]>(() => {
+    if (assets.length === 0) return [];
+
+    const assetMap = new Map<string, T.Asset>(assets.map(a => [a.id, a]));
+    const partnerMap = new Map<string, string>(partners.map(p => [p.id, p.name]));
+    const projectMap = new Map<string, string>(projects.map(p => [p.id, p.name]));
+    const liabilityMap = new Map<string, string>(liabilities.map(l => [l.id, l.description]));
+    const receivableMap = new Map<string, string>(receivables.map(r => [r.id, r.description]));
+    const periodLiabilityMap = new Map<string, string>(periodLiabilities.map(l => [l.id, l.description]));
+    const periodReceivableMap = new Map<string, string>(periodReceivables.map(r => [r.id, r.description]));
+    
+    const transactions: EnrichedTransaction[] = [];
+    const push = (t: Omit<EnrichedTransaction, 'id'>, id: string) => {
+        transactions.push({ ...t, id });
+    };
+
+    capitalInflows.forEach(i => {
+        const asset = assetMap.get(i.assetId); if (!asset) return;
+        push({ date: i.date, asset, type: 'Vốn góp', description: i.description, inflow: i.amount, outflow: 0, sender: i.contributedByPartnerId ? partnerMap.get(i.contributedByPartnerId) : i.externalInvestorName || 'Nguồn bên ngoài', receiver: asset.name }, `capital-${i.id}`);
+    });
+
+    commissions.forEach(c => {
+        const asset = assetMap.get(c.assetId); if (!asset) return;
+        const amount = asset.currency === 'USD' ? c.usdAmount : c.vndAmount;
+        push({ date: c.date, asset, type: 'Hoa hồng', description: `Dự án ${projectMap.get(c.projectId) || ''}`, inflow: amount, outflow: 0, sender: 'Platform', receiver: asset.name }, `commission-${c.id}`);
+    });
+
+    exchangeLogs.forEach(log => {
+        const sellingAsset = assetMap.get(log.sellingAssetId);
+        const receivingAsset = assetMap.get(log.receivingAssetId);
+        if(sellingAsset) push({ date: log.date, asset: sellingAsset, type: 'Bán ngoại tệ', description: `Bán ${formatCurrency(log.usdAmount, 'USD')}`, inflow: 0, outflow: log.usdAmount, sender: sellingAsset.name, receiver: receivingAsset?.name }, `ex-out-${log.id}`);
+        if(receivingAsset) push({ date: log.date, asset: receivingAsset, type: 'Bán ngoại tệ', description: `Nhận từ bán ${formatCurrency(log.usdAmount, 'USD')}`, inflow: log.vndAmount, outflow: 0, sender: sellingAsset?.name, receiver: receivingAsset.name }, `ex-in-${log.id}`);
+    });
+
+    adDeposits.forEach(d => {
+        const asset = assetMap.get(d.assetId); if (!asset) return;
+        push({ date: d.date, asset, type: 'Chi phí Ads', description: `Nạp tiền TK ${d.adAccountNumber}`, inflow: 0, outflow: d.vndAmount, sender: asset.name, receiver: d.adAccountNumber }, `ad_deposit-${d.id}`);
+    });
+
+    miscellaneousExpenses.forEach(e => {
+        const asset = assetMap.get(e.assetId); if (!asset) return;
+        push({ date: e.date, asset, type: 'Chi phí', description: e.description, inflow: 0, outflow: e.amount, sender: asset.name, receiver: e.projectId ? projectMap.get(e.projectId) : 'Chi phí chung' }, `misc_exp-${e.id}`);
+    });
+
+    withdrawals.forEach(w => {
+        const asset = assetMap.get(w.assetId); if (!asset) return;
+        push({ date: w.date, asset, type: 'Rút tiền', description: w.description, inflow: 0, outflow: w.amount, sender: asset.name, receiver: partnerMap.get(w.withdrawnBy) }, `withdrawal-${w.id}`);
+    });
+
+    [...debtPayments, ...periodDebtPayments].forEach(p => {
+        const asset = assetMap.get(p.assetId); if (!asset) return;
+        const desc = 'liabilityId' in p ? `Trả nợ: ${liabilityMap.get(p.liabilityId)}` : `Trả nợ: ${periodLiabilityMap.get(p.periodLiabilityId)}`;
+        push({ date: p.date, asset, type: 'Trả nợ', description: desc, inflow: 0, outflow: p.amount, sender: asset.name }, `debt_payment-${p.id}`);
+    });
+
+    [...receivablePayments, ...periodReceivablePayments].forEach(p => {
+        const asset = assetMap.get(p.assetId); if (!asset) return;
+        const desc = 'receivableId' in p ? `Thu nợ: ${receivableMap.get(p.receivableId)}` : `Thu nợ: ${periodReceivableMap.get(p.periodReceivableId)}`;
+        push({ date: p.date, asset, type: 'Thu nợ', description: desc, inflow: p.amount, outflow: 0, receiver: asset.name }, `rec_payment-${p.id}`);
+    });
+
+    taxPayments.forEach(p => {
+        const asset = assetMap.get(p.assetId); if (!asset) return;
+        push({ date: p.date, asset, type: 'Thuế', description: `Nộp thuế kỳ ${p.period}`, inflow: 0, outflow: p.amount, sender: asset.name, receiver: 'Cơ quan thuế' }, `tax_payment-${p.id}`);
+    });
+
+    investments.forEach(i => {
+        const asset = assetMap.get(i.assetId); if (asset) push({ date: i.date, asset, type: 'Đầu tư', description: i.description, inflow: 0, outflow: i.investmentAmount, sender: asset.name }, `invest_out-${i.id}`);
+        if (i.status === 'liquidated' && i.liquidationAssetId) {
+            const liqAsset = assetMap.get(i.liquidationAssetId); if (liqAsset) push({ date: i.liquidationDate!, asset: liqAsset, type: 'Thanh lý ĐT', description: `Thanh lý: ${i.description}`, inflow: i.liquidationAmount!, outflow: 0, receiver: liqAsset.name }, `invest_in-${i.id}`);
+        }
+    });
+
+    savings.forEach(s => {
+        const asset = assetMap.get(s.assetId); if (asset) push({ date: s.startDate, asset, type: 'Tiết kiệm', description: s.description, inflow: 0, outflow: s.principalAmount, sender: asset.name, receiver: `Sổ tiết kiệm` }, `saving-${s.id}`);
+    });
+
+    return transactions.sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime() || b.id.localeCompare(a.id));
+  }, [
+      assets, partners, projects, capitalInflows, commissions, exchangeLogs, adDeposits, miscellaneousExpenses, 
+      withdrawals, debtPayments, receivablePayments, taxPayments, investments, savings,
+      liabilities, receivables, periodLiabilities, periodReceivables, periodDebtPayments, periodReceivablePayments
+  ]);
 
   const enrichedDailyAdCosts = useMemo<EnrichedDailyAdCost[]>(() => {
+      const depositsByAccount = adDeposits.reduce((acc, deposit) => {
+          if (!acc[deposit.adAccountNumber]) {
+              acc[deposit.adAccountNumber] = [];
+          }
+          acc[deposit.adAccountNumber].push(deposit);
+          return acc;
+      }, {} as Record<string, T.AdDeposit[]>);
+
+      for (const acc in depositsByAccount) {
+          depositsByAccount[acc].sort((a, b) => a.date.localeCompare(b.date));
+      }
+
+      return dailyAdCosts.map(cost => {
+          const depositsForAccount = depositsByAccount[cost.adAccountNumber] || [];
+          const relevantDeposit = [...depositsForAccount].reverse().find(d => d.date <= cost.date);
+          
+          const effectiveRate = relevantDeposit ? relevantDeposit.rate : 25000; // Fallback rate
+          const vndCost = cost.amount * effectiveRate;
+          return { ...cost, vndCost, effectiveRate };
+      });
+  }, [dailyAdCosts, adDeposits]);
+  
+  const { enrichedAdAccounts, adAccountTransactions, partnerAdAccountBalances } = useMemo(() => {
     const projectMap = new Map(projects.map(p => [p.id, p]));
-    type LedgerItem = { amount: number, rate: number };
-    const ledgersByAccount = new Map<string, LedgerItem[]>();
+    const assetMap = new Map(assets.map(a => [a.id, a.name]));
 
-    const getAccountKey = (platform: T.AdsPlatform, accountNumber: string) => `${platform}__${accountNumber}`;
+    const transactions: any[] = [
+        ...adDeposits.map(d => ({ ...d, type: 'deposit' })),
+        ...dailyAdCosts.map(c => ({ ...c, type: 'cost' })),
+        ...adFundTransfers.map(t => ({ ...t, type: 'transfer' })),
+    ].sort((a, b) => new Date(a.date).getTime() - new Date(b.date).getTime() || a.id.localeCompare(b.id));
 
-    const fundEvents = [
-        ...adDeposits.map(d => ({ ...d, type: 'deposit' as const })),
-        ...adFundTransfers.map(t => ({ ...t, type: 'transfer' as const }))
-    ].sort((a, b) => new Date(a.date).getTime() - new Date(b.date).getTime());
+    const balances: Record<string, number> = {}; // adAccountNumber -> balance
+    const partnerBalances: Record<string, Record<string, number>> = {}; // adAccountNumber -> partnerId -> balance
+    const ledger: T.AdAccountTransaction[] = [];
 
-    for (const event of fundEvents) {
-        if (event.type === 'deposit') {
-            const key = getAccountKey(event.adsPlatform, event.adAccountNumber);
-            if (!ledgersByAccount.has(key)) ledgersByAccount.set(key, []);
-            ledgersByAccount.get(key)!.push({ amount: event.usdAmount, rate: event.rate });
-        } else {
-            const fromKey = getAccountKey(event.adsPlatform, event.fromAdAccountNumber);
-            const toKey = getAccountKey(event.adsPlatform, event.toAdAccountNumber);
-            if (!ledgersByAccount.has(fromKey)) continue;
-            if (!ledgersByAccount.has(toKey)) ledgersByAccount.set(toKey, []);
-            const fromLedger = ledgersByAccount.get(fromKey)!;
-            const toLedger = ledgersByAccount.get(toKey)!;
-            let amountToTransfer = event.amount;
-            const transferredChunks: LedgerItem[] = [];
-            for (const item of fromLedger) {
-                if (amountToTransfer <= 0) break;
-                const amountToTake = Math.min(amountToTransfer, item.amount);
-                item.amount -= amountToTake;
-                amountToTransfer -= amountToTake;
-                transferredChunks.push({ amount: amountToTake, rate: item.rate });
-            }
-            toLedger.push(...transferredChunks);
-            ledgersByAccount.set(fromKey, fromLedger.filter(item => item.amount > 0.001));
-        }
-    }
-
-    const consumableLedgers = new Map(Array.from(ledgersByAccount.entries()).map(([key, items]) => 
-        [key, items.map(item => ({...item}))]
-    ));
-
-    const sortedCosts = [...dailyAdCosts].sort((a, b) => new Date(a.date).getTime() - new Date(b.date).getTime());
-
-    return sortedCosts.map(cost => {
-        const project = projectMap.get(cost.projectId);
-        const accountDetails = adAccountMap.get(cost.adAccountNumber);
-        
-        if (!project || !accountDetails) {
-            return { ...cost, vndCost: 0, effectiveRate: 0 };
-        }
-
-        const platformForCosting = accountDetails.adsPlatform;
-        const accountKey = getAccountKey(platformForCosting, cost.adAccountNumber);
-        const ledger = consumableLedgers.get(accountKey);
-
-        let costRemaining = cost.amount;
-        let totalVndCost = 0;
-
-        if (ledger) {
-             for (const deposit of ledger) {
-                if (deposit.amount > 0 && costRemaining > 0) {
-                    const amountToUse = Math.min(costRemaining, deposit.amount);
-                    totalVndCost += amountToUse * deposit.rate;
-                    deposit.amount -= amountToUse;
-                    costRemaining -= amountToUse;
-                }
-                if (costRemaining <= 0.001) break;
-            }
-        }
-        
-        if (costRemaining > 0.001) {
-            const relevantDeposits = adDeposits.filter(d => d.adAccountNumber === cost.adAccountNumber).sort((a,b) => new Date(a.date).getTime() - new Date(b.date).getTime());
-            const lastRate = relevantDeposits.length > 0 ? relevantDeposits[relevantDeposits.length - 1].rate : 25000;
-            totalVndCost += costRemaining * lastRate;
-        }
-
-        return { ...cost, vndCost: totalVndCost, effectiveRate: cost.amount > 0 ? totalVndCost / cost.amount : 0 };
+    adAccounts.forEach(acc => {
+        balances[acc.accountNumber] = 0;
+        partnerBalances[acc.accountNumber] = {};
     });
-  }, [dailyAdCosts, adDeposits, adFundTransfers, projects, adAccountMap]);
 
-  const enrichedAssets = useMemo<EnrichedAsset[]>(() => {
-        const assetOwnerStats = new Map<string, Map<string, { received: number, withdrawn: number }>>();
-        const projectMap = new Map<string, T.Project>(projects.map(p => [p.id, p]));
-        const mePartnerId = 'default-me';
-        const assetMap = new Map(assets.map(a => [a.id, a]));
-        const addValue = (assetId: string, partnerId: string, value: number, type: 'received' | 'withdrawn') => {
-            if (!assetId || !partnerId || value === 0 || typeof assetId !== 'string' || typeof partnerId !== 'string') return;
-            if (!assetOwnerStats.has(assetId)) assetOwnerStats.set(assetId, new Map());
-            const ownerStats = assetOwnerStats.get(assetId)!;
-            if (!ownerStats.has(partnerId)) ownerStats.set(partnerId, { received: 0, withdrawn: 0 });
-            ownerStats.get(partnerId)![type] += value;
+    const ensurePartnerBalance = (accountNumber: string, partnerId: string) => {
+        if (!partnerBalances[accountNumber]) partnerBalances[accountNumber] = {};
+        if (!partnerBalances[accountNumber][partnerId]) partnerBalances[accountNumber][partnerId] = 0;
+    };
+    
+    transactions.forEach(tx => {
+        if (tx.type === 'deposit') {
+            const accNum = tx.adAccountNumber;
+            balances[accNum] = (balances[accNum] || 0) + tx.usdAmount;
+            
+            const project = tx.projectId ? projectMap.get(tx.projectId) : null;
+            const shares = project?.isPartnership ? project.partnerShares : null;
+
+            if (shares && shares.length > 0) {
+                shares.forEach(share => {
+                    ensurePartnerBalance(accNum, share.partnerId);
+                    partnerBalances[accNum][share.partnerId] += tx.usdAmount * (share.sharePercentage / 100);
+                });
+            } else {
+                ensurePartnerBalance(accNum, 'default-me');
+                partnerBalances[accNum]['default-me'] += tx.usdAmount;
+            }
+
+            ledger.push({
+                id: `deposit-${tx.id}`,
+                date: tx.date,
+                adAccountNumber: accNum,
+                description: `Nạp tiền từ ${assetMap.get(tx.assetId) || 'Không rõ'}`,
+                deposit: tx.usdAmount,
+                spent: 0,
+                balance: balances[accNum],
+            });
+        } 
+        else if (tx.type === 'cost') {
+            const accNum = tx.adAccountNumber;
+            balances[accNum] = (balances[accNum] || 0) - tx.amount;
+
+            const currentPartnerBals = partnerBalances[accNum] || {};
+            const positiveCapitalPartners = Object.entries(currentPartnerBals).filter(([, bal]) => bal > 0);
+            const totalPositiveCapital = positiveCapitalPartners.reduce((sum, [, bal]) => sum + bal, 0);
+
+            if (totalPositiveCapital > 0.01) {
+                // Distribute cost among partners with positive capital proportionally
+                positiveCapitalPartners.forEach(([partnerId, balance]) => {
+                    const partnerShare = balance / totalPositiveCapital;
+                    currentPartnerBals[partnerId] -= tx.amount * partnerShare;
+                });
+            } else {
+                // No positive capital, distribute cost/debt based on project shares
+                const project = projectMap.get(tx.projectId);
+                const shares = project?.isPartnership ? project.partnerShares : null;
+
+                if (shares && shares.length > 0) {
+                    shares.forEach(share => {
+                        ensurePartnerBalance(accNum, share.partnerId);
+                        partnerBalances[accNum][share.partnerId] -= tx.amount * (share.sharePercentage / 100);
+                    });
+                } else {
+                    ensurePartnerBalance(accNum, 'default-me');
+                    partnerBalances[accNum]['default-me'] -= tx.amount;
+                }
+            }
+
+            ledger.push({
+                id: `cost-${tx.id}`,
+                date: tx.date,
+                adAccountNumber: accNum,
+                description: `Chi tiêu cho dự án ${projectMap.get(tx.projectId)?.name || 'Không rõ'}`,
+                deposit: 0,
+                spent: tx.amount,
+                balance: balances[accNum],
+            });
+        } 
+        else if (tx.type === 'transfer') {
+            const fromAcc = tx.fromAdAccountNumber;
+            balances[fromAcc] = (balances[fromAcc] || 0) - tx.amount;
+            
+            const fromPartnerBals = partnerBalances[fromAcc] || {};
+            const transferredPartnerShares: Record<string, number> = {};
+
+            const positiveCapitalPartners = Object.entries(fromPartnerBals).filter(([, bal]) => bal > 0);
+            const totalPositiveCapital = positiveCapitalPartners.reduce((sum, [, bal]) => sum + bal, 0);
+            
+            if (totalPositiveCapital > 0.01) {
+                // Transfer from partners with positive capital
+                positiveCapitalPartners.forEach(([partnerId, balance]) => {
+                    const partnerShare = balance / totalPositiveCapital;
+                    const amountToTransfer = tx.amount * partnerShare;
+                    fromPartnerBals[partnerId] -= amountToTransfer;
+                    transferredPartnerShares[partnerId] = amountToTransfer;
+                });
+            } else {
+                // No positive capital, it's a debt transfer. Distribute based on existing debt shares.
+                const negativeCapitalPartners = Object.entries(fromPartnerBals).filter(([, bal]) => bal < 0);
+                const totalNegativeCapital = negativeCapitalPartners.reduce((sum, [, bal]) => sum + bal, 0);
+                
+                if (totalNegativeCapital < -0.01) {
+                    negativeCapitalPartners.forEach(([partnerId, balance]) => {
+                        const debtShare = balance / totalNegativeCapital; // negative/negative = positive share
+                        const amountToTransfer = tx.amount * debtShare;
+                        fromPartnerBals[partnerId] -= amountToTransfer; // Increase the debt
+                        transferredPartnerShares[partnerId] = amountToTransfer;
+                    });
+                } else {
+                    // Zero balance case, fallback to 'me' as last resort
+                    ensurePartnerBalance(fromAcc, 'default-me');
+                    fromPartnerBals['default-me'] -= tx.amount;
+                    transferredPartnerShares['default-me'] = tx.amount;
+                }
+            }
+
+            ledger.push({
+                id: `transfer-out-${tx.id}`,
+                date: tx.date,
+                adAccountNumber: fromAcc,
+                description: `Chuyển tiền đến TK ${tx.toAdAccountNumber}`,
+                deposit: 0,
+                spent: tx.amount,
+                balance: balances[fromAcc],
+            });
+
+            // Inflow to destination account
+            const toAcc = tx.toAdAccountNumber;
+            balances[toAcc] = (balances[toAcc] || 0) + tx.amount;
+            
+            Object.entries(transferredPartnerShares).forEach(([partnerId, amount]) => {
+                ensurePartnerBalance(toAcc, partnerId);
+                partnerBalances[toAcc][partnerId] += amount;
+            });
+            
+            ledger.push({
+                id: `transfer-in-${tx.id}`,
+                date: tx.date,
+                adAccountNumber: toAcc,
+                description: `Nhận tiền từ TK ${tx.fromAdAccountNumber}`,
+                deposit: tx.amount,
+                spent: 0,
+                balance: balances[toAcc],
+            });
+        }
+    });
+
+    const finalEnrichedAccounts = adAccounts.map(acc => ({
+        ...acc,
+        balance: balances[acc.accountNumber] || 0,
+    }));
+    
+    // This is for the partner asset allocation view.
+    const finalPartnerAdBalances = new Map<string, { adAccountNumber: string, balance: number }[]>();
+    
+    Object.entries(partnerBalances).forEach(([accNum, partnerBals]) => {
+        Object.entries(partnerBals).forEach(([partnerId, bal]) => {
+            if (bal > 0.01) { // Only show positive balances
+                if (!finalPartnerAdBalances.has(partnerId)) {
+                    finalPartnerAdBalances.set(partnerId, []);
+                }
+                finalPartnerAdBalances.get(partnerId)!.push({ adAccountNumber: accNum, balance: bal });
+            }
+        });
+    });
+
+    const sortedLedger = ledger.sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime() || a.id.localeCompare(b.id));
+
+    return {
+        enrichedAdAccounts: finalEnrichedAccounts,
+        adAccountTransactions: sortedLedger,
+        partnerAdAccountBalances: finalPartnerAdBalances,
+    };
+
+}, [adAccounts, adDeposits, dailyAdCosts, adFundTransfers, assets, projects]);
+
+  const masterProjects = useMemo<MasterProject[]>(() => {
+    const uniqueProjects = new Map<string, MasterProject>();
+    projects.forEach(p => {
+        const key = p.name.trim().toLowerCase();
+        if (!uniqueProjects.has(key)) {
+            uniqueProjects.set(key, { name: p.name, categoryId: p.categoryId, nicheId: p.nicheId });
+        }
+    });
+    return Array.from(uniqueProjects.values());
+  }, [projects]);
+  
+    const calculatePeriodFinancials = (
+        period: string,
+        allProjects: T.Project[],
+        allCommissions: T.Commission[],
+        allEnrichedDailyAdCosts: EnrichedDailyAdCost[],
+        allMiscellaneousExpenses: T.MiscellaneousExpense[],
+        allPartners: T.Partner[],
+        allTaxSettings: T.TaxSettings,
+        allExchangeLogs: T.ExchangeLog[],
+        allInvestments: T.Investment[],
+        allTaxPayments: T.TaxPayment[],
+        allWithdrawals: T.Withdrawal[],
+        allCapitalInflows: T.CapitalInflow[],
+        allPeriodDebtPayments: T.PeriodDebtPayment[],
+        allPeriodReceivablePayments: T.PeriodReceivablePayment[],
+        allAdDeposits: T.AdDeposit[]
+    ): PeriodFinancials | null => {
+        if (!period) return null;
+
+        const projectsForPeriod = allProjects.filter(p => isDateInPeriod(p.period, period));
+        const projectMap = new Map(projectsForPeriod.map(p => [p.id, p]));
+        const commissionsForPeriod = allCommissions.filter(c => isDateInPeriod(c.date, period));
+        const enrichedDailyAdCostsForPeriod = allEnrichedDailyAdCosts.filter(c => isDateInPeriod(c.date, period));
+        const miscExpensesForPeriod = allMiscellaneousExpenses.filter(e => isDateInPeriod(e.date, period));
+        const exchangeLogsForPeriod = allExchangeLogs.filter(e => isDateInPeriod(e.date, period));
+        const liquidatedInvestmentsForPeriod = allInvestments.filter(i => i.status === 'liquidated' && i.liquidationDate && isDateInPeriod(i.liquidationDate, period));
+        const taxPaymentsForPeriod = allTaxPayments.filter(p => isDateInPeriod(p.date, period));
+        const periodDebtPaymentsForPeriod = allPeriodDebtPayments.filter(p => isDateInPeriod(p.date, period));
+        const periodReceivablePaymentsForPeriod = allPeriodReceivablePayments.filter(p => isDateInPeriod(p.date, period));
+        const adDepositsForPeriod = allAdDeposits.filter(d => isDateInPeriod(d.date, period));
+
+
+        const partnerPnlDetails: T.PartnerPnl[] = allPartners.map(p => ({
+            partnerId: p.id, name: p.name, revenue: 0, cost: 0, profit: 0, inputVat: 0, taxPayable: 0
+        }));
+        const partnerPnlMap = new Map(partnerPnlDetails.map(p => [p.partnerId, p]));
+
+        const revenueDetails: { name: string, amount: number }[] = [];
+        commissionsForPeriod.forEach(comm => {
+            const project = projectMap.get(comm.projectId);
+            if (!project) return;
+            revenueDetails.push({ name: project.name, amount: comm.vndAmount });
+
+            if (project.isPartnership && project.partnerShares) {
+                project.partnerShares.forEach(share => {
+                    const partnerPnl = partnerPnlMap.get(share.partnerId);
+                    if (partnerPnl) partnerPnl.revenue += comm.vndAmount * (share.sharePercentage / 100);
+                });
+            } else {
+                const mePnl = partnerPnlMap.get('default-me');
+                if (mePnl) mePnl.revenue += comm.vndAmount;
+            }
+        });
+
+        // Calculate Exchange Rate Gain/Loss using FIFO
+        let exchangeRateGainLoss = 0;
+        const transactionsByAsset: { [assetId: string]: (T.Commission | T.ExchangeLog)[] } = {};
+        const usdAssetIds = new Set<string>();
+        assets.forEach(a => { if (a.currency === 'USD') usdAssetIds.add(a.id); });
+        allCommissions.forEach(c => {
+            if (usdAssetIds.has(c.assetId)) {
+                if (!transactionsByAsset[c.assetId]) transactionsByAsset[c.assetId] = [];
+                transactionsByAsset[c.assetId].push(c);
+            }
+        });
+        allExchangeLogs.forEach(e => {
+            if (usdAssetIds.has(e.sellingAssetId)) {
+                if (!transactionsByAsset[e.sellingAssetId]) transactionsByAsset[e.sellingAssetId] = [];
+                transactionsByAsset[e.sellingAssetId].push(e);
+            }
+        });
+        for (const assetId in transactionsByAsset) {
+            transactionsByAsset[assetId].sort((a, b) => a.date.localeCompare(b.date));
+        }
+        for (const assetId in transactionsByAsset) {
+            const fifoQueue: { amount: number, rate: number }[] = [];
+            for (const tx of transactionsByAsset[assetId]) {
+                if ('predictedRate' in tx) { // Commission
+                    fifoQueue.push({ amount: tx.usdAmount, rate: tx.predictedRate });
+                } else { // ExchangeLog
+                    let amountToSell = tx.usdAmount;
+                    let costBasisVND = 0;
+                    while (amountToSell > 0 && fifoQueue.length > 0) {
+                        const firstIn = fifoQueue[0];
+                        const amountFromChunk = Math.min(amountToSell, firstIn.amount);
+                        costBasisVND += amountFromChunk * firstIn.rate;
+                        amountToSell -= amountFromChunk;
+                        firstIn.amount -= amountFromChunk;
+                        if (firstIn.amount < 0.001) {
+                            fifoQueue.shift();
+                        }
+                    }
+                    if (isDateInPeriod(tx.date, period)) {
+                         const actualVND = tx.usdAmount * tx.rate;
+                         exchangeRateGainLoss += actualVND - costBasisVND;
+                    }
+                }
+            }
+        }
+        
+        if (exchangeRateGainLoss !== 0) {
+            revenueDetails.push({ name: 'Lãi/Lỗ tỷ giá', amount: exchangeRateGainLoss });
+        }
+
+        const totalCommissionRevenue = commissionsForPeriod.reduce((sum, c) => sum + c.vndAmount, 0);
+        if (totalCommissionRevenue > 0) {
+            partnerPnlDetails.forEach(pnl => {
+                const partnerRevenueShare = pnl.revenue / totalCommissionRevenue;
+                pnl.revenue += exchangeRateGainLoss * partnerRevenueShare;
+            });
+        } else if (exchangeRateGainLoss !== 0) {
+            const mePnl = partnerPnlMap.get('default-me');
+            if (mePnl) {
+                mePnl.revenue += exchangeRateGainLoss;
+            }
+        }
+        
+        const adCostDetails: { name: string, amount: number }[] = [];
+        enrichedDailyAdCostsForPeriod.forEach(cost => {
+            const project = projectMap.get(cost.projectId);
+            if (!project) return;
+            const totalVndCost = cost.vndCost;
+            const inputVat = totalVndCost * (cost.vatRate || 0) / 100;
+            adCostDetails.push({ name: project.name, amount: totalVndCost });
+
+            if (project.isPartnership && project.partnerShares) {
+                project.partnerShares.forEach(share => {
+                    const partnerPnl = partnerPnlMap.get(share.partnerId);
+                    if (partnerPnl) {
+                        const shareAmount = share.sharePercentage / 100;
+                        partnerPnl.cost += totalVndCost * shareAmount;
+                        partnerPnl.inputVat += inputVat * shareAmount;
+                    }
+                });
+            } else {
+                const mePnl = partnerPnlMap.get('default-me');
+                if (mePnl) {
+                    mePnl.cost += totalVndCost;
+                    mePnl.inputVat += inputVat;
+                }
+            }
+        });
+
+        const miscCostDetails: { name: string, amount: number }[] = [];
+        miscExpensesForPeriod.forEach(exp => {
+            const project = exp.projectId ? projectMap.get(exp.projectId) : null;
+            const totalVndCost = exp.vndAmount;
+            const inputVat = totalVndCost * (exp.vatRate || 0) / 100;
+            miscCostDetails.push({ name: exp.description, amount: totalVndCost });
+
+            let shares = (project && project.isPartnership && project.partnerShares) ? project.partnerShares :
+                         (!project && exp.isPartnership && exp.partnerShares) ? exp.partnerShares : undefined;
+
+            if (shares) {
+                shares.forEach(share => {
+                    const partnerPnl = partnerPnlMap.get(share.partnerId);
+                    if (partnerPnl) {
+                        const shareAmount = share.sharePercentage / 100;
+                        partnerPnl.cost += totalVndCost * shareAmount;
+                        partnerPnl.inputVat += inputVat * shareAmount;
+                    }
+                });
+            } else {
+                const mePnl = partnerPnlMap.get('default-me');
+                if (mePnl) {
+                    mePnl.cost += totalVndCost;
+                    mePnl.inputVat += inputVat;
+                }
+            }
+        });
+
+        partnerPnlDetails.forEach(p => p.profit = p.revenue - p.cost);
+        const totalRevenue = partnerPnlDetails.reduce((sum, p) => sum + p.revenue, 0);
+        const totalAdCost = adCostDetails.reduce((sum, d) => sum + d.amount, 0);
+        const totalMiscCost = miscCostDetails.reduce((sum, d) => sum + d.amount, 0);
+        const totalCost = totalAdCost + totalMiscCost;
+        const totalProfit = totalRevenue - totalCost;
+
+        const investmentGainLoss = liquidatedInvestmentsForPeriod.reduce((sum, i) => sum + ((i.liquidationAmount || 0) - i.investmentAmount), 0);
+        const profitBeforeTax = totalProfit + investmentGainLoss;
+
+        const mePnl = partnerPnlMap.get('default-me') || { revenue: 0, cost: 0, profit: 0, inputVat: 0, partnerId: '', name: '', taxPayable: 0 };
+        const taxBases = {
+            initialRevenueBase: allTaxSettings.incomeTaxBase === 'personal' ? mePnl.revenue : totalRevenue,
+            taxSeparationAmount: allTaxSettings.taxSeparationAmount || 0,
+            get revenueBase() { return this.initialRevenueBase - this.taxSeparationAmount; },
+            costBase: allTaxSettings.incomeTaxBase === 'personal' ? mePnl.cost : totalCost,
+            get profitBase() { return this.revenueBase - this.costBase + investmentGainLoss }, // Adjusted to reflect new profitBeforeTax logic
+            vatOutputBase: allTaxSettings.vatOutputBase === 'personal' ? mePnl.revenue : totalRevenue,
+            vatInputBase: allTaxSettings.vatInputMethod === 'manual' ? allTaxSettings.manualInputVat :
+                          (allTaxSettings.vatInputBase === 'personal' ? mePnl.inputVat : partnerPnlDetails.reduce((sum, p) => sum + p.inputVat, 0)),
         };
 
-        commissions.forEach(comm => {
-            const project = projectMap.get(comm.projectId);
-            const asset = assetMap.get(comm.assetId);
-            if (!asset) return;
-            const value = asset.currency === 'VND' ? comm.vndAmount : comm.usdAmount;
-            if (project?.isPartnership && project.partnerShares) {
-                project.partnerShares.forEach(share => addValue(comm.assetId, share.partnerId, value * (share.sharePercentage / 100), 'received'));
-            } else { addValue(comm.assetId, mePartnerId, value, 'received'); }
-        });
-        adDeposits.forEach(deposit => addValue(deposit.assetId, mePartnerId, deposit.vndAmount, 'withdrawn'));
-        miscellaneousExpenses.forEach(exp => {
-            const value = exp.amount; // amount is in asset currency
-            if (exp.isPartnership && exp.partnerShares) {
-                exp.partnerShares.forEach(share => addValue(exp.assetId, share.partnerId, value * (share.sharePercentage / 100), 'withdrawn'));
-            } else if (exp.projectId) {
-                const project = projectMap.get(exp.projectId);
-                if (project?.isPartnership && project.partnerShares) {
-                    project.partnerShares.forEach(share => addValue(exp.assetId, share.partnerId, value * (share.sharePercentage / 100), 'withdrawn'));
-                } else { addValue(exp.assetId, mePartnerId, value, 'withdrawn'); }
-            } else { addValue(exp.assetId, mePartnerId, value, 'withdrawn'); }
-        });
-        [...exchangeLogs].sort((a, b) => new Date(a.date).getTime() - new Date(b.date).getTime()).forEach(log => {
-            const sellingAssetStats = assetOwnerStats.get(log.sellingAssetId);
-            const balances = new Map<string, number>();
-            let totalPositiveBalance = 0;
-            if (sellingAssetStats) {
-                sellingAssetStats.forEach((stats, partnerId) => {
-                    const balance = stats.received - stats.withdrawn;
-                    balances.set(partnerId, balance);
-                    if (balance > 0) totalPositiveBalance += balance;
-                });
+        let tax: T.TaxCalculationResult = { taxPayable: 0, incomeTax: 0, netVat: 0, outputVat: 0 };
+        if (allTaxSettings.method === 'revenue') {
+            tax.taxPayable = taxBases.revenueBase * (allTaxSettings.revenueRate / 100);
+        } else {
+            tax.outputVat = taxBases.vatOutputBase * (allTaxSettings.vatRate / 100);
+            tax.netVat = tax.outputVat - taxBases.vatInputBase;
+            tax.incomeTax = Math.max(0, taxBases.profitBase) * (allTaxSettings.incomeRate / 100);
+            tax.taxPayable = Math.max(0, tax.netVat) + tax.incomeTax;
+        }
+
+        if (profitBeforeTax > 0) {
+            partnerPnlDetails.forEach(p => {
+                const profitShare = p.profit / profitBeforeTax;
+                p.taxPayable = tax.taxPayable * profitShare;
+            });
+        }
+
+        const netProfit = profitBeforeTax - tax.taxPayable;
+
+        // Cash Flow Calculation
+        const cashInflowFromCommissionAndExchange = commissionsForPeriod.reduce((s, i) => s + i.vndAmount, 0) + exchangeRateGainLoss;
+        const cfOperatingInflows = [
+            { label: 'Thu từ hoa hồng', amount: cashInflowFromCommissionAndExchange },
+            { label: 'Thu nợ trong kỳ', amount: periodReceivablePaymentsForPeriod.reduce((s, i) => s + i.amount, 0) }
+        ].filter(i => i.amount > 0);
+        const cfOperatingOutflows = [
+            { label: 'Nạp tiền Ads', amount: adDepositsForPeriod.reduce((s, i) => s + i.vndAmount, 0) },
+            { label: 'Chi phí phát sinh', amount: miscExpensesForPeriod.reduce((s, i) => s + i.vndAmount, 0) },
+            { label: 'Trả nợ trong kỳ', amount: periodDebtPaymentsForPeriod.reduce((s, i) => s + i.amount, 0) },
+            { label: 'Nộp thuế', amount: taxPaymentsForPeriod.reduce((s, i) => s + i.amount, 0) }
+        ].filter(i => i.amount > 0);
+        const cashFlow: T.PeriodFinancials['cashFlow'] = {
+            operating: { inflows: cfOperatingInflows, outflows: cfOperatingOutflows, net: cfOperatingInflows.reduce((s,i)=>s+i.amount,0) - cfOperatingOutflows.reduce((s,i)=>s+i.amount,0) },
+            investing: { inflows: [], outflows: [], net: 0 },
+            financing: { inflows: [], outflows: [], net: 0 },
+            netChange: 0, beginningBalance: 0, endBalance: 0
+        };
+
+        return {
+            totalRevenue, totalAdCost, totalMiscCost, totalCost, totalProfit,
+            totalInputVat: partnerPnlDetails.reduce((sum, p) => sum + p.inputVat, 0),
+            myRevenue: mePnl.revenue, myCost: mePnl.cost, myProfit: mePnl.profit, myInputVat: mePnl.inputVat,
+            exchangeRateGainLoss, investmentGainLoss, profitBeforeTax, netProfit,
+            tax, taxBases, partnerPnlDetails,
+            revenueDetails, adCostDetails, miscCostDetails, cashFlow,
+        };
+    };
+  
+    const periodFinancials = useMemo<T.PeriodFinancials | null>(() => {
+        return calculatePeriodFinancials(
+            currentPeriod, projects, commissions, enrichedDailyAdCosts, miscellaneousExpenses, 
+            partners, taxSettings, exchangeLogs, investments, taxPayments, withdrawals, 
+            capitalInflows, periodDebtPayments, periodReceivablePayments, adDeposits
+        );
+    }, [
+        currentPeriod, projects, commissions, enrichedDailyAdCosts, miscellaneousExpenses, 
+        partners, taxSettings, exchangeLogs, investments, taxPayments, withdrawals, 
+        capitalInflows, periodDebtPayments, periodReceivablePayments, adDeposits
+    ]);
+  
+    const allPartnerLedgerEntries = useMemo<T.PartnerLedgerEntry[]>(() => {
+        const assetMap = new Map<string, T.Asset>(assets.map(a => [a.id, a]));
+        const projectMap = new Map<string, T.Project>(projects.map(p => [p.id, p]));
+    
+        const ledgerEntries: T.PartnerLedgerEntry[] = [];
+    
+        const transactions: any[] = [
+            ...capitalInflows.map(i => ({ ...i, type: 'capitalInflow' })),
+            ...withdrawals.map(w => ({ ...w, type: 'withdrawal' })),
+            ...commissions.map(c => ({ ...c, type: 'commission' })),
+            ...enrichedDailyAdCosts.map(c => ({ ...c, type: 'dailyAdCost' })),
+            ...miscellaneousExpenses.map(e => ({ ...e, type: 'miscExpense' })),
+            ...exchangeLogs.map(log => ({ ...log, type: 'exchange' })),
+            ...partnerLedgerEntries.map(e => ({ ...e, type: 'manual' })),
+        ].sort((a, b) => a.date.localeCompare(b.date) || a.id.localeCompare(a.id));
+    
+        transactions.forEach(tx => {
+            switch (tx.type) {
+                case 'capitalInflow': {
+                    const capitalInflow = tx as T.CapitalInflow;
+                    const partnerId = capitalInflow.contributedByPartnerId || 'default-me';
+                    const asset = assetMap.get(capitalInflow.assetId);
+                    if (!asset) break;
+    
+                    ledgerEntries.push({
+                        id: `ci-${capitalInflow.id}`, date: capitalInflow.date, partnerId,
+                        description: `Vốn góp: ${capitalInflow.description}`, type: 'inflow', amount: capitalInflow.amount,
+                        sourceName: capitalInflow.externalInvestorName || 'Nguồn vốn bên ngoài',
+                        destinationName: asset.name
+                    });
+                    break;
+                }
+                case 'withdrawal': {
+                    const withdrawal = tx as T.Withdrawal;
+                    ledgerEntries.push({
+                        id: `wd-${withdrawal.id}`, date: withdrawal.date, partnerId: withdrawal.withdrawnBy,
+                        description: `Rút tiền: ${withdrawal.description}`, type: 'outflow', amount: withdrawal.vndAmount,
+                        sourceName: assetMap.get(withdrawal.assetId)?.name || 'Không rõ',
+                        destinationName: 'Rút ra ngoài'
+                    });
+                    break;
+                }
+                case 'commission': {
+                    const commission = tx as T.Commission;
+                    const project = projectMap.get(commission.projectId);
+                    if (!project) break;
+                    const asset = assetMap.get(commission.assetId);
+                    if (!asset) break;
+    
+                    const shares = project.isPartnership ? project.partnerShares : null;
+                    
+                    if (shares && shares.length > 0) {
+                        shares.forEach(share => {
+                            ledgerEntries.push({
+                                id: `rev-${commission.id}-${share.partnerId}`, date: commission.date, partnerId: share.partnerId,
+                                description: `Hoa hồng dự án ${project.name}`, type: 'inflow', amount: commission.vndAmount * (share.sharePercentage / 100),
+                                sourceName: project.name, destinationName: asset.name
+                            });
+                        });
+                    } else {
+                        ledgerEntries.push({
+                            id: `rev-${commission.id}-default-me`, date: commission.date, partnerId: 'default-me',
+                            description: `Hoa hồng dự án ${project.name}`, type: 'inflow', amount: commission.vndAmount,
+                            sourceName: project.name, destinationName: asset.name
+                        });
+                    }
+                    break;
+                }
+// FIX: Split combined 'dailyAdCost' and 'miscExpense' case to ensure type safety.
+                case 'dailyAdCost': {
+                    const expense = tx as EnrichedDailyAdCost;
+                    const project = expense.projectId ? projectMap.get(expense.projectId) : undefined;
+                    
+                    let shares: T.PartnerShare[] | undefined | null = null;
+                    if (project?.isPartnership && project.partnerShares) {
+                        shares = project.partnerShares;
+                    }
+                    
+                    const vndAmount = expense.vndCost;
+                    const description = `Chi phí Ads cho dự án ${project?.name || expense.adAccountNumber}`;
+                    const sourceName = `TK Ads ${expense.adAccountNumber}`;
+                    const destinationName = project?.name;
+
+                    if (shares && shares.length > 0) {
+                        shares.forEach(share => {
+                            ledgerEntries.push({
+                                id: `cost-${expense.id}-${share.partnerId}`, date: expense.date, partnerId: share.partnerId,
+                                description, type: 'outflow', amount: vndAmount * (share.sharePercentage / 100),
+                                sourceName: sourceName, destinationName
+                            });
+                        });
+                    } else {
+                        ledgerEntries.push({
+                            id: `cost-${expense.id}-default-me`, date: expense.date, partnerId: 'default-me',
+                            description, type: 'outflow', amount: vndAmount,
+                            sourceName: sourceName, destinationName
+                        });
+                    }
+                    break;
+                }
+                case 'miscExpense': {
+                    const expense = tx as T.MiscellaneousExpense;
+                    const project = expense.projectId ? projectMap.get(expense.projectId) : undefined;
+                    
+                    let shares: T.PartnerShare[] | undefined | null = null;
+                    if (project?.isPartnership && project.partnerShares) {
+                        shares = project.partnerShares;
+                    } else if (expense.isPartnership) {
+                        shares = expense.partnerShares;
+                    }
+                    
+                    const vndAmount = expense.vndAmount;
+                    const description = `Chi phí: ${expense.description}`;
+                    const sourceName = assetMap.get(expense.assetId)?.name;
+                    const destinationName = project?.name || 'Chi phí chung';
+
+                    if (shares && shares.length > 0) {
+                        shares.forEach(share => {
+                            ledgerEntries.push({
+                                id: `cost-${expense.id}-${share.partnerId}`, date: expense.date, partnerId: share.partnerId,
+                                description, type: 'outflow', amount: vndAmount * (share.sharePercentage / 100),
+                                sourceName: sourceName, destinationName
+                            });
+                        });
+                    } else {
+                        ledgerEntries.push({
+                            id: `cost-${expense.id}-default-me`, date: expense.date, partnerId: 'default-me',
+                            description, type: 'outflow', amount: vndAmount,
+                            sourceName: sourceName, destinationName
+                        });
+                    }
+                    break;
+                }
+                case 'exchange': {
+                    // Exchange logs are capital movements between assets, not P&L events for the ledger.
+                    // The P&L impact (gain/loss) is calculated in periodFinancials and should be entered as an adjustment if needed.
+                    // For simplicity, we omit direct ledger entries for exchanges now.
+                    break;
+                }
+                case 'manual':
+                    ledgerEntries.push(tx);
+                    break;
             }
-            if (totalPositiveBalance <= 0) {
-                addValue(log.sellingAssetId, mePartnerId, log.usdAmount, 'withdrawn');
-                addValue(log.receivingAssetId, mePartnerId, log.vndAmount, 'received');
-            } else {
-                balances.forEach((balance, partnerId) => {
-                    if (balance > 0) {
-                        const ratio = balance / totalPositiveBalance;
-                        addValue(log.sellingAssetId, partnerId, log.usdAmount * ratio, 'withdrawn');
-                        addValue(log.receivingAssetId, partnerId, log.vndAmount * ratio, 'received');
+        });
+
+        const pnlEntries: T.PartnerLedgerEntry[] = [];
+        closedPeriods.forEach((closedPeriod: T.ClosedPeriod) => {
+            const financials = calculatePeriodFinancials(
+                closedPeriod.period, projects, commissions, enrichedDailyAdCosts, miscellaneousExpenses, 
+                partners, taxSettings, exchangeLogs, investments, taxPayments, withdrawals, 
+                capitalInflows, periodDebtPayments, periodReceivablePayments, adDeposits
+            );
+            if (financials) {
+                const [year, month] = closedPeriod.period.split('-');
+                const periodLabel = `T${parseInt(month)}/${year}`;
+                financials.partnerPnlDetails.forEach(pnl => {
+                    if (Math.abs(pnl.profit) > 0.01) {
+                        pnlEntries.push({
+                            id: `pnl-${closedPeriod.period}-${pnl.partnerId}`,
+                            date: closedPeriod.closedAt,
+                            partnerId: pnl.partnerId,
+                            description: `Ghi nhận Lãi/Lỗ kỳ ${periodLabel}`,
+                            type: pnl.profit > 0 ? 'inflow' : 'outflow',
+                            amount: Math.abs(pnl.profit),
+                            sourceName: 'Kết chuyển Lãi/Lỗ',
+                            destinationName: 'Vốn chủ sở hữu'
+                        });
                     }
                 });
             }
         });
-        withdrawals.forEach(w => addValue(w.assetId, w.withdrawnBy, w.amount, 'withdrawn'));
-        debtPayments.forEach(p => addValue(p.assetId, mePartnerId, p.amount, 'withdrawn'));
-        taxPayments.forEach(p => addValue(p.assetId, mePartnerId, p.amount, 'withdrawn'));
+
+        return [...ledgerEntries, ...pnlEntries].sort((a,b) => b.date.localeCompare(a.date) || b.id.localeCompare(a.id));
+    }, [
+        assets, capitalInflows, withdrawals, commissions, miscellaneousExpenses,
+        exchangeLogs, partnerLedgerEntries, projects, partners, closedPeriods, taxSettings,
+        investments, taxPayments, periodDebtPayments, periodReceivablePayments, enrichedDailyAdCosts
+    ]);
+
+
+  const enrichedPartners = useMemo<EnrichedPartner[]>(() => {
+    return partners.map(p => {
+        const inflows = allPartnerLedgerEntries.filter(e => e.partnerId === p.id && e.type === 'inflow').reduce((sum, e) => sum + e.amount, 0);
+        const outflows = allPartnerLedgerEntries.filter(e => e.partnerId === p.id && e.type === 'outflow').reduce((sum, e) => sum + e.amount, 0);
+        return {
+            ...p,
+            totalInflow: inflows,
+            totalOutflow: outflows,
+            balance: inflows - outflows,
+        };
+    });
+  }, [partners, allPartnerLedgerEntries]);
+  
+  const partnerAssetBalances = useMemo(() => {
+        const balances = new Map<string, { assetId: string, assetName: string, balance: number, currency: 'VND' | 'USD' }[]>();
         
-        capitalInflows.forEach(inflow => {
-            const partnerToCredit = inflow.contributedByPartnerId || mePartnerId;
-            addValue(inflow.assetId, partnerToCredit, inflow.amount, 'received');
-        });
+        partners.forEach(p => balances.set(p.id, []));
 
-        receivablePayments.forEach(p => { if (assetMap.has(p.assetId)) addValue(p.assetId, mePartnerId, p.amount, 'received'); });
-        receivables.forEach(r => { if (assetMap.has(r.outflowAssetId)) addValue(r.outflowAssetId, mePartnerId, r.totalAmount, 'withdrawn'); });
-        liabilities.forEach(l => { if (l.inflowAssetId && assetMap.has(l.inflowAssetId)) addValue(l.inflowAssetId, mePartnerId, l.totalAmount, 'received'); });
-        
-        const partnerMap = new Map<string, string>(partners.map(p => [p.id, p.name]));
-        
-        return assets.map(asset => {
-            const ownerStatsMap = assetOwnerStats.get(asset.id);
-            let allTransactionsInflow = 0;
-            let allTransactionsOutflow = 0;
-            const ownersData: {id: string, name: string, received: number, withdrawn: number}[] = [];
-
-            if (ownerStatsMap) {
-                for (const [ownerId, stats] of ownerStatsMap.entries()) {
-                    allTransactionsInflow += stats.received;
-                    allTransactionsOutflow += stats.withdrawn;
-                    ownersData.push({ id: ownerId, name: partnerMap.get(ownerId) || 'N/A', ...stats });
-                }
-            }
-
-            const currentBalance = asset.balance + allTransactionsInflow - allTransactionsOutflow;
-
-            let partnersTotalReceived = 0;
-            let partnersTotalWithdrawn = 0;
-            ownersData.forEach(owner => {
-                if (owner.id !== mePartnerId) {
-                    partnersTotalReceived += owner.received;
-                    partnersTotalWithdrawn += owner.withdrawn;
+        // 1. Physical assets
+        enrichedAssets.forEach(asset => {
+            asset.owners.forEach(owner => {
+                const partnerBalance = owner.received - owner.withdrawn;
+                if (Math.abs(partnerBalance) > 0.01) { // Only show if there's a non-trivial balance
+                    const partnerBalances = balances.get(owner.id);
+                    if (partnerBalances) {
+                        partnerBalances.push({
+                            assetId: asset.id,
+                            assetName: asset.name,
+                            balance: partnerBalance,
+                            currency: asset.currency,
+                        });
+                    }
                 }
             });
-
-            const myTotalReceived = (asset.balance + allTransactionsInflow) - partnersTotalReceived;
-            const myTotalWithdrawn = allTransactionsOutflow - partnersTotalWithdrawn;
-
-            let meOwner = ownersData.find(o => o.id === mePartnerId);
-            if (meOwner) {
-                meOwner.received = myTotalReceived;
-                meOwner.withdrawn = myTotalWithdrawn;
-            } else {
-                ownersData.push({
-                    id: mePartnerId,
-                    name: partnerMap.get(mePartnerId) || 'Tôi',
-                    received: myTotalReceived,
-                    withdrawn: myTotalWithdrawn,
-                });
-            }
-
-            const finalOwnersData = ownersData.filter(o => o.received > 0.001 || o.withdrawn > 0.001);
-            const hasPartnerFlow = finalOwnersData.some(o => o.id !== mePartnerId);
-            
-            if (hasPartnerFlow && !finalOwnersData.some(o => o.id === mePartnerId)) {
-                finalOwnersData.push({
-                    id: mePartnerId, name: partnerMap.get(mePartnerId) || 'Tôi', received: 0, withdrawn: 0,
-                });
-            }
-
-            return { 
-                ...asset, 
-                balance: currentBalance, 
-                totalReceived: asset.balance + allTransactionsInflow, 
-                totalWithdrawn: allTransactionsOutflow,
-                owners: finalOwnersData.sort((a,b) => (a.id === mePartnerId ? -1 : b.id === mePartnerId ? 1 : a.name.localeCompare(b.name))),
-                isExpandable: hasPartnerFlow,
-            };
         });
-    }, [assets, projects, partners, commissions, exchangeLogs, withdrawals, adDeposits, miscellaneousExpenses, debtPayments, taxPayments, capitalInflows, receivables, receivablePayments, liabilities]);
-    
+        
+        // 2. Ad account virtual assets
+        partnerAdAccountBalances.forEach((adBalances, partnerId) => {
+            const partnerPhysicalBalances = balances.get(partnerId);
+            if (partnerPhysicalBalances) {
+                adBalances.forEach(adBal => {
+                    partnerPhysicalBalances.push({
+                        assetId: adBal.adAccountNumber, // Use account number as a unique ID
+                        assetName: `TK Ads ${adBal.adAccountNumber}`, // Display name
+                        balance: adBal.balance,
+                        currency: 'USD',
+                    });
+                });
+            }
+        });
+
+        return balances;
+    }, [enrichedAssets, partners, partnerAdAccountBalances]);
+
   const periodAssetDetails = useMemo<PeriodAssetDetail[]>(() => {
     if (!currentPeriod) return [];
-    
-    return assets.map(asset => {
-        const enriched = enrichedAssets.find(a => a.id === asset.id);
-        const closingBalance = enriched?.balance ?? asset.balance;
-        
+
+    const details = assets.map(asset => {
+        let openingBalance = asset.balance;
         let change = 0;
-        
-        // Inflows this period
-        commissions.filter(t => isDateInPeriod(t.date, currentPeriod) && t.assetId === asset.id).forEach(t => change += asset.currency === 'USD' ? t.usdAmount : t.vndAmount);
-        exchangeLogs.filter(t => isDateInPeriod(t.date, currentPeriod) && t.receivingAssetId === asset.id).forEach(t => change += t.vndAmount);
-        receivablePayments.filter(t => isDateInPeriod(t.date, currentPeriod) && t.assetId === asset.id).forEach(t => change += t.amount);
-        capitalInflows.filter(t => isDateInPeriod(t.date, currentPeriod) && t.assetId === asset.id).forEach(t => change += t.amount);
-        liabilities.filter(t => isDateInPeriod(t.creationDate, currentPeriod) && t.inflowAssetId === asset.id).forEach(t => change += t.totalAmount);
 
-        // Outflows this period
-        adDeposits.filter(t => isDateInPeriod(t.date, currentPeriod) && t.assetId === asset.id).forEach(t => change -= t.vndAmount);
-        exchangeLogs.filter(t => isDateInPeriod(t.date, currentPeriod) && t.sellingAssetId === asset.id).forEach(t => change -= t.usdAmount);
-        miscellaneousExpenses.filter(t => isDateInPeriod(t.date, currentPeriod) && t.assetId === asset.id).forEach(t => change -= t.amount);
-        debtPayments.filter(t => isDateInPeriod(t.date, currentPeriod) && t.assetId === asset.id).forEach(t => change -= t.amount);
-        withdrawals.filter(t => isDateInPeriod(t.date, currentPeriod) && t.assetId === asset.id).forEach(t => change -= t.amount);
-        taxPayments.filter(t => isDateInPeriod(t.date, currentPeriod) && t.assetId === asset.id).forEach(t => change -= t.amount);
-        receivables.filter(t => isDateInPeriod(t.creationDate, currentPeriod) && t.outflowAssetId === asset.id).forEach(t => change -= t.totalAmount);
+        const transactionsForAsset = allTransactions.filter(t => t.asset.id === asset.id);
 
-        const openingBalance = closingBalance - change;
-
-        return { id: asset.id, name: asset.name, currency: asset.currency, openingBalance, change, closingBalance };
-    });
-  }, [currentPeriod, assets, enrichedAssets, commissions, exchangeLogs, receivablePayments, capitalInflows, adDeposits, miscellaneousExpenses, debtPayments, withdrawals, taxPayments, receivables, liabilities]);
-
-  const periodFinancials = useMemo<T.PeriodFinancials | null>(() => {
-        if (!currentPeriod || !periodAssetDetails) return null;
-        const mePartnerId = 'default-me';
-        const assetMap = new Map<string, T.Asset>(assets.map(a => [a.id, a]));
-        const projectMap = new Map(projects.map(p => [p.id, p.name]));
-        const periodCommissions = commissions.filter(c => isDateInPeriod(c.date, currentPeriod));
-        const periodAdCosts = enrichedDailyAdCosts.filter(c => isDateInPeriod(c.date, currentPeriod));
-        const periodMiscExpenses = miscellaneousExpenses.filter(e => isDateInPeriod(e.date, currentPeriod));
-        const periodProjects = projects.filter(p => p.period === currentPeriod);
-        const periodExchangeLogs = exchangeLogs.filter(log => isDateInPeriod(log.date, currentPeriod)).sort((a, b) => new Date(a.date).getTime() - new Date(b.date).getTime());
-        const periodDebtPayments = debtPayments.filter(p => isDateInPeriod(p.date, currentPeriod));
-        const periodWithdrawals = withdrawals.filter(w => isDateInPeriod(w.date, currentPeriod));
-        const periodAdDeposits = adDeposits.filter(d => isDateInPeriod(d.date, currentPeriod));
-        const periodTaxPayments = taxPayments.filter(p => p.period === currentPeriod);
-        const periodCapitalInflows = capitalInflows.filter(i => isDateInPeriod(i.date, currentPeriod));
-        const periodReceivables = receivables.filter(r => isDateInPeriod(r.creationDate, currentPeriod));
-        const periodReceivablePayments = receivablePayments.filter(p => isDateInPeriod(p.date, currentPeriod));
-        const periodLiabilities = liabilities.filter(l => isDateInPeriod(l.creationDate, currentPeriod) && l.inflowAssetId);
-
-        
-        const projectPnL = new Map<string, { revenue: number, cost: number, inputVat: number }>();
-        periodProjects.forEach(p => projectPnL.set(p.id, { revenue: 0, cost: 0, inputVat: 0 }));
-
-        periodCommissions.forEach(c => {
-            const pnl = projectPnL.get(c.projectId);
-            if (pnl) pnl.revenue += c.vndAmount;
-        });
-
-        periodAdCosts.forEach(c => {
-            const pnl = projectPnL.get(c.projectId);
-            if (pnl) {
-                pnl.cost += c.vndCost;
-                pnl.inputVat += c.vndCost * (c.vatRate || 0) / 100;
+        transactionsForAsset.forEach(t => {
+            const netAmount = t.inflow - t.outflow;
+            if (t.date < currentPeriod) {
+                openingBalance += netAmount;
+            } else if (t.date.startsWith(currentPeriod)) {
+                change += netAmount;
             }
         });
 
-        periodMiscExpenses.forEach(e => {
-            if (e.projectId) {
-                const pnl = projectPnL.get(e.projectId);
-                if (pnl) {
-                    pnl.cost += e.vndAmount;
-                    pnl.inputVat += e.vndAmount * (e.vatRate || 0) / 100;
-                }
-            }
-        });
-        
-        let exchangeRateGainLoss = 0;
-        const commissionLedger = new Map<string, {amount: number, predictedRate: number}[]>();
-        periodCommissions.forEach(c => {
-            if(!commissionLedger.has(c.assetId)) commissionLedger.set(c.assetId, []);
-            commissionLedger.get(c.assetId)!.push({amount: c.usdAmount, predictedRate: c.predictedRate});
-        });
-        periodExchangeLogs.forEach(log => {
-            const ledger = commissionLedger.get(log.sellingAssetId);
-            if(!ledger) return;
-            let amountToProcess = log.usdAmount;
-            while(amountToProcess > 0 && ledger.length > 0) {
-                const chunk = ledger[0];
-                const amountFromChunk = Math.min(amountToProcess, chunk.amount);
-                exchangeRateGainLoss += amountFromChunk * (log.rate - chunk.predictedRate);
-                chunk.amount -= amountFromChunk;
-                amountToProcess -= amountFromChunk;
-                if(chunk.amount < 0.001) ledger.shift();
-            }
-        });
-        
-        const totalRevenue = Array.from(projectPnL.values()).reduce((sum, pnl) => sum + pnl.revenue, 0) + exchangeRateGainLoss;
-        const totalAdCost = periodAdCosts.reduce((sum, c) => sum + c.vndCost, 0);
-        const totalMiscCost = periodMiscExpenses.reduce((sum, e) => sum + e.vndAmount, 0);
-        const totalCost = totalAdCost + totalMiscCost;
-        const totalInputVat = periodAdCosts.reduce((s, c) => s + c.vndCost * (c.vatRate || 0)/100, 0) + periodMiscExpenses.reduce((s, e) => s + e.vndAmount * (e.vatRate || 0)/100, 0);
-        const totalProfit = totalRevenue - totalCost;
-
-        const partnerPnl = new Map<string, { revenue: number, cost: number, profit: number, inputVat: number }>();
-        partners.forEach(p => partnerPnl.set(p.id, { revenue: 0, cost: 0, profit: 0, inputVat: 0 }));
-
-        periodProjects.forEach(p => {
-            const pnl = projectPnL.get(p.id);
-            if (!pnl) return;
-            const shares = p.isPartnership ? p.partnerShares : [{ partnerId: mePartnerId, sharePercentage: 100 }];
-            shares?.forEach(share => {
-                const partner = partnerPnl.get(share.partnerId);
-                if (partner) {
-                    const ratio = share.sharePercentage / 100;
-                    partner.revenue += pnl.revenue * ratio;
-                    partner.cost += pnl.cost * ratio;
-                    partner.inputVat += pnl.inputVat * ratio;
-                }
-            });
-        });
-
-        periodMiscExpenses.filter(e => !e.projectId).forEach(e => {
-            const shares = e.isPartnership ? e.partnerShares : [{ partnerId: mePartnerId, sharePercentage: 100 }];
-            shares?.forEach(share => {
-                 const partner = partnerPnl.get(share.partnerId);
-                 if(partner) {
-                     const ratio = share.sharePercentage / 100;
-                     partner.cost += e.vndAmount * ratio;
-                     partner.inputVat += e.vndAmount * (e.vatRate || 0) / 100 * ratio;
-                 }
-            });
-        });
-
-        partnerPnl.forEach((pnl, id) => {
-            const partnerShareOfGainLoss = (id === mePartnerId) ? exchangeRateGainLoss : 0; // Simplified
-            pnl.revenue += partnerShareOfGainLoss;
-            pnl.profit = pnl.revenue - pnl.cost;
-        });
-
-        const myPnl = partnerPnl.get(mePartnerId) || { revenue: 0, cost: 0, profit: 0, inputVat: 0 };
-
-        const { taxSeparationAmount = 0 } = taxSettings;
-        const initialRevenueBase = taxSettings.incomeTaxBase === 'personal' ? myPnl.revenue : totalRevenue;
-        const revenueBase = Math.max(0, initialRevenueBase - taxSeparationAmount);
-        const costBase = taxSettings.incomeTaxBase === 'personal' ? myPnl.cost : totalCost;
-        const profitBase = revenueBase - costBase;
-        const vatOutputBase = taxSettings.vatOutputBase === 'personal' ? myPnl.revenue : totalRevenue;
-        const vatInputBase = taxSettings.vatInputMethod === 'manual' 
-            ? taxSettings.manualInputVat
-            : (taxSettings.vatInputBase === 'personal' ? myPnl.inputVat : totalInputVat);
-        
-        let taxPayable=0, incomeTax=0, netVat=0, outputVat=0;
-
-        if(taxSettings.method === 'revenue'){
-            taxPayable = revenueBase * (taxSettings.revenueRate/100);
-        } else {
-            outputVat = vatOutputBase * (taxSettings.vatRate/100);
-            netVat = outputVat - vatInputBase;
-            incomeTax = Math.max(0, profitBase) * (taxSettings.incomeRate/100);
-            taxPayable = Math.max(0, netVat) + incomeTax;
-        }
-
-        const partnerPnlDetails = Array.from(partnerPnl.entries()).map(([partnerId, pnl]) => {
-             const { taxSeparationAmount = 0 } = taxSettings;
-             const partnerInitialRevenueBase = taxSettings.incomeTaxBase === 'personal' ? pnl.revenue : totalRevenue;
-             const partnerRevenueBase = Math.max(0, partnerInitialRevenueBase - (partnerId === mePartnerId ? taxSeparationAmount : 0)); // only apply separation to 'me'
-             const partnerCostBase = taxSettings.incomeTaxBase === 'personal' ? pnl.cost : totalCost;
-             const partnerProfitBase = partnerRevenueBase - partnerCostBase;
-             const partnerVatOutputBase = taxSettings.vatOutputBase === 'personal' ? pnl.revenue : totalRevenue;
-             const partnerVatInputBase = taxSettings.vatInputMethod === 'manual' ? taxSettings.manualInputVat : (taxSettings.vatInputBase === 'personal' ? pnl.inputVat : totalInputVat);
-             
-             let partnerTaxPayable=0;
-             if(taxSettings.method === 'revenue'){
-                partnerTaxPayable = partnerRevenueBase * (taxSettings.revenueRate/100);
-             } else {
-                 const partnerOutputVat = partnerVatOutputBase * (taxSettings.vatRate/100);
-                 const partnerNetVat = partnerOutputVat - partnerVatInputBase;
-                 const partnerIncomeTax = Math.max(0, partnerProfitBase) * (taxSettings.incomeRate/100);
-                 partnerTaxPayable = Math.max(0, partnerNetVat) + partnerIncomeTax;
-             }
-            
-            return {
-                partnerId,
-                name: partners.find(p => p.id === partnerId)?.name || 'N/A',
-                ...pnl,
-                taxPayable: partnerId === mePartnerId ? taxPayable : partnerTaxPayable,
-            };
-        });
-
-        const cashFlow = {
-            operating: { inflows: [] as T.CashFlowDetails[], outflows: [] as T.CashFlowDetails[], net: 0 },
-            investing: { inflows: [] as T.CashFlowDetails[], outflows: [] as T.CashFlowDetails[], net: 0 },
-            financing: { inflows: [] as T.CashFlowDetails[], outflows: [] as T.CashFlowDetails[], net: 0 },
-            netChange: 0, beginningBalance: 0, endBalance: 0,
-        };
-        const addCashFlow = (category: 'operating' | 'investing' | 'financing', type: 'inflows' | 'outflows', label: string, amount: number) => {
-            if(amount === 0) return;
-            cashFlow[category][type].push({label, amount});
-        }
-        
-        // Operating - Inflows
-        addCashFlow('operating', 'inflows', 'Từ hoa hồng', periodCommissions.reduce((s, c) => {
-             const receivingAsset = assetMap.get(c.assetId);
-             if(!receivingAsset || receivingAsset.currency !== 'VND') return s;
-             return s + c.vndAmount;
-        }, 0));
-        addCashFlow('operating', 'inflows', 'Từ thu nợ phải thu', periodReceivablePayments.reduce((s, p) => s + p.amount, 0));
-        addCashFlow('operating', 'inflows', 'Từ bán USD', periodExchangeLogs.reduce((s, l) => s + l.vndAmount, 0));
-
-        // Operating - Outflows
-        addCashFlow('operating', 'outflows', 'Nạp tiền Ads', periodAdDeposits.reduce((s, d) => s + d.vndAmount, 0));
-        addCashFlow('operating', 'outflows', 'Chi phí phát sinh', periodMiscExpenses.reduce((s, e) => s + e.vndAmount, 0));
-        addCashFlow('operating', 'outflows', 'Trả nợ', periodDebtPayments.reduce((s, p) => s + p.amount, 0));
-        addCashFlow('operating', 'outflows', 'Nộp thuế', periodTaxPayments.reduce((s, p) => s + p.amount, 0));
-        
-        // Investing - Outflows
-        addCashFlow('investing', 'outflows', 'Tạo khoản phải thu', periodReceivables.reduce((s,r) => s+r.totalAmount, 0));
-        // Investing - Inflows
-        addCashFlow('investing', 'inflows', 'Nhận tiền vay/nợ', periodLiabilities.reduce((s, l) => s + l.totalAmount, 0));
-
-        // Financing - Inflows & Outflows
-        addCashFlow('financing', 'inflows', 'Vốn góp', periodCapitalInflows.reduce((s,i)=>s+i.amount, 0));
-        addCashFlow('financing', 'outflows', 'Rút vốn', periodWithdrawals.reduce((s,w)=>s+w.vndAmount, 0));
-        
-        cashFlow.operating.net = cashFlow.operating.inflows.reduce((s,i)=>s+i.amount,0) - cashFlow.operating.outflows.reduce((s,i)=>s+i.amount,0);
-        cashFlow.investing.net = cashFlow.investing.inflows.reduce((s,i)=>s+i.amount,0) - cashFlow.investing.outflows.reduce((s,i)=>s+i.amount,0);
-        cashFlow.financing.net = cashFlow.financing.inflows.reduce((s,i)=>s+i.amount,0) - cashFlow.financing.outflows.reduce((s,i)=>s+i.amount,0);
-        
-        cashFlow.netChange = cashFlow.operating.net + cashFlow.investing.net + cashFlow.financing.net;
-        cashFlow.beginningBalance = periodAssetDetails.filter(a => a.currency === 'VND').reduce((sum, a) => sum + a.openingBalance, 0);
-        cashFlow.endBalance = cashFlow.beginningBalance + cashFlow.netChange;
+        const closingBalance = openingBalance + change;
 
         return {
-            totalRevenue, totalAdCost, totalMiscCost, totalCost, totalProfit, totalInputVat,
-            myRevenue: myPnl.revenue, myCost: myPnl.cost, myProfit: myPnl.profit, myInputVat: myPnl.inputVat,
-            exchangeRateGainLoss, profitBeforeTax: totalProfit, netProfit: totalProfit - taxPayable, tax: { taxPayable, incomeTax, netVat, outputVat },
-            taxBases: { initialRevenueBase, taxSeparationAmount, revenueBase, costBase, profitBase, vatOutputBase, vatInputBase },
-            partnerPnlDetails, cashFlow,
-            revenueDetails: Array.from(projectPnL.entries()).map(([id, pnl]) => ({name: projectMap.get(id) || 'N/A', amount: pnl.revenue})).filter(d => d.amount > 0),
-            adCostDetails: periodAdCosts.map(c => ({name: projectMap.get(c.projectId) || 'N/A', amount: c.vndCost})).filter(d => d.amount > 0),
-            miscCostDetails: periodMiscExpenses.map(e => ({name: e.description, amount: e.vndAmount})).filter(d => d.amount > 0),
+            id: asset.id,
+            name: asset.name,
+            currency: asset.currency,
+            openingBalance,
+            change,
+            closingBalance,
         };
-    }, [
-        currentPeriod, taxSettings, partners, projects, enrichedDailyAdCosts, commissions, miscellaneousExpenses,
-        exchangeLogs, debtPayments, withdrawals, adDeposits, taxPayments, capitalInflows, receivables, receivablePayments,
-        periodAssetDetails, assets, liabilities
-    ]);
-
-    const masterProjects = useMemo(() => {
-        const uniqueProjects = new Map<string, { name: string; categoryId?: string; nicheId?: string; }>();
-        projects.forEach(p => {
-            const key = p.name.trim().toLowerCase();
-            if (!uniqueProjects.has(key)) {
-                uniqueProjects.set(key, { name: p.name, categoryId: p.categoryId, nicheId: p.nicheId });
-            }
-        });
-        return Array.from(uniqueProjects.values());
-    }, [projects]);
-
-    const allTransactions = useMemo<EnrichedTransaction[]>(() => {
-        const assetMap = new Map(assets.map(a => [a.id, a]));
-        const projectMap = new Map(projects.map(p => [p.id, p.name]));
-        const partnerMap = new Map(partners.map(p => [p.id, p.name]));
-        const liabilityMap = new Map(liabilities.map(l => [l.id, l.description]));
-        const receivableMap = new Map(receivables.map(r => [r.id, r.description]));
-        
-        let transactions: EnrichedTransaction[] = [];
-
-        capitalInflows.forEach(t => {
-            const asset = assetMap.get(t.assetId); if (!asset) return;
-            let sourceName = 'Tự góp vốn';
-            if (t.contributedByPartnerId && t.contributedByPartnerId !== 'default-me') sourceName = partnerMap.get(t.contributedByPartnerId) || 'Đối tác';
-            else if (t.externalInvestorName) sourceName = `Bên ngoài: ${t.externalInvestorName}`;
-            transactions.push({ id: `ci-${t.id}`, date: t.date, asset, type: 'Vốn góp', description: t.description, inflow: t.amount, outflow: 0, sender: sourceName, receiver: asset.name });
-        });
-
-        commissions.forEach(t => {
-            const asset = assetMap.get(t.assetId); if (!asset) return;
-            const amount = asset.currency === 'USD' ? t.usdAmount : t.vndAmount;
-            const projectName = projectMap.get(t.projectId) || 'N/A';
-            transactions.push({ id: `comm-${t.id}`, date: t.date, asset, type: 'Hoa hồng', description: `Dự án: ${projectName}`, inflow: amount, outflow: 0, sender: `Dự án ${projectName}`, receiver: asset.name });
-        });
-        
-        exchangeLogs.forEach(t => {
-            const sellingAsset = assetMap.get(t.sellingAssetId);
-            const receivingAsset = assetMap.get(t.receivingAssetId);
-            if (sellingAsset) {
-                transactions.push({ id: `ex-out-${t.id}`, date: t.date, asset: sellingAsset, type: 'Bán USD', description: `Bán ${formatCurrency(t.usdAmount, 'USD')}`, inflow: 0, outflow: t.usdAmount, sender: sellingAsset.name, receiver: receivingAsset?.name || 'N/A' });
-            }
-            if (receivingAsset) {
-                transactions.push({ id: `ex-in-${t.id}`, date: t.date, asset: receivingAsset, type: 'Bán USD', description: `Nhận ${formatCurrency(t.vndAmount)}`, inflow: t.vndAmount, outflow: 0, sender: sellingAsset?.name || 'N/A', receiver: receivingAsset.name });
-            }
-        });
-
-        receivablePayments.forEach(t => {
-            const asset = assetMap.get(t.assetId); if (!asset) return;
-            const receivableDesc = receivableMap.get(t.receivableId) || 'N/A';
-            transactions.push({ id: `rp-${t.id}`, date: t.date, asset, type: 'Thu nợ', description: receivableDesc, inflow: t.amount, outflow: 0, sender: receivableDesc, receiver: asset.name });
-        });
-
-        adDeposits.forEach(t => {
-            const asset = assetMap.get(t.assetId); if (!asset) return;
-            const receiverDesc = `TK ${t.adAccountNumber} (${t.adsPlatform})`;
-            transactions.push({ id: `ad-${t.id}`, date: t.date, asset, type: 'Nạp Ads', description: `Nạp vào ${receiverDesc}`, inflow: 0, outflow: t.vndAmount, sender: asset.name, receiver: receiverDesc });
-        });
-
-        miscellaneousExpenses.forEach(t => {
-            const asset = assetMap.get(t.assetId); if (!asset) return;
-            transactions.push({ id: `me-${t.id}`, date: t.date, asset, type: 'Chi phí PS', description: t.description, inflow: 0, outflow: t.amount, sender: asset.name, receiver: t.description });
-        });
-
-        debtPayments.forEach(t => {
-            const asset = assetMap.get(t.assetId); if (!asset) return;
-            const liabilityDesc = liabilityMap.get(t.liabilityId) || 'N/A';
-            transactions.push({ id: `dp-${t.id}`, date: t.date, asset, type: 'Trả nợ', description: liabilityDesc, inflow: 0, outflow: t.amount, sender: asset.name, receiver: liabilityDesc });
-        });
-
-        withdrawals.forEach(t => {
-            const asset = assetMap.get(t.assetId); if (!asset) return;
-            const partnerName = partnerMap.get(t.withdrawnBy) || 'N/A';
-            transactions.push({ id: `wd-${t.id}`, date: t.date, asset, type: 'Rút tiền', description: t.description, inflow: 0, outflow: t.amount, sender: asset.name, receiver: partnerName });
-        });
-
-        taxPayments.forEach(t => {
-            const asset = assetMap.get(t.assetId); if (!asset) return;
-            transactions.push({ id: `tp-${t.id}`, date: t.date, asset, type: 'Nộp thuế', description: `Thuế kỳ ${t.period}`, inflow: 0, outflow: t.amount, sender: asset.name, receiver: 'Cơ quan thuế' });
-        });
-        
-        receivables.forEach(t => {
-            const asset = assetMap.get(t.outflowAssetId); if (!asset) return;
-            transactions.push({ id: `rec-${t.id}`, date: t.creationDate, asset, type: 'Tạo phải thu', description: t.description, inflow: 0, outflow: t.totalAmount, sender: asset.name, receiver: t.description });
-        });
-        
-        liabilities.forEach(t => {
-            if(t.inflowAssetId){
-                const asset = assetMap.get(t.inflowAssetId); if (!asset) return;
-                transactions.push({ id: `lia-${t.id}`, date: t.creationDate, asset, type: 'Nhận nợ', description: t.description, inflow: t.totalAmount, outflow: 0, sender: t.description, receiver: asset.name });
-            }
-        });
-
-        // FIX: Remove the redundant and type-breaking .map() call. The properties it added were not part of the EnrichedTransaction type.
-        // The consuming component will now use the properties from the 'asset' object directly.
-        return transactions.sort((a,b) => new Date(b.date).getTime() - new Date(a.date).getTime() || a.id.localeCompare(b.id) );
-    }, [
-        assets, projects, partners, liabilities, receivables, 
-        capitalInflows, commissions, exchangeLogs, receivablePayments, adDeposits, 
-        miscellaneousExpenses, debtPayments, withdrawals, taxPayments
-    ]);
-
-  // FIX: Calculate enrichedAdAccounts and adAccountTransactions
-  const { enrichedAdAccounts, adAccountTransactions } = useMemo(() => {
-    const transactions: (AdAccountTransaction & { type: 'deposit' | 'spent' | 'transfer_in' | 'transfer_out' })[] = [];
-    
-    const assetMap = new Map(assets.map(a => [a.id, a.name]));
-    const projectMap = new Map(projects.map(p => [p.id, p.name]));
-    
-    // Add deposits
-    adDeposits.forEach(d => transactions.push({
-        date: d.date,
-        adAccountNumber: d.adAccountNumber,
-        description: `Nạp tiền từ ${assetMap.get(d.assetId) || 'N/A'}`,
-        deposit: d.usdAmount,
-        spent: 0,
-        balance: 0, // will be calculated later
-        type: 'deposit'
-    }));
-
-    // Add costs
-    dailyAdCosts.forEach(c => transactions.push({
-        date: c.date,
-        adAccountNumber: c.adAccountNumber,
-        description: `Chi phí cho dự án ${projectMap.get(c.projectId) || 'N/A'}`,
-        deposit: 0,
-        spent: c.amount,
-        balance: 0,
-        type: 'spent'
-    }));
-
-    // Add fund transfers
-    adFundTransfers.forEach(t => {
-        // Outflow from source account
-        transactions.push({
-            date: t.date,
-            adAccountNumber: t.fromAdAccountNumber,
-            description: `Chuyển tiền đến TK ${t.toAdAccountNumber}`,
-            deposit: 0,
-            spent: t.amount,
-            balance: 0,
-            type: 'transfer_out'
-        });
-        // Inflow to destination account
-        transactions.push({
-            date: t.date,
-            adAccountNumber: t.toAdAccountNumber,
-            description: `Nhận tiền từ TK ${t.fromAdAccountNumber}`,
-            deposit: t.amount,
-            spent: 0,
-            balance: 0,
-            type: 'transfer_in'
-        });
     });
 
-    transactions.sort((a, b) => new Date(a.date).getTime() - new Date(b.date).getTime());
-    
-    const balances = new Map<string, number>();
-    const finalTransactions: AdAccountTransaction[] = transactions.map(t => {
-        const currentBalance = balances.get(t.adAccountNumber) || 0;
-        const newBalance = currentBalance + t.deposit - t.spent;
-        balances.set(t.adAccountNumber, newBalance);
-        return { ...t, balance: newBalance };
-    });
+    return details;
+}, [currentPeriod, assets, allTransactions]);
 
-    const finalEnrichedAccounts: EnrichedAdAccount[] = adAccounts.map(acc => ({
-        ...acc,
-        balance: balances.get(acc.accountNumber) || 0
-    })).sort((a, b) => a.accountNumber.localeCompare(b.accountNumber));
-    
-    return { 
-        enrichedAdAccounts: finalEnrichedAccounts, 
-        adAccountTransactions: finalTransactions.sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime()) 
-    };
+  const updateTaxSettings = async (settings: T.TaxSettings) => {
+    if (!firestoreDb) return;
+    try {
+        await setDoc(doc(firestoreDb, 'settings', 'tax'), settings);
+        setTaxSettings(settings);
+    } catch (e) {
+        console.error("Error updating tax settings: ", e);
+    }
+  };
 
-  }, [adAccounts, adDeposits, dailyAdCosts, adFundTransfers, assets, projects]);
+  const openPeriod = async (period: string) => {
+    if (!firestoreDb) return;
+    try {
+        await setDoc(doc(firestoreDb, 'settings', 'periods'), { activePeriod: period, closedPeriods });
+        setActivePeriod(period);
+    } catch (e) {
+        console.error("Error opening period: ", e);
+    }
+  };
 
+  const closePeriod = async (period: string) => {
+      if (!firestoreDb || period !== activePeriod) return;
+      try {
+          const newClosedPeriods = [...closedPeriods, { period, closedAt: new Date().toISOString() }];
+          await setDoc(doc(firestoreDb, 'settings', 'periods'), { activePeriod: null, closedPeriods: newClosedPeriods });
+          setActivePeriod(null);
+          setClosedPeriods(newClosedPeriods);
+      } catch (e) {
+          console.error("Error closing period: ", e);
+      }
+  };
 
-  return (
-    <DataContext.Provider value={{ 
-        isLoading, projects, addProject, updateProject, deleteProject, adAccounts, addAdAccount, updateAdAccount,
-        deleteAdAccount, dailyAdCosts, addDailyAdCost, updateDailyAdCost, deleteDailyAdCost,
-        partners, addPartner, updatePartner, deletePartner,
-        assetTypes, addAssetType, updateAssetType, deleteAssetType,
-        assets, addAsset, updateAsset, deleteAsset,
-        commissions, addCommission, updateCommission, deleteCommission,
-        exchangeLogs, addExchangeLog, updateExchangeLog, deleteExchangeLog,
-        miscellaneousExpenses, addMiscellaneousExpense, updateMiscellaneousExpense, deleteMiscellaneousExpense,
-        adDeposits, addAdDeposit, updateAdDeposit, deleteAdDeposit,
-        adFundTransfers, addAdFundTransfer, updateAdFundTransfer, deleteAdFundTransfer,
-        liabilities, addLiability, updateLiability, deleteLiability,
-        receivables, addReceivable, updateReceivable, deleteReceivable,
-        receivablePayments, addReceivablePayment, updateReceivablePayment, deleteReceivablePayment,
-        withdrawals, addWithdrawal, updateWithdrawal, deleteWithdrawal,
-        debtPayments, addDebtPayment, updateDebtPayment, deleteDebtPayment,
-        taxPayments, addTaxPayment,
-        capitalInflows, addCapitalInflow, updateCapitalInflow, deleteCapitalInflow,
-        taxSettings, updateTaxSettings,
-        activePeriod, openPeriod, closePeriod, closedPeriods, viewingPeriod, setViewingPeriod, clearViewingPeriod,
-        currentPage, setCurrentPage,
-        currentPeriod, isReadOnly,
-        enrichedAssets,
-        enrichedDailyAdCosts,
-        periodFinancials,
-        periodAssetDetails,
-        seedData,
-        categories, addCategory, updateCategory, deleteCategory,
-        niches, addNiche, updateNiche, deleteNiche,
-        masterProjects,
-        firebaseConfig, setFirebaseConfig,
-        // Add period-specific data and functions
-        periodLiabilities, addPeriodLiability, updatePeriodLiability, deletePeriodLiability,
-        periodDebtPayments, addPeriodDebtPayment,
-        periodReceivables, addPeriodReceivable, updatePeriodReceivable, deletePeriodReceivable,
-        periodReceivablePayments, addPeriodReceivablePayment,
-        allTransactions,
-        enrichedAdAccounts,
-        adAccountTransactions,
-     }}>
-      {children}
-    </DataContext.Provider>
-  );
+  const setViewingPeriod = (period: string) => {
+      setViewingPeriodInternal(period);
+  };
+
+  const clearViewingPeriod = () => {
+      setViewingPeriodInternal(null);
+  };
+
+  const value: DataContextType = {
+    isLoading,
+    projects, addProject, updateProject, deleteProject,
+    adAccounts, addAdAccount, updateAdAccount, deleteAdAccount,
+    dailyAdCosts, addDailyAdCost, updateDailyAdCost, deleteDailyAdCost,
+    adDeposits, addAdDeposit, updateAdDeposit, deleteAdDeposit,
+    adFundTransfers, addAdFundTransfer, updateAdFundTransfer, deleteAdFundTransfer,
+    commissions, addCommission, updateCommission, deleteCommission,
+    assetTypes, addAssetType, updateAssetType, deleteAssetType,
+    assets, addAsset, updateAsset, deleteAsset,
+    liabilities, addLiability, updateLiability, deleteLiability,
+    receivables, addReceivable, updateReceivable, deleteReceivable,
+    receivablePayments, addReceivablePayment, updateReceivablePayment, deleteReceivablePayment,
+    exchangeLogs, addExchangeLog, updateExchangeLog, deleteExchangeLog,
+    miscellaneousExpenses, addMiscellaneousExpense, updateMiscellaneousExpense, deleteMiscellaneousExpense,
+    partners, addPartner, updatePartner, deletePartner,
+    withdrawals, addWithdrawal, updateWithdrawal, deleteWithdrawal,
+    debtPayments, addDebtPayment, updateDebtPayment, deleteDebtPayment,
+    taxPayments, addTaxPayment,
+    capitalInflows, addCapitalInflow, updateCapitalInflow, deleteCapitalInflow,
+    taxSettings, updateTaxSettings,
+    activePeriod, viewingPeriod, openPeriod, closePeriod, closedPeriods, setViewingPeriod, clearViewingPeriod, seedData,
+    currentPage, setCurrentPage,
+    currentPeriod, isReadOnly,
+    enrichedAssets,
+    enrichedDailyAdCosts,
+    periodFinancials,
+    periodAssetDetails,
+    categories, addCategory, updateCategory, deleteCategory,
+    niches, addNiche, updateNiche, deleteNiche,
+    masterProjects,
+    firebaseConfig, setFirebaseConfig,
+    periodLiabilities, addPeriodLiability, updatePeriodLiability, deletePeriodLiability,
+    periodDebtPayments, addPeriodDebtPayment,
+    periodReceivables, addPeriodReceivable, updatePeriodReceivable, deletePeriodReceivable,
+    periodReceivablePayments, addPeriodReceivablePayment,
+    allTransactions,
+    enrichedAdAccounts,
+    adAccountTransactions,
+    savings, addSaving, updateSaving, deleteSaving,
+    investments, addInvestment, updateInvestment, deleteInvestment,
+    enrichedPartners,
+    partnerLedgerEntries,
+    allPartnerLedgerEntries,
+    addPartnerLedgerEntry, updatePartnerLedgerEntry, deletePartnerLedgerEntry,
+    partnerAssetBalances,
+  };
+
+  return <DataContext.Provider value={value}>{children}</DataContext.Provider>;
 };

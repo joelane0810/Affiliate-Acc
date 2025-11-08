@@ -14,7 +14,6 @@ export const TableBody: React.FC<{ children: React.ReactNode }> = ({ children })
   <tbody className="bg-gray-900 divide-y divide-gray-800">{children}</tbody>
 );
 
-// FIX: Allow all tr attributes (like onClick) and make children optional.
 interface TableRowProps extends React.HTMLAttributes<HTMLTableRowElement> {
     children?: React.ReactNode;
 }
@@ -22,7 +21,6 @@ export const TableRow: React.FC<TableRowProps> = ({ children, className, ...prop
   <tr className={`hover:bg-gray-800 transition-colors duration-150 ${className}`} {...props}>{children}</tr>
 );
 
-// Fix: Allow all th attributes (like onClick) and make children optional.
 interface TableHeaderProps extends React.ThHTMLAttributes<HTMLTableHeaderCellElement> {
     children?: React.ReactNode;
 }
@@ -32,7 +30,6 @@ export const TableHeader: React.FC<TableHeaderProps> = ({ children, className, .
   </th>
 );
 
-// Fix: Allow all td attributes (like colSpan) and make children optional.
 interface TableCellProps extends React.TdHTMLAttributes<HTMLTableCellElement> {
     children?: React.ReactNode;
 }

@@ -1,3 +1,4 @@
+
 import React, { useState } from 'react';
 import { useData } from '../context/DataContext';
 import { Header } from '../components/Header';
@@ -56,8 +57,10 @@ const ReportRow: React.FC<{
 const DetailRow: React.FC<{ label: string, value: number, isNegative?: boolean }> = ({ label, value, isNegative }) => (
     <div className="flex justify-between items-center py-1.5 px-4 pl-10 border-b border-gray-800/70 text-sm">
         <span className="text-gray-400 truncate pr-4">{label}</span>
-        <span className={`font-mono ${isNegative ? 'text-red-400/80' : 'text-gray-300'}`}>
-             {isNegative && value > 0 ? `- ${formatCurrency(value)}` : formatCurrency(value)}
+        <span className={`font-mono ${
+            value >= 0 ? (isNegative ? 'text-red-400/80' : 'text-green-400/80') : (isNegative ? 'text-green-400/80' : 'text-red-400/80')
+        }`}>
+             {formatCurrency(value)}
         </span>
     </div>
 );
@@ -136,8 +139,8 @@ const ReportPageContent = () => {
                         <CardHeader>Báo cáo kinh doanh</CardHeader>
                         <CardContent>
                             <ReportRow 
-                                label="Tổng Doanh thu (dự tính)" 
-                                value={periodFinancials.revenueDetails.reduce((sum, r) => sum + r.amount, 0)} 
+                                label="Tổng Doanh thu" 
+                                value={periodFinancials.totalRevenue} 
                                 valueColor="text-primary-400" 
                                 isExpandable={periodFinancials.revenueDetails.length > 0}
                                 isExpanded={expandedRows.has('revenue')}
@@ -146,16 +149,16 @@ const ReportPageContent = () => {
                             />
                             {expandedRows.has('revenue') && (
                                 <div className="bg-gray-800/50 -mx-4">
-                                    {periodFinancials.revenueDetails.map(item => (
-                                        <DetailRow key={item.name} label={item.name} value={item.amount} />
+                                    {periodFinancials.revenueDetails.map((item, index) => (
+                                        <DetailRow key={`${item.name}-${index}`} label={item.name} value={item.amount} />
                                     ))}
                                 </div>
                             )}
 
                             <ReportRow 
-                                label="Điều chỉnh doanh thu theo tỷ giá" 
-                                value={periodFinancials.exchangeRateGainLoss}
-                                valueColor={periodFinancials.exchangeRateGainLoss >= 0 ? 'text-green-400' : 'text-red-400'}
+                                label="Lãi/Lỗ từ đầu tư" 
+                                value={periodFinancials.investmentGainLoss}
+                                valueColor={periodFinancials.investmentGainLoss >= 0 ? 'text-green-400' : 'text-red-400'}
                             />
 
                             <ReportRow label="Tổng Chi phí" value={periodFinancials.totalCost} isNegative indented={false} boldLabel />

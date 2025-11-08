@@ -1,4 +1,4 @@
-import React, { ErrorInfo, ReactNode } from 'react';
+import React, { Component, ErrorInfo, ReactNode } from 'react';
 
 interface Props {
   children: ReactNode;
@@ -10,23 +10,28 @@ interface State {
   errorInfo?: ErrorInfo;
 }
 
-// FIX: To resolve errors related to missing 'setState' and 'props', the class must extend React.Component.
-// This gives the class access to component lifecycle methods and properties.
-class ErrorBoundary extends React.Component<Props, State> {
-  public state: State = {
+class ErrorBoundary extends Component<Props, State> {
+  // Initializing state as a class property.
+  state: State = {
     hasError: false,
+    error: undefined,
+    errorInfo: undefined,
   };
 
-  public static getDerivedStateFromError(error: Error): State {
+  static getDerivedStateFromError(error: Error): Partial<State> {
+    // This lifecycle method should return a state update object.
     return { hasError: true, error };
   }
 
-  public componentDidCatch(error: Error, errorInfo: ErrorInfo) {
+  componentDidCatch(error: Error, errorInfo: ErrorInfo) {
     console.error("Uncaught error:", error, errorInfo);
-    this.setState({ errorInfo });
+    // This lifecycle is for side effects like logging. We update the state with the errorInfo here.
+    // Correctly call this.setState, which is inherited from Component.
+    // FIX: Class methods like setState must be called on the component instance using `this`.
+    this.setState({ error, errorInfo });
   }
 
-  public render() {
+  render() {
     if (this.state.hasError) {
       return (
         <div className="flex items-center justify-center h-screen bg-gray-900 text-gray-200 p-8">
@@ -53,6 +58,8 @@ class ErrorBoundary extends React.Component<Props, State> {
       );
     }
 
+    // Correctly access this.props.children to render the component tree.
+    // FIX: Class properties like props must be accessed on the component instance using `this`.
     return this.props.children;
   }
 }

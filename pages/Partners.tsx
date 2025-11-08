@@ -1,166 +1,270 @@
 import React, { useState, useMemo } from 'react';
 import { useData } from '../context/DataContext';
-import type { Partner } from '../types';
+import type { Partner, PartnerLedgerEntry } from '../types';
 import { Header } from '../components/Header';
 import { Button } from '../components/ui/Button';
-import { Card, CardContent } from '../components/ui/Card';
+import { Card, CardContent, CardHeader } from '../components/ui/Card';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '../components/ui/Table';
-import { Input } from '../components/ui/Input';
-import { Plus, Trash2 } from '../components/icons/IconComponents';
-import { formatCurrency, formatPercentage } from '../lib/utils';
+import { Modal } from '../components/ui/Modal';
+import { Input, Label } from '../components/ui/Input';
+import { NumberInput } from '../components/ui/NumberInput';
+import { Plus, Edit, Trash2 } from '../components/icons/IconComponents';
+import { formatCurrency, formatDate } from '../lib/utils';
 import { ConfirmationModal } from '../components/ui/ConfirmationModal';
+
+// Form for adding/editing a partner
+const PartnerForm: React.FC<{
+    partner?: Partner;
+    onSave: (partner: Omit<Partner, 'id'> | Partner) => void;
+    onCancel: () => void;
+}> = ({ partner, onSave, onCancel }) => {
+    const [name, setName] = useState(partner?.name || '');
+    
+    const handleSubmit = (e: React.FormEvent) => {
+        e.preventDefault();
+        onSave({ id: partner?.id || '', name });
+    };
+
+    return (
+        <form onSubmit={handleSubmit} className="space-y-4">
+            <div>
+                <Label htmlFor="partnerName">Tên đối tác</Label>
+                <Input id="partnerName" value={name} onChange={e => setName(e.target.value)} required autoFocus />
+            </div>
+            <div className="mt-6 flex justify-end space-x-3">
+                <Button type="button" variant="secondary" onClick={onCancel}>Hủy</Button>
+                <Button type="submit">Lưu</Button>
+            </div>
+        </form>
+    );
+};
+
+// Form for adding a manual ledger entry
+const LedgerEntryForm: React.FC<{
+    partnerId: string;
+    onSave: (entry: Omit<PartnerLedgerEntry, 'id'>) => void;
+    onCancel: () => void;
+}> = ({ partnerId, onSave, onCancel }) => {
+    const [date, setDate] = useState(new Date().toISOString().split('T')[0]);
+    const [description, setDescription] = useState('');
+    const [type, setType] = useState<'inflow' | 'outflow'>('outflow');
+    const [amount, setAmount] = useState(0);
+    
+    const handleSubmit = (e: React.FormEvent) => {
+        e.preventDefault();
+        if (amount <= 0) {
+            alert("Số tiền phải lớn hơn 0.");
+            return;
+        }
+        onSave({ partnerId, date, description, type, amount });
+    };
+
+    return (
+        <form onSubmit={handleSubmit} className="space-y-4">
+            <div>
+                <Label htmlFor="entryDate">Ngày</Label>
+                <Input id="entryDate" type="date" value={date} onChange={e => setDate(e.target.value)} required />
+            </div>
+            <div>
+                <Label htmlFor="entryDesc">Mô tả</Label>
+                <Input id="entryDesc" value={description} onChange={e => setDescription(e.target.value)} placeholder="VD: Điều chỉnh số dư, Tạm ứng..." required />
+            </div>
+             <div className="grid grid-cols-2 gap-4">
+                <div>
+                    <Label htmlFor="entryType">Loại giao dịch</Label>
+                     <select id="entryType" value={type} onChange={e => setType(e.target.value as 'inflow' | 'outflow')} className="w-full px-3 py-2 bg-gray-900 border border-gray-600 rounded-md focus:outline-none focus:ring-2 focus:ring-primary-500">
+                        <option value="inflow">Ghi có (Inflow)</option>
+                        <option value="outflow">Ghi nợ (Outflow)</option>
+                    </select>
+                </div>
+                 <div>
+                    <Label htmlFor="entryAmount">Số tiền (VND)</Label>
+                    <NumberInput id="entryAmount" value={amount} onValueChange={setAmount} required />
+                </div>
+            </div>
+            <div className="mt-6 flex justify-end space-x-3">
+                <Button type="button" variant="secondary" onClick={onCancel}>Hủy</Button>
+                <Button type="submit">Lưu</Button>
+            </div>
+        </form>
+    );
+};
 
 
 export default function Partners() {
-    const { 
-        partners, addPartner, updatePartner, deletePartner,
-        periodFinancials, isReadOnly
+    const {
+        enrichedPartners, allPartnerLedgerEntries, isReadOnly,
+        addPartner, updatePartner, deletePartner,
+        addPartnerLedgerEntry, deletePartnerLedgerEntry,
+        partnerAssetBalances,
     } = useData();
+    
+    const [isPartnerModalOpen, setIsPartnerModalOpen] = useState(false);
+    const [editingPartner, setEditingPartner] = useState<Partner | undefined>(undefined);
     const [partnerToDelete, setPartnerToDelete] = useState<Partner | null>(null);
 
-    const partnerStats = useMemo(() => {
-        if (!periodFinancials) {
-            return partners.map(p => ({
-                ...p,
-                revenue: 0,
-                cost: 0,
-                profit: 0,
-                roi: 0,
-            }));
+    const [isLedgerModalOpen, setIsLedgerModalOpen] = useState(false);
+    const [ledgerPartnerId, setLedgerPartnerId] = useState<string>('');
+    const [ledgerEntryToDelete, setLedgerEntryToDelete] = useState<PartnerLedgerEntry | null>(null);
+    
+    // Partner handlers
+    const handleSavePartner = (partner: Omit<Partner, 'id'> | Partner) => {
+        if ('id' in partner && partner.id) {
+            updatePartner(partner as Partner);
+        } else {
+            addPartner(partner as Omit<Partner, 'id'>);
         }
-        return periodFinancials.partnerPnlDetails.map(pnl => {
-            const roi = pnl.cost > 0 ? (pnl.profit / pnl.cost) * 100 : 0;
-            return {
-                ...pnl,
-                id: pnl.partnerId,
-                roi,
-            };
-        });
-    }, [periodFinancials, partners]);
-
-    const handleAddPartner = () => {
-        addPartner({
-            name: 'Đối tác mới',
-        });
+        setIsPartnerModalOpen(false);
     };
-
-    const handleDeleteClick = (partner: { id: string, name: string }) => {
-        if (partner.id === 'default-me') {
-            alert("Không thể xóa đối tác 'Tôi'.");
-            return;
-        }
-        if (partners.length <= 1) {
-            alert("Không thể xóa đối tác cuối cùng.");
-            return;
-        }
-        setPartnerToDelete(partner as Partner);
-    };
-
-    const handleConfirmDelete = () => {
+    const handleDeletePartner = () => {
         if (partnerToDelete) {
             deletePartner(partnerToDelete.id);
             setPartnerToDelete(null);
         }
     };
-
-    const handlePartnerChange = (id: string, field: 'name', value: string) => {
-        const partnerToUpdate = partners.find(p => p.id === id);
-        if (partnerToUpdate) {
-            if (partnerToUpdate.id === 'default-me') return;
-            const updatedPartner = { ...partnerToUpdate, [field]: value };
-            updatePartner(updatedPartner);
+    
+    // Ledger handlers
+    const handleSaveLedgerEntry = (entry: Omit<PartnerLedgerEntry, 'id'>) => {
+        addPartnerLedgerEntry(entry);
+        setIsLedgerModalOpen(false);
+    };
+    const handleDeleteLedgerEntry = () => {
+        if (ledgerEntryToDelete) {
+            deletePartnerLedgerEntry(ledgerEntryToDelete.id);
+            setLedgerEntryToDelete(null);
         }
     };
 
+    const partnerLedger = useMemo(() => 
+        [...allPartnerLedgerEntries].sort((a,b) => {
+             const dateComparison = new Date(b.date).getTime() - new Date(a.date).getTime();
+             if (dateComparison !== 0) return dateComparison;
+             // If dates are the same, sort by ID to maintain a stable order
+             return b.id.localeCompare(a.id);
+        }),
+    [allPartnerLedgerEntries]);
+    
+    const partnerMap = useMemo(() => new Map(enrichedPartners.map(p => [p.id, p.name])), [enrichedPartners]);
+
     return (
-        <>
+        <div>
             <Header title="Đối tác">
                 {!isReadOnly && (
-                    <Button onClick={handleAddPartner}>
+                    <Button onClick={() => { setEditingPartner(undefined); setIsPartnerModalOpen(true); }}>
                         <span className="flex items-center gap-2"><Plus /> Thêm đối tác</span>
                     </Button>
                 )}
             </Header>
 
+            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6 mb-8">
+                {enrichedPartners.map(partner => {
+                    const balancesForPartner = partnerAssetBalances.get(partner.id) || [];
+                    return (
+                    <Card key={partner.id} className="flex flex-col">
+                        <CardHeader className="flex justify-between items-center">
+                            <span>{partner.name}</span>
+                             {!isReadOnly && partner.id !== 'default-me' && (
+                                <div className="flex items-center space-x-2">
+                                    <button onClick={() => { setEditingPartner(partner); setIsPartnerModalOpen(true); }} className="text-gray-400 hover:text-primary-400"><Edit /></button>
+                                    <button onClick={() => setPartnerToDelete(partner)} className="text-gray-400 hover:text-red-400"><Trash2 /></button>
+                                </div>
+                            )}
+                        </CardHeader>
+                        <CardContent className="flex-grow space-y-3">
+                            <div className="flex justify-between items-baseline">
+                                <span className="text-gray-400">Tổng Ghi có (Inflow)</span>
+                                <span className="font-semibold text-green-400">{formatCurrency(partner.totalInflow)}</span>
+                            </div>
+                            <div className="flex justify-between items-baseline">
+                                <span className="text-gray-400">Tổng Ghi nợ (Outflow)</span>
+                                <span className="font-semibold text-red-400">{formatCurrency(partner.totalOutflow)}</span>
+                            </div>
+                            <div className="flex justify-between items-baseline pt-3 border-t border-gray-700">
+                                <span className="font-bold text-white">Số dư</span>
+                                <span className={`font-bold text-xl ${partner.balance >= 0 ? 'text-green-400' : 'text-red-400'}`}>{formatCurrency(partner.balance)}</span>
+                            </div>
+                            {balancesForPartner.length > 0 && (
+                                <div className="pt-3 border-t border-gray-700 mt-3">
+                                    <h4 className="text-sm font-semibold text-gray-400 mb-2">Phân bổ theo tài sản</h4>
+                                    <div className="space-y-1.5 text-sm max-h-24 overflow-y-auto pr-2">
+                                        {balancesForPartner.map(assetBalance => (
+                                            <div key={assetBalance.assetId} className="flex justify-between">
+                                                <span className="text-gray-300 truncate pr-2">{assetBalance.assetName}</span>
+                                                <span className="font-mono font-semibold text-gray-200 flex-shrink-0">
+                                                    {formatCurrency(assetBalance.balance, assetBalance.currency)}
+                                                </span>
+                                            </div>
+                                        ))}
+                                    </div>
+                                </div>
+                            )}
+                        </CardContent>
+                         <div className="p-4 pt-0">
+                            {!isReadOnly && (
+                                <Button size="sm" variant="secondary" className="w-full" onClick={() => { setLedgerPartnerId(partner.id); setIsLedgerModalOpen(true); }}>
+                                    <span className="flex items-center gap-2"><Plus /> Ghi sổ thủ công</span>
+                                </Button>
+                            )}
+                        </div>
+                    </Card>
+                )})}
+            </div>
+
             <Card>
+                <CardHeader>Sổ cái đối tác</CardHeader>
                 <CardContent>
-                    <Table>
+                     <Table>
                         <TableHead>
                             <TableRow>
-                                <TableHeader className="w-1/3">Đối tác</TableHeader>
-                                <TableHeader>Doanh thu kỳ</TableHeader>
-                                <TableHeader>Chi phí kỳ</TableHeader>
-                                <TableHeader>Lợi nhuận kỳ</TableHeader>
-                                <TableHeader>ROI kỳ</TableHeader>
-                                {!isReadOnly && <TableHeader className="w-24">Hành động</TableHeader>}
+                                <TableHeader>Ngày</TableHeader>
+                                <TableHeader>Đối tác</TableHeader>
+                                <TableHeader className="text-left">Mô tả</TableHeader>
+                                <TableHeader className="text-left">Nguồn</TableHeader>
+                                <TableHeader className="text-left">Đích</TableHeader>
+                                <TableHeader>Ghi có (Inflow)</TableHeader>
+                                <TableHeader>Ghi nợ (Outflow)</TableHeader>
+                                {!isReadOnly && <TableHeader>Hành động</TableHeader>}
                             </TableRow>
                         </TableHead>
                         <TableBody>
-                            {partnerStats.map(p => (
-                                <TableRow key={p.id}>
-                                    <TableCell className="py-3">
-                                        <Input
-                                            value={p.name}
-                                            onChange={(e) => handlePartnerChange(p.id, 'name', e.target.value)}
-                                            className="bg-transparent border-none focus:ring-1 focus:bg-gray-800 focus:ring-primary-500 py-1 text-center"
-                                            aria-label={`Tên đối tác ${p.name}`}
-                                            readOnly={p.id === 'default-me' || isReadOnly}
-                                        />
+                            {partnerLedger.map(entry => {
+                                const isManualEntry = !entry.id.startsWith('ci-') && !entry.id.startsWith('wd-') && !entry.id.startsWith('pnl-') && !entry.id.startsWith('active-');
+                                return (
+                                <TableRow key={entry.id}>
+                                    <TableCell>{formatDate(entry.date)}</TableCell>
+                                    <TableCell className="font-medium text-white">{partnerMap.get(entry.partnerId) || 'N/A'}</TableCell>
+                                    <TableCell className="text-left">{entry.description}</TableCell>
+                                    <TableCell className="text-left text-gray-400">{entry.sourceName || '—'}</TableCell>
+                                    <TableCell className="text-left text-gray-400">{entry.destinationName || '—'}</TableCell>
+                                    <TableCell className="text-green-400">{entry.type === 'inflow' ? formatCurrency(entry.amount) : '—'}</TableCell>
+                                    <TableCell className="text-red-400">{entry.type === 'outflow' ? formatCurrency(entry.amount) : '—'}</TableCell>
+                                    <TableCell>
+                                        {!isReadOnly && isManualEntry && (
+                                             <button onClick={() => setLedgerEntryToDelete(entry)} className="text-gray-400 hover:text-red-400"><Trash2 /></button>
+                                        )}
+                                         {!isManualEntry && <span className="text-xs text-gray-500">Tự động</span>}
                                     </TableCell>
-                                    <TableCell className="text-primary-400 py-3">{formatCurrency(p.revenue)}</TableCell>
-                                    <TableCell className="text-red-400 py-3">{formatCurrency(p.cost)}</TableCell>
-                                    <TableCell className={`font-semibold py-3 ${p.profit >= 0 ? 'text-green-400' : 'text-red-400'}`}>
-                                        {formatCurrency(p.profit)}
-                                    </TableCell>
-                                    <TableCell className={`font-semibold py-3 ${p.roi >= 0 ? 'text-green-400' : 'text-red-400'}`}>
-                                       {p.cost > 0 ? formatPercentage(p.roi) : 'N/A'}
-                                    </TableCell>
-                                    {!isReadOnly && (
-                                        <TableCell className="py-3">
-                                            <div className="flex justify-center">
-                                                {p.id !== 'default-me' && (
-                                                    <button 
-                                                        onClick={() => handleDeleteClick(p)} 
-                                                        className="text-gray-400 hover:text-red-400 disabled:opacity-30 disabled:cursor-not-allowed"
-                                                        disabled={partners.length <= 1}
-                                                        aria-label={`Xóa đối tác ${p.name}`}
-                                                    >
-                                                        <Trash2 />
-                                                    </button>
-                                                )}
-                                            </div>
-                                        </TableCell>
-                                    )}
                                 </TableRow>
-                            ))}
+                            )})}
                         </TableBody>
-                        <tfoot className="border-t-2 border-gray-700">
-                            <TableRow className="hover:bg-gray-900">
-                                <TableCell className="font-bold text-white py-3">Tổng</TableCell>
-                                <TableCell className="font-bold text-white py-3">{formatCurrency(periodFinancials?.totalRevenue)}</TableCell>
-                                <TableCell className="font-bold text-white py-3">{formatCurrency(periodFinancials?.totalCost)}</TableCell>
-                                <TableCell 
-                                     className={`font-bold py-3 ${periodFinancials && periodFinancials.totalProfit >= 0 ? 'text-white' : 'text-red-400'}`}
-                                >
-                                    {formatCurrency(periodFinancials?.totalProfit)}
-                                </TableCell>
-                                <TableCell className="py-3"></TableCell>
-                                {!isReadOnly && <TableCell className="py-3"></TableCell>}
-                            </TableRow>
-                        </tfoot>
                     </Table>
                 </CardContent>
             </Card>
             
             {!isReadOnly && (
-                <ConfirmationModal
-                    isOpen={!!partnerToDelete}
-                    onClose={() => setPartnerToDelete(null)}
-                    onConfirm={handleConfirmDelete}
-                    title="Xác nhận xóa đối tác"
-                    message={`Bạn có chắc chắn muốn xóa đối tác "${partnerToDelete?.name}" không? Hành động này không thể hoàn tác.`}
-                />
+                <>
+                    <Modal isOpen={isPartnerModalOpen} onClose={() => setIsPartnerModalOpen(false)} title={editingPartner ? 'Sửa đối tác' : 'Thêm đối tác'}>
+                        <PartnerForm partner={editingPartner} onSave={handleSavePartner} onCancel={() => setIsPartnerModalOpen(false)} />
+                    </Modal>
+                    <ConfirmationModal isOpen={!!partnerToDelete} onClose={() => setPartnerToDelete(null)} onConfirm={handleDeletePartner} title="Xác nhận xóa" message={`Bạn có chắc muốn xóa đối tác "${partnerToDelete?.name}" không?`} />
+                
+                    {ledgerPartnerId && <Modal isOpen={isLedgerModalOpen} onClose={() => setIsLedgerModalOpen(false)} title={`Ghi sổ cho ${partnerMap.get(ledgerPartnerId)}`}>
+                        <LedgerEntryForm partnerId={ledgerPartnerId} onSave={handleSaveLedgerEntry} onCancel={() => setIsLedgerModalOpen(false)} />
+                    </Modal>}
+                    <ConfirmationModal isOpen={!!ledgerEntryToDelete} onClose={() => setLedgerEntryToDelete(null)} onConfirm={handleDeleteLedgerEntry} title="Xác nhận xóa" message={`Bạn có chắc muốn xóa bút toán "${ledgerEntryToDelete?.description}" không?`} />
+                </>
             )}
-        </>
+
+        </div>
     );
 }
