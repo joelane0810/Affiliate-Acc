@@ -303,109 +303,163 @@ const ProjectForm: React.FC<{ project?: T.Project; onSave: (project: Omit<T.Proj
     );
 };
 
-const ProjectListContent: React.FC<{ onEditClick: (project: T.Project) => void; }> = ({ onEditClick }) => {
-    const { projects, deleteProject, currentPeriod, isReadOnly, commissions, enrichedDailyAdCosts, miscellaneousExpenses } = useData();
-    const [projectToDelete, setProjectToDelete] = useState<T.Project | null>(null);
+const ProjectFilters: React.FC<{
+    projectsForPeriod: T.Project[];
+    selectedProjectIds: string[];
+    onProjectSelectionChange: (ids: string[]) => void;
+    dateRange: { start: string; end: string };
+    onDateRangeChange: (range: { start: string; end: string }) => void;
+}> = ({ projectsForPeriod, selectedProjectIds, onProjectSelectionChange, dateRange, onDateRangeChange }) => {
+    const [isDropdownOpen, setIsDropdownOpen] = useState(false);
+    const dropdownRef = useRef<HTMLDivElement>(null);
 
-    const enrichedProjects = useMemo(() => {
-        const projectsForPeriod = projects.filter(p => isDateInPeriod(p.period, currentPeriod));
-    
-        return projectsForPeriod.map(p => {
-          const revenue = commissions
-            .filter(c => c.projectId === p.id)
-            .reduce((sum, c) => sum + c.vndAmount, 0);
-          
-          const adCost = enrichedDailyAdCosts
-            .filter(c => c.projectId === p.id)
-            .reduce((sum, c) => sum + c.vndCost, 0);
-          
-          const miscCost = miscellaneousExpenses
-            .filter(e => e.projectId === p.id)
-            .reduce((sum, e) => sum + e.vndAmount, 0);
-          
-          const totalCost = adCost + miscCost;
-          const profit = revenue - totalCost;
-    
-          return {
-            ...p,
-            revenue,
-            cost: totalCost,
-            profit,
-          };
-        }).sort((a,b) => b.profit - a.profit);
-      }, [projects, commissions, enrichedDailyAdCosts, miscellaneousExpenses, currentPeriod]);
+    useEffect(() => {
+        const handleClickOutside = (event: MouseEvent) => {
+            if (dropdownRef.current && !dropdownRef.current.contains(event.target as Node)) {
+                setIsDropdownOpen(false);
+            }
+        };
+        document.addEventListener("mousedown", handleClickOutside);
+        return () => document.removeEventListener("mousedown", handleClickOutside);
+    }, []);
 
-    const handleDeleteClick = (project: T.Project) => {
-        setProjectToDelete(project);
+    const handleProjectSelection = (projectId: string) => {
+        const newSet = new Set(selectedProjectIds);
+        if (newSet.has(projectId)) {
+            newSet.delete(projectId);
+        } else {
+            newSet.add(projectId);
+        }
+        onProjectSelectionChange(Array.from(newSet));
     };
-
-    const handleConfirmDelete = () => {
-        if (projectToDelete) {
-            deleteProject(projectToDelete.id);
-            setProjectToDelete(null);
+    
+    const handleSelectAll = (checked: boolean) => {
+        if (checked) {
+            onProjectSelectionChange(projectsForPeriod.map(p => p.id));
+        } else {
+            onProjectSelectionChange([]);
         }
     };
+    
+    const areAllSelected = projectsForPeriod.length > 0 && selectedProjectIds.length === projectsForPeriod.length;
+    const isIndeterminate = selectedProjectIds.length > 0 && selectedProjectIds.length < projectsForPeriod.length;
+    const selectAllRef = useRef<HTMLInputElement>(null);
+    useEffect(() => {
+        if (selectAllRef.current) {
+            selectAllRef.current.indeterminate = isIndeterminate;
+        }
+    }, [isIndeterminate]);
 
     return (
-        <>
-             <Card>
-                <CardContent>
-                    <Table>
-                        <TableHead>
-                            <TableRow>
-                                <TableHeader>Tên dự án</TableHeader>
-                                <TableHeader>Nền tảng</TableHeader>
-                                <TableHeader>Loại</TableHeader>
-                                <TableHeader>Trạng thái</TableHeader>
-                                <TableHeader>Doanh thu</TableHeader>
-                                <TableHeader>Chi phí</TableHeader>
-                                <TableHeader>Lợi nhuận</TableHeader>
-                                {!isReadOnly && <TableHeader>Hành động</TableHeader>}
-                            </TableRow>
-                        </TableHead>
-                        <TableBody>
-                            {enrichedProjects.map(p => (
-                                <TableRow key={p.id}>
-                                    <TableCell className="font-medium text-white">{p.name} {p.isPartnership && <Users className="inline-block ml-2 text-primary-400" width={16} height={16} />}</TableCell>
-                                    <TableCell>{p.adsPlatforms.map(ap => adsPlatformLabels[ap]).join(', ')}</TableCell>
-                                    <TableCell>{projectTypeLabels[p.projectType]}</TableCell>
-                                    <TableCell>
-                                        <span className={`px-2 inline-flex text-xs leading-5 font-semibold rounded-full ${p.status === 'running' ? 'bg-green-200 text-green-800' : 'bg-gray-200 text-gray-800'}`}>
-                                            {projectStatusLabels[p.status]}
-                                        </span>
-                                    </TableCell>
-                                    <TableCell className="text-primary-400">{formatCurrency(p.revenue)}</TableCell>
-                                    <TableCell className="text-red-400">{formatCurrency(p.cost)}</TableCell>
-                                    <TableCell className={`font-bold ${p.profit >= 0 ? 'text-green-400' : 'text-red-400'}`}>
-                                        {formatCurrency(p.profit)}
-                                    </TableCell>
-                                    {!isReadOnly && (
-                                        <TableCell>
-                                            <div className="flex items-center space-x-3 justify-center">
-                                                <button onClick={() => onEditClick(p)} className="text-gray-400 hover:text-primary-400"><Edit /></button>
-                                                <button onClick={() => handleDeleteClick(p)} className="text-gray-400 hover:text-red-400"><Trash2 /></button>
-                                            </div>
-                                        </TableCell>
-                                    )}
-                                </TableRow>
+        <Card className="mb-6">
+            <CardContent className="flex flex-wrap items-center gap-4">
+                <div ref={dropdownRef} className="relative">
+                    <Button variant="secondary" onClick={() => setIsDropdownOpen(!isDropdownOpen)} className="flex items-center gap-2">
+                        {selectedProjectIds.length === projectsForPeriod.length ? 'Tất cả dự án' : `${selectedProjectIds.length} dự án được chọn`}
+                        <ChevronDown />
+                    </Button>
+                    {isDropdownOpen && (
+                        <div className="absolute top-full left-0 mt-2 w-72 bg-gray-800 border border-gray-700 rounded-md shadow-lg z-10 p-2 max-h-60 overflow-y-auto">
+                            <div className="flex items-center p-2 hover:bg-gray-700 rounded-md">
+                                <input ref={selectAllRef} type="checkbox" id="all-projects-filter" checked={areAllSelected} onChange={(e) => handleSelectAll(e.target.checked)} className="h-4 w-4 rounded border-gray-600 bg-gray-900 text-primary-600 focus:ring-primary-500" />
+                                <label htmlFor="all-projects-filter" className="ml-2 text-white font-semibold">Tất cả dự án</label>
+                            </div>
+                            <div className="border-t border-gray-700 my-1"></div>
+                            {projectsForPeriod.map(p => (
+                                 <div key={p.id} className="flex items-center p-2 hover:bg-gray-700 rounded-md">
+                                    <input type="checkbox" id={`proj-filter-${p.id}`} checked={selectedProjectIds.includes(p.id)} onChange={() => handleProjectSelection(p.id)}  className="h-4 w-4 rounded border-gray-600 bg-gray-900 text-primary-600 focus:ring-primary-500"/>
+                                    <label htmlFor={`proj-filter-${p.id}`} className="ml-2 text-gray-300 truncate">{p.name}</label>
+                                </div>
                             ))}
-                        </TableBody>
-                    </Table>
-                </CardContent>
-            </Card>
-
-            {!isReadOnly && (
-                <ConfirmationModal
-                    isOpen={!!projectToDelete}
-                    onClose={() => setProjectToDelete(null)}
-                    onConfirm={handleConfirmDelete}
-                    title="Xác nhận xóa dự án"
-                    message={`Bạn có chắc chắn muốn xóa dự án "${projectToDelete?.name}" không? Tất cả dữ liệu liên quan (chi phí, hoa hồng) cũng sẽ bị xóa.`}
-                />
-            )}
-        </>
+                        </div>
+                    )}
+                </div>
+                 <div className="flex items-center gap-2">
+                    <Label htmlFor="startDate" className="mb-0 whitespace-nowrap">Từ ngày:</Label>
+                    <Input id="startDate" type="date" value={dateRange.start} onChange={e => onDateRangeChange({ ...dateRange, start: e.target.value })} className="w-40"/>
+                </div>
+                 <div className="flex items-center gap-2">
+                    <Label htmlFor="endDate" className="mb-0 whitespace-nowrap">Đến ngày:</Label>
+                    <Input id="endDate" type="date" value={dateRange.end} onChange={e => onDateRangeChange({ ...dateRange, end: e.target.value })} className="w-40"/>
+                </div>
+            </CardContent>
+        </Card>
     );
-}
+};
+
+const ProjectListContent: React.FC<{ 
+    enrichedProjects: any[];
+    onEditClick: (project: T.Project) => void; 
+    onDeleteClick: (project: T.Project) => void;
+    isReadOnly: boolean;
+}> = ({ enrichedProjects, onEditClick, onDeleteClick, isReadOnly }) => {
+    
+    const totals = useMemo(() => {
+        return enrichedProjects.reduce((acc, p) => {
+            acc.revenue += p.revenue;
+            acc.cost += p.cost;
+            acc.profit += p.profit;
+            return acc;
+        }, { revenue: 0, cost: 0, profit: 0 });
+    }, [enrichedProjects]);
+
+    return (
+         <Card>
+            <CardContent>
+                <Table>
+                    <TableHead>
+                        <TableRow>
+                            <TableHeader>Tên dự án</TableHeader>
+                            <TableHeader>Nền tảng</TableHeader>
+                            <TableHeader>Loại</TableHeader>
+                            <TableHeader>Trạng thái</TableHeader>
+                            <TableHeader>Doanh thu</TableHeader>
+                            <TableHeader>Chi phí</TableHeader>
+                            <TableHeader>Lợi nhuận</TableHeader>
+                            {!isReadOnly && <TableHeader>Hành động</TableHeader>}
+                        </TableRow>
+                    </TableHead>
+                    <TableBody>
+                        {enrichedProjects.map(p => (
+                            <TableRow key={p.id}>
+                                <TableCell className="font-medium text-white">{p.name} {p.isPartnership && <Users className="inline-block ml-2 text-primary-400" width={16} height={16} />}</TableCell>
+                                <TableCell>{p.adsPlatforms.map(ap => adsPlatformLabels[ap]).join(', ')}</TableCell>
+                                <TableCell>{projectTypeLabels[p.projectType]}</TableCell>
+                                <TableCell>
+                                    <span className={`px-2 inline-flex text-xs leading-5 font-semibold rounded-full ${p.status === 'running' ? 'bg-green-200 text-green-800' : 'bg-gray-200 text-gray-800'}`}>
+                                        {projectStatusLabels[p.status]}
+                                    </span>
+                                </TableCell>
+                                <TableCell className="text-primary-400">{formatCurrency(p.revenue)}</TableCell>
+                                <TableCell className="text-red-400">{formatCurrency(p.cost)}</TableCell>
+                                <TableCell className={`font-bold ${p.profit >= 0 ? 'text-green-400' : 'text-red-400'}`}>
+                                    {formatCurrency(p.profit)}
+                                </TableCell>
+                                {!isReadOnly && (
+                                    <TableCell>
+                                        <div className="flex items-center space-x-3 justify-center">
+                                            <button onClick={() => onEditClick(p)} className="text-gray-400 hover:text-primary-400"><Edit /></button>
+                                            <button onClick={() => onDeleteClick(p)} className="text-gray-400 hover:text-red-400"><Trash2 /></button>
+                                        </div>
+                                    </TableCell>
+                                )}
+                            </TableRow>
+                        ))}
+                    </TableBody>
+                    <tfoot className="border-t-2 border-gray-700 bg-gray-800">
+                        <TableRow className="hover:bg-gray-800">
+                            <TableHeader colSpan={4} className="text-right !font-bold text-base text-white">Tổng cộng</TableHeader>
+                            <TableCell className="font-bold text-primary-400">{formatCurrency(totals.revenue)}</TableCell>
+                            <TableCell className="font-bold text-red-400">{formatCurrency(totals.cost)}</TableCell>
+                            <TableCell className={`font-bold ${totals.profit >= 0 ? 'text-green-400' : 'text-red-400'}`}>{formatCurrency(totals.profit)}</TableCell>
+                            {!isReadOnly && <TableCell></TableCell>}
+                        </TableRow>
+                    </tfoot>
+                </Table>
+            </CardContent>
+        </Card>
+    );
+};
 
 const CustomTooltip = ({ active, payload, label }: TooltipProps<ValueType, NameType>) => {
   if (active && payload && payload.length) {
@@ -605,11 +659,69 @@ const TabButton: React.FC<{ active: boolean; onClick: () => void; children: Reac
 );
 
 export default function Projects() {
-    const { isReadOnly, addProject, updateProject, currentPeriod } = useData();
+    const { 
+        isReadOnly, addProject, updateProject, deleteProject, currentPeriod, 
+        projects, commissions, enrichedDailyAdCosts, miscellaneousExpenses 
+    } = useData();
     const [activeTab, setActiveTab] = useState<'list' | 'trends'>('list');
 
     const [isModalOpen, setIsModalOpen] = useState(false);
     const [editingProject, setEditingProject] = useState<T.Project | undefined>(undefined);
+    const [projectToDelete, setProjectToDelete] = useState<T.Project | null>(null);
+
+    // Filter states
+    const [selectedProjectIds, setSelectedProjectIds] = useState<string[]>([]);
+    const [dateRange, setDateRange] = useState(() => {
+        const today = new Date();
+        const startOfMonth = new Date(today.getFullYear(), today.getMonth(), 1).toISOString().split('T')[0];
+        const endOfRange = new Date().toISOString().split('T')[0];
+        return { start: startOfMonth, end: endOfRange };
+    });
+
+    const projectsForPeriod = useMemo(() => 
+        projects.filter(p => p.period === currentPeriod),
+    [projects, currentPeriod]);
+    
+    // Auto-select all projects when projects for period changes, or when currentPeriod changes
+    useEffect(() => {
+        setSelectedProjectIds(projectsForPeriod.map(p => p.id));
+    }, [projectsForPeriod]);
+
+    const filteredAndEnrichedProjects = useMemo(() => {
+        const projectIdsToProcess = new Set(selectedProjectIds);
+        const projectsToProcess = projectsForPeriod.filter(p => projectIdsToProcess.has(p.id));
+        
+        const isDateInRange = (date: string) => {
+            return (!dateRange.start || date >= dateRange.start) && (!dateRange.end || date <= dateRange.end);
+        };
+    
+        return projectsToProcess.map(p => {
+          const revenue = commissions
+            .filter(c => c.projectId === p.id && isDateInRange(c.date))
+            .reduce((sum, c) => sum + c.vndAmount, 0);
+          
+          const adCost = enrichedDailyAdCosts
+            .filter(c => c.projectId === p.id && isDateInRange(c.date))
+            .reduce((sum, c) => sum + c.vndCost, 0);
+          
+          const miscCost = miscellaneousExpenses
+            .filter(e => e.projectId === p.id && isDateInRange(e.date))
+            .reduce((sum, e) => sum + e.vndAmount, 0);
+          
+          const totalCost = adCost + miscCost;
+          const profit = revenue - totalCost;
+    
+          return {
+            ...p,
+            revenue,
+            cost: totalCost,
+            profit,
+          };
+        }).sort((a,b) => b.profit - a.profit);
+      }, [
+        projectsForPeriod, commissions, enrichedDailyAdCosts, miscellaneousExpenses, 
+        selectedProjectIds, dateRange
+      ]);
 
     const handleSave = (project: Omit<T.Project, 'id' | 'period'> | T.Project) => {
         if ('id' in project && project.id) {
@@ -631,6 +743,17 @@ export default function Projects() {
         setIsModalOpen(true);
     };
 
+    const handleDeleteClick = (project: T.Project) => {
+        setProjectToDelete(project);
+    };
+
+    const handleConfirmDelete = () => {
+        if (projectToDelete) {
+            deleteProject(projectToDelete.id);
+            setProjectToDelete(null);
+        }
+    };
+
     return (
         <>
             <Header title="Dự án">
@@ -650,17 +773,42 @@ export default function Projects() {
                 </TabButton>
             </div>
             
-            {activeTab === 'list' && <ProjectListContent onEditClick={handleEditClick} />}
+            {activeTab === 'list' && (
+                <>
+                    <ProjectFilters
+                        projectsForPeriod={projectsForPeriod}
+                        selectedProjectIds={selectedProjectIds}
+                        onProjectSelectionChange={setSelectedProjectIds}
+                        dateRange={dateRange}
+                        onDateRangeChange={setDateRange}
+                    />
+                    <ProjectListContent 
+                        enrichedProjects={filteredAndEnrichedProjects} 
+                        onEditClick={handleEditClick}
+                        onDeleteClick={handleDeleteClick}
+                        isReadOnly={isReadOnly}
+                    />
+                </>
+            )}
             {activeTab === 'trends' && <ProjectTrendsContent />}
 
             {!isReadOnly && (
-                <Modal isOpen={isModalOpen} onClose={() => setIsModalOpen(false)} title={editingProject ? 'Sửa dự án' : 'Thêm dự án mới'}>
-                    <ProjectForm
-                        project={editingProject}
-                        onSave={handleSave}
-                        onCancel={() => { setIsModalOpen(false); setEditingProject(undefined); }}
+                <>
+                    <Modal isOpen={isModalOpen} onClose={() => setIsModalOpen(false)} title={editingProject ? 'Sửa dự án' : 'Thêm dự án mới'}>
+                        <ProjectForm
+                            project={editingProject}
+                            onSave={handleSave}
+                            onCancel={() => { setIsModalOpen(false); setEditingProject(undefined); }}
+                        />
+                    </Modal>
+                     <ConfirmationModal
+                        isOpen={!!projectToDelete}
+                        onClose={() => setProjectToDelete(null)}
+                        onConfirm={handleConfirmDelete}
+                        title="Xác nhận xóa dự án"
+                        message={`Bạn có chắc chắn muốn xóa dự án "${projectToDelete?.name}" không? Tất cả dữ liệu liên quan (chi phí, hoa hồng) cũng sẽ bị xóa.`}
                     />
-                </Modal>
+                </>
             )}
         </>
     );
