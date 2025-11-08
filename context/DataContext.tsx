@@ -27,6 +27,7 @@ type MasterProject = {
     name: string;
     categoryId?: string;
     nicheId?: string;
+    affiliateUrls?: T.AffiliateUrl[];
 };
 
 // Define a unified transaction type for the transaction history feature.
@@ -1936,10 +1937,18 @@ export const DataProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
 
   const masterProjects = useMemo<MasterProject[]>(() => {
     const uniqueProjects = new Map<string, MasterProject>();
-    projects.forEach(p => {
+    // Sắp xếp dự án theo kỳ giảm dần để lấy thông tin từ dự án gần nhất
+    const sortedProjects = [...projects].sort((a, b) => b.period.localeCompare(a.period));
+
+    sortedProjects.forEach(p => {
         const key = p.name.trim().toLowerCase();
         if (!uniqueProjects.has(key)) {
-            uniqueProjects.set(key, { name: p.name, categoryId: p.categoryId, nicheId: p.nicheId });
+            uniqueProjects.set(key, { 
+                name: p.name, 
+                categoryId: p.categoryId, 
+                nicheId: p.nicheId,
+                affiliateUrls: p.affiliateUrls
+            });
         }
     });
     return Array.from(uniqueProjects.values());

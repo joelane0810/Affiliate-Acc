@@ -28,6 +28,11 @@ export interface PartnerShare {
     sharePercentage: number;
 }
 
+export interface AffiliateUrl {
+    name: string;
+    url: string;
+}
+
 export interface Project {
     id: string;
     name: string;
@@ -39,6 +44,7 @@ export interface Project {
     period: string;
     categoryId?: string;
     nicheId?: string;
+    affiliateUrls?: AffiliateUrl[];
 }
 
 export interface AdAccount {

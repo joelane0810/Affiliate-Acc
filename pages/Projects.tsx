@@ -82,8 +82,9 @@ const ProjectForm: React.FC<{ project?: T.Project; onSave: (project: Omit<T.Proj
     const [isAddPartnerModalOpen, setIsAddPartnerModalOpen] = useState(false);
     const [categoryId, setCategoryId] = useState(project?.categoryId || '');
     const [nicheId, setNicheId] = useState(project?.nicheId || '');
+    const [affiliateUrls, setAffiliateUrls] = useState<T.AffiliateUrl[]>(project?.affiliateUrls || []);
 
-    const [suggestions, setSuggestions] = useState<{ name: string; categoryId?: string; nicheId?: string; }[]>([]);
+    const [suggestions, setSuggestions] = useState<{ name: string; categoryId?: string; nicheId?: string; affiliateUrls?: T.AffiliateUrl[] }[]>([]);
     const [isSuggestionBoxOpen, setIsSuggestionBoxOpen] = useState(false);
 
      const availableNiches = useMemo(() => {
@@ -157,12 +158,30 @@ const ProjectForm: React.FC<{ project?: T.Project; onSave: (project: Omit<T.Proj
         }
     };
 
-    const handleSuggestionClick = (suggestion: { name: string; categoryId?: string; nicheId?: string; }) => {
+    const handleSuggestionClick = (suggestion: { name: string; categoryId?: string; nicheId?: string; affiliateUrls?: T.AffiliateUrl[] }) => {
         setName(suggestion.name);
         setCategoryId(suggestion.categoryId || '');
         setNicheId(suggestion.nicheId || '');
+        setAffiliateUrls(suggestion.affiliateUrls || []);
         setIsSuggestionBoxOpen(false);
     };
+    
+    const handleAddUrl = () => {
+        setAffiliateUrls(prev => [...prev, { name: '', url: '' }]);
+    };
+
+    const handleUrlChange = (index: number, field: 'name' | 'url', value: string) => {
+        setAffiliateUrls(prev => {
+            const newUrls = [...prev];
+            newUrls[index] = { ...newUrls[index], [field]: value };
+            return newUrls;
+        });
+    };
+
+    const handleRemoveUrl = (index: number) => {
+        setAffiliateUrls(prev => prev.filter((_, i) => i !== index));
+    };
+
 
     const handleSubmit = (e: React.FormEvent) => {
         e.preventDefault();
@@ -180,6 +199,7 @@ const ProjectForm: React.FC<{ project?: T.Project; onSave: (project: Omit<T.Proj
             partnerShares: isPartnership ? shares.filter(s => s.sharePercentage > 0) : [],
             categoryId: categoryId || undefined,
             nicheId: nicheId || undefined,
+            affiliateUrls,
         };
 
         if (project) {
@@ -255,6 +275,30 @@ const ProjectForm: React.FC<{ project?: T.Project; onSave: (project: Omit<T.Proj
                         {Object.entries(projectStatusLabels).map(([key, label]) => <option key={key} value={key}>{label}</option>)}
                     </select>
                 </div>
+            </div>
+            
+            <div className="border-t border-gray-700 pt-4 space-y-3">
+                <div className="flex justify-between items-center">
+                    <h4 className="font-semibold text-white">Affiliate Links</h4>
+                    <Button type="button" size="sm" variant="secondary" onClick={handleAddUrl}>
+                        <span className="flex items-center gap-1"><Plus width={14} height={14} /> Thêm Link</span>
+                    </Button>
+                </div>
+                {affiliateUrls.map((url, index) => (
+                    <div key={index} className="flex items-end gap-2 p-2 bg-gray-900/50 rounded-md">
+                        <div className="flex-1">
+                            <Label htmlFor={`url-name-${index}`} className="text-xs">Tên Link</Label>
+                            <Input id={`url-name-${index}`} value={url.name} onChange={e => handleUrlChange(index, 'name', e.target.value)} placeholder="VD: Tài khoản ClickBank 1" />
+                        </div>
+                        <div className="flex-1">
+                            <Label htmlFor={`url-url-${index}`} className="text-xs">URL</Label>
+                            <Input id={`url-url-${index}`} value={url.url} onChange={e => handleUrlChange(index, 'url', e.target.value)} placeholder="https://..." />
+                        </div>
+                        <Button type="button" variant="danger" size="sm" className="!p-2" onClick={() => handleRemoveUrl(index)}>
+                            <Trash2 />
+                        </Button>
+                    </div>
+                ))}
             </div>
 
             <div className="border-t border-gray-700 pt-4">
@@ -389,10 +433,11 @@ const ProjectFilters: React.FC<{
 
 const ProjectListContent: React.FC<{ 
     enrichedProjects: any[];
+    onProjectClick: (project: T.Project) => void;
     onEditClick: (project: T.Project) => void; 
     onDeleteClick: (project: T.Project) => void;
     isReadOnly: boolean;
-}> = ({ enrichedProjects, onEditClick, onDeleteClick, isReadOnly }) => {
+}> = ({ enrichedProjects, onProjectClick, onEditClick, onDeleteClick, isReadOnly }) => {
     
     const totals = useMemo(() => {
         return enrichedProjects.reduce((acc, p) => {
@@ -422,7 +467,16 @@ const ProjectListContent: React.FC<{
                     <TableBody>
                         {enrichedProjects.map(p => (
                             <TableRow key={p.id}>
-                                <TableCell className="font-medium text-white">{p.name} {p.isPartnership && <Users className="inline-block ml-2 text-primary-400" width={16} height={16} />}</TableCell>
+                                <TableCell className="font-medium text-white">
+                                    <button 
+                                        onClick={() => onProjectClick(p)} 
+                                        className="text-left hover:text-primary-400 hover:underline disabled:no-underline disabled:text-white disabled:cursor-default"
+                                        disabled={!p.affiliateUrls || p.affiliateUrls.length === 0}
+                                    >
+                                        {p.name}
+                                    </button>
+                                    {p.isPartnership && <Users className="inline-block ml-2 text-primary-400" width={16} height={16} />}
+                                </TableCell>
                                 <TableCell>{p.adsPlatforms.map(ap => adsPlatformLabels[ap]).join(', ')}</TableCell>
                                 <TableCell>{projectTypeLabels[p.projectType]}</TableCell>
                                 <TableCell>
@@ -448,7 +502,7 @@ const ProjectListContent: React.FC<{
                     </TableBody>
                     <tfoot className="border-t-2 border-gray-700 bg-gray-800">
                         <TableRow className="hover:bg-gray-800">
-                            <TableHeader colSpan={4} className="text-right !font-bold text-base text-white">Tổng cộng</TableHeader>
+                            <TableHeader colSpan={4} className="text-center !font-bold text-base text-white">Tổng cộng</TableHeader>
                             <TableCell className="font-bold text-primary-400">{formatCurrency(totals.revenue)}</TableCell>
                             <TableCell className="font-bold text-red-400">{formatCurrency(totals.cost)}</TableCell>
                             <TableCell className={`font-bold ${totals.profit >= 0 ? 'text-green-400' : 'text-red-400'}`}>{formatCurrency(totals.profit)}</TableCell>
@@ -658,6 +712,38 @@ const TabButton: React.FC<{ active: boolean; onClick: () => void; children: Reac
   </button>
 );
 
+const UrlListModal: React.FC<{
+    project: T.Project | null;
+    onClose: () => void;
+}> = ({ project, onClose }) => {
+    if (!project || !project.affiliateUrls || project.affiliateUrls.length === 0) {
+        return null;
+    }
+
+    const handleUrlClick = (url: string) => {
+        window.open(url, '_blank', 'noopener,noreferrer');
+        onClose();
+    };
+    
+    return (
+        <Modal isOpen={!!project} onClose={onClose} title={`Affiliate Links cho: ${project.name}`}>
+            <div className="space-y-2 max-h-96 overflow-y-auto">
+                {project.affiliateUrls.map((link, index) => (
+                    <button
+                        key={index}
+                        onClick={() => handleUrlClick(link.url)}
+                        className="w-full text-left p-3 bg-gray-900 hover:bg-gray-700 rounded-md transition-colors"
+                    >
+                        <span className="font-semibold text-primary-400">{link.name}</span>
+                        <p className="text-sm text-gray-500 truncate">{link.url}</p>
+                    </button>
+                ))}
+            </div>
+        </Modal>
+    );
+};
+
+
 export default function Projects() {
     const { 
         isReadOnly, addProject, updateProject, deleteProject, currentPeriod, 
@@ -668,6 +754,7 @@ export default function Projects() {
     const [isModalOpen, setIsModalOpen] = useState(false);
     const [editingProject, setEditingProject] = useState<T.Project | undefined>(undefined);
     const [projectToDelete, setProjectToDelete] = useState<T.Project | null>(null);
+    const [urlModalProject, setUrlModalProject] = useState<T.Project | null>(null);
 
     // Filter states
     const [selectedProjectIds, setSelectedProjectIds] = useState<string[]>([]);
@@ -753,6 +840,12 @@ export default function Projects() {
             setProjectToDelete(null);
         }
     };
+    
+    const handleProjectClick = (project: T.Project) => {
+        if (project.affiliateUrls && project.affiliateUrls.length > 0) {
+            setUrlModalProject(project);
+        }
+    };
 
     return (
         <>
@@ -784,6 +877,7 @@ export default function Projects() {
                     />
                     <ProjectListContent 
                         enrichedProjects={filteredAndEnrichedProjects} 
+                        onProjectClick={handleProjectClick}
                         onEditClick={handleEditClick}
                         onDeleteClick={handleDeleteClick}
                         isReadOnly={isReadOnly}
@@ -791,6 +885,13 @@ export default function Projects() {
                 </>
             )}
             {activeTab === 'trends' && <ProjectTrendsContent />}
+            
+            {urlModalProject && (
+                <UrlListModal
+                    project={urlModalProject}
+                    onClose={() => setUrlModalProject(null)}
+                />
+            )}
 
             {!isReadOnly && (
                 <>
