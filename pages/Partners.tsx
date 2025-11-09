@@ -20,7 +20,7 @@ const PartnerForm: React.FC<{
 }> = ({ partner, onSave, onCancel }) => {
     const [name, setName] = useState(partner?.name || '');
     const [loginEmail, setLoginEmail] = useState(partner?.loginEmail || '');
-    const isEditingSelf = partner?.id === 'default-me';
+    const isEditingSelf = partner?.isSelf;
 
     const handleSubmit = (e: React.FormEvent) => {
         e.preventDefault();
@@ -119,6 +119,7 @@ export default function Partners() {
         addPartner, updatePartner, deletePartner,
         addPartnerLedgerEntry, deletePartnerLedgerEntry,
         partnerAssetBalances,
+        user,
     } = useData();
     
     const [isPartnerModalOpen, setIsPartnerModalOpen] = useState(false);
@@ -128,6 +129,12 @@ export default function Partners() {
     const [isLedgerModalOpen, setIsLedgerModalOpen] = useState(false);
     const [ledgerPartnerId, setLedgerPartnerId] = useState<string>('');
     const [ledgerEntryToDelete, setLedgerEntryToDelete] = useState<PartnerLedgerEntry | null>(null);
+
+    const myPartners = useMemo(() => {
+        if (!user) return [];
+        // Filter to show only the user's own 'self' record and the partners they have added.
+        return enrichedPartners.filter(p => p.ownerUid === user.uid);
+    }, [enrichedPartners, user]);
     
     // Partner handlers
     const handleSavePartner = (partnerData: Partial<Omit<Partner, 'id' | 'ownerUid' | 'ownerName'>> | Partner) => {
@@ -179,7 +186,7 @@ export default function Partners() {
             </Header>
 
             <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6 mb-8">
-                {enrichedPartners.map(partner => {
+                {myPartners.map(partner => {
                     const balancesForPartner = partnerAssetBalances.get(partner.id) || [];
                     return (
                     <Card key={partner.id} className="flex flex-col">
@@ -188,7 +195,7 @@ export default function Partners() {
                              {!isReadOnly && (
                                 <div className="flex items-center space-x-2">
                                     <button onClick={() => { setEditingPartner(partner); setIsPartnerModalOpen(true); }} className="text-gray-400 hover:text-primary-400"><Edit /></button>
-                                    {partner.id !== 'default-me' && <button onClick={() => setPartnerToDelete(partner)} className="text-gray-400 hover:text-red-400"><Trash2 /></button>}
+                                    {!partner.isSelf && <button onClick={() => setPartnerToDelete(partner)} className="text-gray-400 hover:text-red-400"><Trash2 /></button>}
                                 </div>
                             )}
                         </CardHeader>

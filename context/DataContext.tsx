@@ -516,6 +516,14 @@ export const DataProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
                 }, { merge: true });
             }
 
+            // Step 1.5: One-time migration to clean up the old "default-me" record if it exists.
+            const legacyDefaultMeRef = doc(firestoreDb, 'partners', 'default-me');
+            const legacyDefaultMeSnap = await getDoc(legacyDefaultMeRef);
+            if (legacyDefaultMeSnap.exists()) {
+                await deleteDoc(legacyDefaultMeRef);
+                console.log("Migrated by deleting legacy 'default-me' partner record.");
+            }
+
             // Step 2: Fetch all partners to determine relationships.
             const allPartnersSnapshot = await getDocs(collection(firestoreDb, 'partners'));
             const allPartners = allPartnersSnapshot.docs.map(doc => ({ ...doc.data() as Omit<T.Partner, 'id'>, id: doc.id }));

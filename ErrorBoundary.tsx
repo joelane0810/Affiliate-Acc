@@ -12,22 +12,22 @@ interface State {
 
 class ErrorBoundary extends Component<Props, State> {
   // FIX: Use a class property for state initialization to avoid potential `this` context issues.
-  public state: State = {
+  state: State = {
     hasError: false,
     error: undefined,
     errorInfo: undefined,
   };
 
-  public static getDerivedStateFromError(error: Error): State {
+  static getDerivedStateFromError(error: Error): State {
     return { hasError: true, error };
   }
 
-  public componentDidCatch(error: Error, errorInfo: ErrorInfo) {
+  componentDidCatch(error: Error, errorInfo: ErrorInfo) {
     console.error("Uncaught error:", error, errorInfo);
     this.setState({ errorInfo });
   }
 
-  public render() {
+  render() {
     if (this.state.hasError) {
       return (
         <div className="flex items-center justify-center h-screen bg-gray-900 text-gray-200 p-8">
