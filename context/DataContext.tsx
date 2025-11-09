@@ -249,7 +249,7 @@ const wipeAllFirestoreData = async (db: Firestore) => {
         throw new Error("DB not connected");
     }
     
-    // FIX: Changed COLLECTION_NAMES to COLLECTION_NAMES_FOR_SEED, which is defined in this scope.
+    // FIX: Removed special handling for 'default-me'. The partners collection will be wiped completely.
     for (const collectionName of COLLECTION_NAMES_FOR_SEED) {
         const snapshot = await getDocs(collection(db, collectionName));
         if(snapshot.empty) continue;
@@ -259,9 +259,6 @@ const wipeAllFirestoreData = async (db: Firestore) => {
         let operationCount = 0;
         
         snapshot.docs.forEach(doc => {
-            if (collectionName === 'partners' && doc.id === 'default-me') {
-                return; // Skip deleting the default partner
-            }
             currentBatch.delete(doc.ref);
             operationCount++;
             if (operationCount >= 499) {
@@ -280,7 +277,7 @@ const wipeAllFirestoreData = async (db: Firestore) => {
 };
 
 
-const seedInitialData = async (db: Firestore) => {
+const seedInitialData = async (db: Firestore, userId: string) => {
     const batch = writeBatch(db);
     const today = new Date();
     const todayStr = today.toISOString().split('T')[0];
@@ -292,30 +289,26 @@ const seedInitialData = async (db: Firestore) => {
     batch.set(doc(db, 'settings', 'tax'), defaultTaxSettings);
     batch.set(doc(db, 'settings', 'periods'), { activePeriod: currentPeriod, closedPeriods: [] });
 
-    // 2. Partners
-    const mePartnerRef = doc(db, 'partners', 'default-me');
-    batch.set(mePartnerRef, { name: 'Tôi' });
-
-    // 3. Asset Types
+    // 2. Asset Types
     const typePlatformRef = doc(db, 'assetTypes', 'platform'); batch.set(typePlatformRef, { name: 'Platform' });
     const typeBankRef = doc(db, 'assetTypes', 'bank'); batch.set(typeBankRef, { name: 'Bank' });
     const typeCashRef = doc(db, 'assetTypes', 'cash'); batch.set(typeCashRef, { name: 'Cash' });
     const typeAgencyRef = doc(db, 'assetTypes', 'agency'); batch.set(typeAgencyRef, { name: 'Agency' });
 
-    // 4. Categories & Niches
+    // 3. Categories & Niches
     const healthCategoryRef = doc(collection(db, 'categories'));
     batch.set(healthCategoryRef, { name: 'Sức khỏe' });
     const weightLossNicheRef = doc(collection(db, 'niches'));
     batch.set(weightLossNicheRef, { name: 'Giảm cân', categoryId: healthCategoryRef.id });
 
-    // 5. Assets
+    // 4. Assets
     const vcbAssetRef = doc(collection(db, 'assets'));
     batch.set(vcbAssetRef, { name: 'Vietcombank', typeId: 'bank', balance: 0, currency: 'VND', ownershipType: 'personal' });
     const clickbankAssetRef = doc(collection(db, 'assets'));
-    // FIX: Changed `sharedWith` from an array of strings to an array of AssetShare objects.
-    batch.set(clickbankAssetRef, { name: 'ClickBank', typeId: 'platform', balance: 0, currency: 'USD', ownershipType: 'shared', sharedWith: [{ partnerId: 'default-me', permission: 'full' }] });
+    // FIX: Use the dynamic userId instead of hardcoded 'default-me'.
+    batch.set(clickbankAssetRef, { name: 'ClickBank', typeId: 'platform', balance: 0, currency: 'USD', ownershipType: 'shared', sharedWith: [{ partnerId: userId, permission: 'full' }] });
 
-    // 6. Projects
+    // 5. Projects
     const project1Ref = doc(collection(db, 'projects'));
     const month = today.getMonth() + 1;
     batch.set(project1Ref, {
@@ -329,73 +322,73 @@ const seedInitialData = async (db: Firestore) => {
         nicheId: weightLossNicheRef.id
     });
     
-    // 7. Capital Inflow
+    // 6. Capital Inflow
     batch.set(doc(collection(db, 'capitalInflows')), {
         date: todayStr, assetId: vcbAssetRef.id, amount: 50000000, description: 'Vốn góp ban đầu',
-        contributedByPartnerId: 'default-me',
+        contributedByPartnerId: userId, // FIX: Use dynamic userId
     });
 
-    // 8. Ad Account
+    // 7. Ad Account
     const adAccount1Ref = doc(collection(db, 'adAccounts'));
     batch.set(adAccount1Ref, { accountNumber: 'GG-ACC-001', adsPlatform: 'google', status: 'running' });
 
-    // 9. Ad Deposit
+    // 8. Ad Deposit
     batch.set(doc(collection(db, 'adDeposits')), {
         date: todayStr, adsPlatform: 'google', adAccountNumber: 'GG-ACC-001', projectId: project1Ref.id,
         assetId: vcbAssetRef.id, usdAmount: 500, rate: 25500, vndAmount: 500 * 25500, status: 'running'
     });
 
-    // 10. Daily Ad Cost
+    // 9. Daily Ad Cost
     batch.set(doc(collection(db, 'dailyAdCosts')), {
         projectId: project1Ref.id, adAccountNumber: 'GG-ACC-001', date: todayStr, amount: 50.75, vatRate: 8
     });
 
-    // 11. Commission
+    // 10. Commission
     batch.set(doc(collection(db, 'commissions')), {
         projectId: project1Ref.id, date: todayStr, assetId: clickbankAssetRef.id,
         usdAmount: 350, predictedRate: 25400, vndAmount: 350 * 25400
     });
     
-    // 12. Exchange Log
+    // 11. Exchange Log
     batch.set(doc(collection(db, 'exchangeLogs')), {
         date: todayStr, sellingAssetId: clickbankAssetRef.id, receivingAssetId: vcbAssetRef.id,
         usdAmount: 300, rate: 25600, vndAmount: 300 * 25600
     });
     
-    // 13. Miscellaneous Expense
+    // 12. Miscellaneous Expense
     batch.set(doc(collection(db, 'miscellaneousExpenses')), {
         date: todayStr, description: 'Thuê VPS tháng này', assetId: vcbAssetRef.id,
         amount: 500000, vndAmount: 500000
     });
     
-    // 14. Liability
+    // 13. Liability
     const liabilityRef = doc(collection(db, 'liabilities'));
     batch.set(liabilityRef, {
         description: 'Vay nóng bạn bè', totalAmount: 10000000, currency: 'VND',
         type: 'short-term', creationDate: todayStr
     });
 
-    // 15. Debt Payment
+    // 14. Debt Payment
     batch.set(doc(collection(db, 'debtPayments')), {
         liabilityId: liabilityRef.id, date: todayStr, amount: 1000000, assetId: vcbAssetRef.id
     });
 
-    // 16. Receivable
+    // 15. Receivable
     const receivableRef = doc(collection(db, 'receivables'));
     batch.set(receivableRef, {
         description: 'Tạm ứng cho Agency', totalAmount: 5000000, currency: 'VND', type: 'short-term',
         creationDate: todayStr, outflowAssetId: vcbAssetRef.id
     });
 
-    // 17. Receivable Payment
+    // 16. Receivable Payment
     batch.set(doc(collection(db, 'receivablePayments')), {
         receivableId: receivableRef.id, date: todayStr, amount: 500000, assetId: vcbAssetRef.id
     });
 
-    // 18. Withdrawal
+    // 17. Withdrawal
     batch.set(doc(collection(db, 'withdrawals')), {
         date: todayStr, assetId: vcbAssetRef.id, amount: 2000000, vndAmount: 2000000,
-        withdrawnBy: mePartnerRef.id, description: 'Rút tiền cá nhân'
+        withdrawnBy: userId, description: 'Rút tiền cá nhân' // FIX: Use dynamic userId
     });
 
     await batch.commit();
@@ -508,40 +501,44 @@ export const DataProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
         setPermissionError(null);
 
         try {
-            // Step 1: Fetch all partners to determine relationships.
-            const allPartnersSnapshot = await getDocs(collection(firestoreDb, 'partners'));
-            const allPartners = allPartnersSnapshot.docs.map(doc => ({ ...doc.data() as Omit<T.Partner, 'id'>, id: doc.id }));
-            
-            // Self-healing for 'default-me' partner record.
-            const mePartnerRef = doc(firestoreDb, 'partners', 'default-me');
+            // Step 1: Self-heal the user's own partner record using their UID. This is the new, robust way to identify "self".
+            const mePartnerRef = doc(firestoreDb, 'partners', user.uid);
             const mePartnerSnap = await getDoc(mePartnerRef);
-            const myCurrentName = mePartnerSnap.exists() ? mePartnerSnap.data().name : 'Tôi';
+            const myCurrentName = mePartnerSnap.exists() ? mePartnerSnap.data().name : (user.displayName || 'Tôi');
             
-            if (!mePartnerSnap.exists() || mePartnerSnap.data().ownerUid !== user.uid) {
+            if (!mePartnerSnap.exists() || !mePartnerSnap.data().isSelf) {
                 await setDoc(mePartnerRef, { 
                     name: myCurrentName, 
                     ownerUid: user.uid,
-                    ownerName: myCurrentName // Owner of 'me' is 'me'
+                    ownerName: myCurrentName, // The owner of "me" is "me"
+                    loginEmail: user.email,  // Store email for cross-workspace lookups
+                    isSelf: true             // Crucial flag to identify this as a "self" record
                 }, { merge: true });
             }
+
+            // Step 2: Fetch all partners to determine relationships.
+            const allPartnersSnapshot = await getDocs(collection(firestoreDb, 'partners'));
+            const allPartners = allPartnersSnapshot.docs.map(doc => ({ ...doc.data() as Omit<T.Partner, 'id'>, id: doc.id }));
             
-            // Step 2: Establish trusted workspaces based on mutual partnership.
-            const myPartnerEntries = allPartners.filter(p => p.ownerUid === user.uid);
+            // Step 3: Establish trusted workspaces based on mutual partnership.
+            const myPartnerEntries = allPartners.filter(p => p.ownerUid === user.uid && !p.isSelf);
             const myPartnerEmails = new Set(myPartnerEntries.map(p => p.loginEmail).filter(Boolean));
             
-            const partnerEntriesForMe = allPartners.filter(p => p.loginEmail === user.email);
+            const partnerEntriesForMe = allPartners.filter(p => p.loginEmail === user.email && !p.isSelf);
             
             const trustedWorkspaceIds = new Set<string>();
             partnerEntriesForMe.forEach(partnerEntry => {
-                const partnerOwner = allPartners.find(p => p.ownerUid === partnerEntry.ownerUid && p.id === 'default-me');
+                // Find the "self" record of the partner who created this entry for me.
+                const partnerOwner = allPartners.find(p => p.ownerUid === partnerEntry.ownerUid && p.isSelf === true);
+                // If that owner's email exists in the list of partners I've created, it's a mutual relationship.
                 if (partnerOwner && partnerOwner.loginEmail && myPartnerEmails.has(partnerOwner.loginEmail)) {
                     trustedWorkspaceIds.add(partnerEntry.ownerUid);
                 }
             });
 
             const workspaceIdsToFetch = [user.uid, ...Array.from(trustedWorkspaceIds)];
-// FIX: Changed arrow functions to regular function declarations to avoid potential parser issues with generics.
-            // Step 3: Fetch data from all relevant workspaces.
+
+            // Step 4: Fetch data from all relevant workspaces.
             async function fetchDataFromWorkspaces<T extends {workspaceId: string}>(collectionName: string): Promise<T[]> {
                 if(workspaceIdsToFetch.length === 0) return [];
                 const q = query(collection(firestoreDb, collectionName), where("workspaceId", "in", workspaceIdsToFetch));
@@ -554,7 +551,7 @@ export const DataProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
                 return snapshot.docs.map(doc => ({ ...doc.data() as T, id: doc.id }));
             };
             
-            // Step 4: Fetch settings for the current user.
+            // Step 5: Fetch settings for the current user.
             async function fetchSettings() {
                 const taxDocRef = doc(firestoreDb, 'settings', 'tax');
                 const taxDocSnap = await getDoc(taxDocRef);
@@ -611,7 +608,7 @@ export const DataProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
                 fetchGlobalCollection<T.AssetType>('assetTypes'),
             ]);
 
-            // **BUG FIX**: After fetching, filter items from trusted workspaces to only include those explicitly shared with the current user.
+            // Step 6: Filter items from trusted workspaces to only include those explicitly shared with the current user.
             const myRepresentationIds = new Set(partnerEntriesForMe.map(p => p.id));
             const filterShared = <T extends { workspaceId: string; isPartnership?: boolean; partnerShares?: T.PartnerShare[]; }>(item: T): boolean => {
                 if (item.workspaceId === user.uid) {
@@ -683,21 +680,20 @@ export const DataProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
         if (p.loginEmail === user.email) {
             map.set(p.id, "Tôi");
         } 
-        // My own 'default-me' record
-        else if (p.id === 'default-me' && p.ownerUid === user.uid) {
+        // My own 'self' record
+        else if (p.isSelf && p.ownerUid === user.uid) {
             map.set(p.id, "Tôi");
         }
-        // A 'default-me' record from another workspace (i.e., the owner of a shared item)
-        else if (p.id === 'default-me') {
-            const ownerAsPartner = partners.find(op => op.ownerUid === p.ownerUid && op.id === 'default-me');
-            if (ownerAsPartner && ownerAsPartner.loginEmail) {
-                const localName = myPartnerEmailMap.get(ownerAsPartner.loginEmail);
+        // A 'self' record from another workspace (i.e., the owner of a shared item)
+        else if (p.isSelf) {
+            if (p.loginEmail) {
+                const localName = myPartnerEmailMap.get(p.loginEmail);
                 map.set(p.id, localName || p.ownerName || 'Đối tác không xác định');
             } else {
                  map.set(p.id, p.ownerName || 'Đối tác không xác định');
             }
         }
-        // A regular partner entry
+        // A regular partner entry I created
         else {
             map.set(p.id, p.name);
         }
@@ -707,11 +703,11 @@ export const DataProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
   }, [partners, user]);
 
   const seedData = async () => {
-    if (!firestoreDb) return;
+    if (!firestoreDb || !user) return;
     setIsLoading(true);
     try {
         await wipeAllFirestoreData(firestoreDb); // Ensure clean state before seeding
-        await seedInitialData(firestoreDb);
+        await seedInitialData(firestoreDb, user.uid);
         alert("Đã khôi phục dữ liệu mẫu thành công. Ứng dụng sẽ được tải lại.");
         window.location.reload();
     } catch (error) {
@@ -1148,9 +1144,9 @@ export const DataProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
       const isShared = (project?.isPartnership && project.partnerShares) || (expense.isPartnership && expense.partnerShares);
       if (isShared) {
         const shares = project?.partnerShares || expense.partnerShares || [];
-        const me = partners.find(p => p.id === 'default-me');
+        const me = partners.find(p => p.isSelf && p.ownerUid === user.uid);
         shares.forEach(share => {
-            if (share.partnerId !== 'default-me') {
+            if (share.partnerId !== user.uid) {
                 const partner = partners.find(p => p.id === share.partnerId);
                 const message = `${me?.name || 'Chủ sở hữu'} đã thêm chi phí chung "${expense.description}" trị giá ${formatCurrency(expense.vndAmount)} mà bạn có tham gia.`;
                 addNotification(message, 'partner');
@@ -1170,9 +1166,9 @@ export const DataProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
       const isShared = (project?.isPartnership && project.partnerShares) || (updatedExpense.isPartnership && updatedExpense.partnerShares);
       if (isShared) {
         const shares = project?.partnerShares || updatedExpense.partnerShares || [];
-         const me = partners.find(p => p.id === 'default-me');
+        const me = partners.find(p => p.isSelf && p.ownerUid === user?.uid);
         shares.forEach(share => {
-            if (share.partnerId !== 'default-me') {
+            if (share.partnerId !== user?.uid) {
                  const message = `${me?.name || 'Chủ sở hữu'} đã cập nhật chi phí chung "${updatedExpense.description}" mà bạn có tham gia.`;
                  addNotification(message, 'partner');
             }
@@ -1191,8 +1187,8 @@ export const DataProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
  const addPartner = async (partnerData: Partial<Omit<T.Partner, 'id' | 'ownerUid' | 'ownerName'>>) => {
     if (!firestoreDb || !user) return;
     
-    // Get the current user's actual name from their 'default-me' record.
-    const mePartner = partners.find(p => p.id === 'default-me' && p.ownerUid === user.uid);
+    // Get the current user's actual name from their 'self' record.
+    const mePartner = partners.find(p => p.isSelf && p.ownerUid === user.uid);
     const ownerName = mePartner ? mePartner.name : 'Tôi'; // Fallback to 'Tôi'
 
     const newPartnerData: Omit<T.Partner, 'id'> = {
@@ -1220,11 +1216,12 @@ const updatePartner = async (updatedPartner: T.Partner) => {
         const partnerRef = doc(firestoreDb, 'partners', id);
         await updateDoc(partnerRef, dataToSave);
 
-        // If the user is updating their own name ('default-me'),
-        // propagate this new name to the `ownerName` field of all other partners they own.
-        if (id === 'default-me') {
+        // If the user is updating their own name, propagate this new name to the `ownerName`
+        // field of all other partners they own.
+        const partnerToUpdate = partners.find(p => p.id === id);
+        if (partnerToUpdate?.isSelf) {
             const batch = writeBatch(firestoreDb);
-            const userPartners = partners.filter(p => p.ownerUid === user.uid && p.id !== 'default-me');
+            const userPartners = partners.filter(p => p.ownerUid === user.uid && !p.isSelf);
             userPartners.forEach(p => {
                 const partnerDocRef = doc(firestoreDb, 'partners', p.id);
                 batch.update(partnerDocRef, { ownerName: dataToSave.name });
@@ -1238,7 +1235,7 @@ const updatePartner = async (updatedPartner: T.Partner) => {
                 if (p.id === id) {
                     return { ...p, ...dataToSave };
                 }
-                if (p.ownerUid === user.uid && id === 'default-me') {
+                if (partnerToUpdate?.isSelf && p.ownerUid === user.uid) {
                     return { ...p, ownerName: dataToSave.name };
                 }
                 return p;
@@ -1253,7 +1250,8 @@ const updatePartner = async (updatedPartner: T.Partner) => {
 
   const deletePartner = async (id: string) => {
         if (!firestoreDb) return;
-        if (id === 'default-me') { alert("Không thể xóa đối tác mặc định 'Tôi'."); return; }
+        const partner = partners.find(p => p.id === id);
+        if (partner?.isSelf) { alert("Không thể xóa bản ghi đại diện cho chính bạn."); return; }
         const isPartnerInProject = projects.some((p: T.Project) => p.isPartnership && p.partnerShares?.some(s => s.partnerId === id));
         if (isPartnerInProject) {
             alert('Không thể xóa đối tác này vì họ đang được liên kết với một hoặc nhiều dự án hợp tác.'); return;
@@ -1592,6 +1590,7 @@ const updatePartner = async (updatedPartner: T.Partner) => {
   }, [viewingPeriod, user]);
 
   const enrichedAssets = useMemo(() => {
+    if (!user) return [];
     const assetMap = new Map<string, T.Asset>(assets.map(a => [a.id, a]));
     const projectMap = new Map<string, T.Project>(projects.map(p => [p.id, p]));
     const partnerMap = new Map<string, string>(partners.map(p => [p.id, p.name]));
@@ -1612,10 +1611,10 @@ const updatePartner = async (updatedPartner: T.Partner) => {
                 amount: asset.balance,
                 description: 'Số dư ban đầu',
             });
-            if (!ownerBalances[asset.id]['default-me']) {
-                ownerBalances[asset.id]['default-me'] = { received: 0, withdrawn: 0 };
+            if (!ownerBalances[asset.id][user.uid]) {
+                ownerBalances[asset.id][user.uid] = { received: 0, withdrawn: 0 };
             }
-            ownerBalances[asset.id]['default-me'].received += asset.balance;
+            ownerBalances[asset.id][user.uid].received += asset.balance;
         }
     });
 
@@ -1627,11 +1626,10 @@ const updatePartner = async (updatedPartner: T.Partner) => {
 
         transactions[inflow.assetId].inflows.push({ date: inflow.date, amount: inflow.amount, description: `Vốn góp: ${inflow.description}`});
         
-        let partnerId = 'default-me';
+        let partnerId = user.uid;
         if (asset.ownershipType === 'shared') {
-             // FIX: The `sharedWith` property contains objects, not strings. We need to map to partnerId.
              const assetSharers = new Set((asset.sharedWith || []).map(s => s.partnerId));
-             const inflowPartner = inflow.contributedByPartnerId || 'default-me';
+             const inflowPartner = inflow.contributedByPartnerId || user.uid;
              if (assetSharers.has(inflowPartner)) {
                 partnerId = inflowPartner;
              }
@@ -1652,13 +1650,12 @@ const updatePartner = async (updatedPartner: T.Partner) => {
         transactions[comm.assetId].inflows.push({ date: comm.date, amount, description: `Hoa hồng dự án ${project.name}` });
 
         const assetOwners = ownerBalances[comm.assetId];
-        // FIX: The `sharedWith` property contains objects, not strings. We need to map to partnerId.
         const assetSharers = new Set((asset.sharedWith || []).map(s => s.partnerId));
 
         if (asset.ownershipType === 'shared' && project.isPartnership && project.partnerShares) {
             project.partnerShares.forEach(share => {
                 const shareAmount = amount * (share.sharePercentage / 100);
-                const targetPartnerId = assetSharers.has(share.partnerId) ? share.partnerId : 'default-me';
+                const targetPartnerId = assetSharers.has(share.partnerId) ? share.partnerId : user.uid;
 
                 if (!assetOwners[targetPartnerId]) {
                     assetOwners[targetPartnerId] = { received: 0, withdrawn: 0 };
@@ -1666,7 +1663,7 @@ const updatePartner = async (updatedPartner: T.Partner) => {
                 assetOwners[targetPartnerId].received += shareAmount;
             });
         } else {
-            const me = assetOwners['default-me'] || (assetOwners['default-me'] = { received: 0, withdrawn: 0 });
+            const me = assetOwners[user.uid] || (assetOwners[user.uid] = { received: 0, withdrawn: 0 });
             me.received += amount;
         }
     });
@@ -1690,7 +1687,6 @@ const updatePartner = async (updatedPartner: T.Partner) => {
       const receivingAssetOwners = ownerBalances[log.receivingAssetId];
 
       if (sellingAsset && receivingAsset && sellingAssetOwners && receivingAssetOwners) {
-          // FIX: The `sharedWith` property contains objects, not strings. We need to map to partnerId.
           const receivingAssetSharers = new Set((receivingAsset.sharedWith || []).map(s => s.partnerId));
           const totalBalanceInSellingAsset = Object.values(sellingAssetOwners).reduce((sum, owner) => sum + (owner.received - owner.withdrawn), 0);
 
@@ -1705,7 +1701,7 @@ const updatePartner = async (updatedPartner: T.Partner) => {
                       const vndShare = log.vndAmount * share;
                       partner.withdrawn += usdShare;
 
-                      const targetPartnerId = receivingAssetSharers.has(partnerId) ? partnerId : 'default-me';
+                      const targetPartnerId = receivingAssetSharers.has(partnerId) ? partnerId : user.uid;
 
                       if (!receivingAssetOwners[targetPartnerId]) {
                           receivingAssetOwners[targetPartnerId] = { received: 0, withdrawn: 0 };
@@ -1714,9 +1710,9 @@ const updatePartner = async (updatedPartner: T.Partner) => {
                   }
               });
           } else {
-              const meSelling = sellingAssetOwners['default-me'] || (sellingAssetOwners['default-me'] = { received: 0, withdrawn: 0 });
+              const meSelling = sellingAssetOwners[user.uid] || (sellingAssetOwners[user.uid] = { received: 0, withdrawn: 0 });
               meSelling.withdrawn += log.usdAmount;
-              const meReceiving = receivingAssetOwners['default-me'] || (receivingAssetOwners['default-me'] = { received: 0, withdrawn: 0 });
+              const meReceiving = receivingAssetOwners[user.uid] || (receivingAssetOwners[user.uid] = { received: 0, withdrawn: 0 });
               meReceiving.received += log.vndAmount;
           }
       }
@@ -1733,7 +1729,7 @@ const updatePartner = async (updatedPartner: T.Partner) => {
       if (!assetOwners) return;
       
       if (asset.ownershipType === 'personal') {
-          const me = assetOwners['default-me'] || (assetOwners['default-me'] = { received: 0, withdrawn: 0 });
+          const me = assetOwners[user.uid] || (assetOwners[user.uid] = { received: 0, withdrawn: 0 });
           me.withdrawn += exp.amount;
           return;
       }
@@ -1750,11 +1746,10 @@ const updatePartner = async (updatedPartner: T.Partner) => {
       }
 
       if (isShared && shares) {
-          // FIX: The `sharedWith` property contains objects, not strings. We need to map to partnerId.
           const assetSharers = new Set((asset.sharedWith || []).map(s => s.partnerId));
           shares.forEach((share: T.PartnerShare) => {
               const shareAmount = exp.amount * (share.sharePercentage / 100);
-              const targetPartnerId = assetSharers.has(share.partnerId) ? share.partnerId : 'default-me';
+              const targetPartnerId = assetSharers.has(share.partnerId) ? share.partnerId : user.uid;
               
               if (!assetOwners[targetPartnerId]) {
                   assetOwners[targetPartnerId] = { received: 0, withdrawn: 0 };
@@ -1762,7 +1757,7 @@ const updatePartner = async (updatedPartner: T.Partner) => {
               assetOwners[targetPartnerId].withdrawn += shareAmount;
           });
       } else {
-          const me = assetOwners['default-me'] || (assetOwners['default-me'] = { received: 0, withdrawn: 0 });
+          const me = assetOwners[user.uid] || (assetOwners[user.uid] = { received: 0, withdrawn: 0 });
           me.withdrawn += exp.amount;
       }
     });
@@ -1779,17 +1774,16 @@ const updatePartner = async (updatedPartner: T.Partner) => {
       if (!assetOwners) return;
 
       if (asset.ownershipType === 'personal') {
-          const me = assetOwners['default-me'] || (assetOwners['default-me'] = { received: 0, withdrawn: 0 });
+          const me = assetOwners[user.uid] || (assetOwners[user.uid] = { received: 0, withdrawn: 0 });
           me.withdrawn += deposit.vndAmount;
           return;
       }
 
       if (project && project.isPartnership && project.partnerShares) {
-          // FIX: The `sharedWith` property contains objects, not strings. We need to map to partnerId.
           const assetSharers = new Set((asset.sharedWith || []).map(s => s.partnerId));
           project.partnerShares.forEach(share => {
               const shareAmount = deposit.vndAmount * (share.sharePercentage / 100);
-              const targetPartnerId = assetSharers.has(share.partnerId) ? share.partnerId : 'default-me';
+              const targetPartnerId = assetSharers.has(share.partnerId) ? share.partnerId : user.uid;
 
               if (!assetOwners[targetPartnerId]) {
                   assetOwners[targetPartnerId] = { received: 0, withdrawn: 0 };
@@ -1797,7 +1791,7 @@ const updatePartner = async (updatedPartner: T.Partner) => {
               assetOwners[targetPartnerId].withdrawn += shareAmount;
           });
       } else {
-          const me = assetOwners['default-me'] || (assetOwners['default-me'] = { received: 0, withdrawn: 0 });
+          const me = assetOwners[user.uid] || (assetOwners[user.uid] = { received: 0, withdrawn: 0 });
           me.withdrawn += deposit.vndAmount;
       }
     });
@@ -1823,7 +1817,7 @@ const updatePartner = async (updatedPartner: T.Partner) => {
         const liability = liabilities.find(l => l.id === ('liabilityId' in p ? p.liabilityId : null)) || periodLiabilities.find(l => l.id === ('periodLiabilityId' in p ? p.periodLiabilityId : null));
         if (transactions[p.assetId]) {
             transactions[p.assetId].outflows.push({ date: p.date, amount: p.amount, description: `Trả nợ: ${liability?.description || 'Không rõ'}` });
-            const me = ownerBalances[p.assetId]['default-me'] || (ownerBalances[p.assetId]['default-me'] = { received: 0, withdrawn: 0 });
+            const me = ownerBalances[p.assetId][user.uid] || (ownerBalances[p.assetId][user.uid] = { received: 0, withdrawn: 0 });
             me.withdrawn += p.amount;
         }
     });
@@ -1833,7 +1827,7 @@ const updatePartner = async (updatedPartner: T.Partner) => {
         const receivable = receivables.find(r => r.id === ('receivableId' in p ? p.receivableId : null)) || periodReceivables.find(r => r.id === ('periodReceivableId' in p ? p.periodReceivableId : null));
         if (transactions[p.assetId]) {
             transactions[p.assetId].inflows.push({ date: p.date, amount: p.amount, description: `Thu nợ: ${receivable?.description || 'Không rõ'}` });
-            const me = ownerBalances[p.assetId]['default-me'] || (ownerBalances[p.assetId]['default-me'] = { received: 0, withdrawn: 0 });
+            const me = ownerBalances[p.assetId][user.uid] || (ownerBalances[p.assetId][user.uid] = { received: 0, withdrawn: 0 });
             me.received += p.amount;
         }
     });
@@ -1841,7 +1835,7 @@ const updatePartner = async (updatedPartner: T.Partner) => {
     taxPayments.forEach(p => {
         if (transactions[p.assetId]) {
             transactions[p.assetId].outflows.push({ date: p.date, amount: p.amount, description: `Thanh toán thuế kỳ ${p.period}` });
-            const me = ownerBalances[p.assetId]['default-me'] || (ownerBalances[p.assetId]['default-me'] = { received: 0, withdrawn: 0 });
+            const me = ownerBalances[p.assetId][user.uid] || (ownerBalances[p.assetId][user.uid] = { received: 0, withdrawn: 0 });
             me.withdrawn += p.amount;
         }
     });
@@ -1849,12 +1843,12 @@ const updatePartner = async (updatedPartner: T.Partner) => {
     investments.forEach(i => {
         if(transactions[i.assetId]) {
             transactions[i.assetId].outflows.push({date: i.date, amount: i.investmentAmount, description: `Đầu tư: ${i.description}`});
-            const me = ownerBalances[i.assetId]['default-me'] || (ownerBalances[i.assetId]['default-me'] = { received: 0, withdrawn: 0 });
+            const me = ownerBalances[i.assetId][user.uid] || (ownerBalances[i.assetId][user.uid] = { received: 0, withdrawn: 0 });
             me.withdrawn += i.investmentAmount;
         }
         if(i.status === 'liquidated' && i.liquidationAssetId && transactions[i.liquidationAssetId]) {
             transactions[i.liquidationAssetId].inflows.push({date: i.liquidationDate!, amount: i.liquidationAmount!, description: `Thanh lý đầu tư: ${i.description}`});
-            const me = ownerBalances[i.liquidationAssetId]['default-me'] || (ownerBalances[i.liquidationAssetId]['default-me'] = { received: 0, withdrawn: 0 });
+            const me = ownerBalances[i.liquidationAssetId][user.uid] || (ownerBalances[i.liquidationAssetId][user.uid] = { received: 0, withdrawn: 0 });
             me.received += i.liquidationAmount!;
         }
     });
@@ -1862,7 +1856,7 @@ const updatePartner = async (updatedPartner: T.Partner) => {
     savings.forEach(s => {
         if(transactions[s.assetId]) {
             transactions[s.assetId].outflows.push({date: s.startDate, amount: s.principalAmount, description: `Gửi tiết kiệm: ${s.description}`});
-             const me = ownerBalances[s.assetId]['default-me'] || (ownerBalances[s.assetId]['default-me'] = { received: 0, withdrawn: 0 });
+             const me = ownerBalances[s.assetId][user.uid] || (ownerBalances[s.assetId][user.uid] = { received: 0, withdrawn: 0 });
             me.withdrawn += s.principalAmount;
         }
     });
@@ -1895,13 +1889,13 @@ const updatePartner = async (updatedPartner: T.Partner) => {
             totalReceived,
             totalWithdrawn,
             owners,
-            isExpandable: owners.length > 1 || (owners.length === 1 && owners[0].id !== 'default-me'),
+            isExpandable: owners.length > 1 || (owners.length === 1 && owners[0].id !== user.uid),
         };
     });
   }, [
     assets, projects, partners, capitalInflows, commissions, exchangeLogs, miscellaneousExpenses, 
     adDeposits, debtPayments, receivablePayments, withdrawals, taxPayments, investments, savings,
-    liabilities, receivables, periodLiabilities, periodReceivables, periodDebtPayments, periodReceivablePayments
+    liabilities, receivables, periodLiabilities, periodReceivables, periodDebtPayments, periodReceivablePayments, user
   ]);
   
   const allTransactions = useMemo<EnrichedTransaction[]>(() => {
@@ -2051,6 +2045,7 @@ const updatePartner = async (updatedPartner: T.Partner) => {
 }, [dailyAdCosts, adDeposits]);
   
   const { enrichedAdAccounts, adAccountTransactions, partnerAdAccountBalances } = useMemo(() => {
+    if (!user) return { enrichedAdAccounts: [], adAccountTransactions: [], partnerAdAccountBalances: new Map() };
     const projectMap = new Map(projects.map(p => [p.id, p]));
     const assetMap = new Map(assets.map(a => [a.id, a.name]));
 
@@ -2088,8 +2083,8 @@ const updatePartner = async (updatedPartner: T.Partner) => {
                     partnerBalances[accNum][share.partnerId] += tx.usdAmount * (share.sharePercentage / 100);
                 });
             } else {
-                ensurePartnerBalance(accNum, 'default-me');
-                partnerBalances[accNum]['default-me'] += tx.usdAmount;
+                ensurePartnerBalance(accNum, user.uid);
+                partnerBalances[accNum][user.uid] += tx.usdAmount;
             }
 
             ledger.push({
@@ -2127,8 +2122,8 @@ const updatePartner = async (updatedPartner: T.Partner) => {
                         partnerBalances[accNum][share.partnerId] -= tx.amount * (share.sharePercentage / 100);
                     });
                 } else {
-                    ensurePartnerBalance(accNum, 'default-me');
-                    partnerBalances[accNum]['default-me'] -= tx.amount;
+                    ensurePartnerBalance(accNum, user.uid);
+                    partnerBalances[accNum][user.uid] -= tx.amount;
                 }
             }
 
@@ -2174,9 +2169,9 @@ const updatePartner = async (updatedPartner: T.Partner) => {
                     });
                 } else {
                     // Zero balance case, fallback to 'me' as last resort
-                    ensurePartnerBalance(fromAcc, 'default-me');
-                    fromPartnerBals['default-me'] -= tx.amount;
-                    transferredPartnerShares['default-me'] = tx.amount;
+                    ensurePartnerBalance(fromAcc, user.uid);
+                    fromPartnerBals[user.uid] -= tx.amount;
+                    transferredPartnerShares[user.uid] = tx.amount;
                 }
             }
 
@@ -2238,7 +2233,7 @@ const updatePartner = async (updatedPartner: T.Partner) => {
         partnerAdAccountBalances: finalPartnerAdBalances,
     };
 
-}, [adAccounts, adDeposits, dailyAdCosts, adFundTransfers, assets, projects]);
+}, [adAccounts, adDeposits, dailyAdCosts, adFundTransfers, assets, projects, user]);
 
   const masterProjects = useMemo<MasterProject[]>(() => {
     const uniqueProjects = new Map<string, MasterProject>();
@@ -2276,7 +2271,7 @@ const updatePartner = async (updatedPartner: T.Partner) => {
         allPeriodReceivablePayments: T.PeriodReceivablePayment[],
         allAdDeposits: T.AdDeposit[]
     ): PeriodFinancials | null => {
-        if (!period) return null;
+        if (!period || !user) return null;
 
         const projectsForPeriod = allProjects.filter(p => isDateInPeriod(p.period, period));
         const projectMap = new Map(projectsForPeriod.map(p => [p.id, p]));
@@ -2310,7 +2305,7 @@ const updatePartner = async (updatedPartner: T.Partner) => {
                     if (partnerPnl) partnerPnl.revenue += comm.vndAmount * (share.sharePercentage / 100);
                 });
             } else {
-                const mePnl = partnerPnlMap.get('default-me');
+                const mePnl = partnerPnlMap.get(user.uid);
                 if (mePnl) mePnl.revenue += comm.vndAmount;
             }
         });
@@ -2373,7 +2368,7 @@ const updatePartner = async (updatedPartner: T.Partner) => {
                 pnl.revenue += exchangeRateGainLoss * partnerRevenueShare;
             });
         } else if (exchangeRateGainLoss !== 0) {
-            const mePnl = partnerPnlMap.get('default-me');
+            const mePnl = partnerPnlMap.get(user.uid);
             if (mePnl) {
                 mePnl.revenue += exchangeRateGainLoss;
             }
@@ -2399,7 +2394,7 @@ const updatePartner = async (updatedPartner: T.Partner) => {
                     }
                 });
             } else {
-                const mePnl = partnerPnlMap.get('default-me');
+                const mePnl = partnerPnlMap.get(user.uid);
                 if (mePnl) {
                     mePnl.cost += totalVndCost;
                     mePnl.inputVat += inputVat;
@@ -2431,7 +2426,7 @@ const updatePartner = async (updatedPartner: T.Partner) => {
                     }
                 });
             } else {
-                const mePnl = partnerPnlMap.get('default-me');
+                const mePnl = partnerPnlMap.get(user.uid);
                 if (mePnl) {
                     mePnl.cost += totalVndCost;
                     mePnl.inputVat += inputVat;
@@ -2450,7 +2445,7 @@ const updatePartner = async (updatedPartner: T.Partner) => {
         const investmentGainLoss = liquidatedInvestmentsForPeriod.reduce((sum, i) => sum + ((i.liquidationAmount || 0) - i.investmentAmount), 0);
         const profitBeforeTax = totalProfit + investmentGainLoss;
 
-        const mePnl = partnerPnlMap.get('default-me') || { revenue: 0, cost: 0, profit: 0, inputVat: 0, partnerId: '', name: '', taxPayable: 0 };
+        const mePnl = partnerPnlMap.get(user.uid) || { revenue: 0, cost: 0, profit: 0, inputVat: 0, partnerId: '', name: '', taxPayable: 0 };
         const taxBases = {
             initialRevenueBase: allTaxSettings.incomeTaxBase === 'personal' ? mePnl.revenue : totalRevenue,
             taxSeparationAmount: allTaxSettings.taxSeparationAmount || 0,
@@ -2511,6 +2506,7 @@ const updatePartner = async (updatedPartner: T.Partner) => {
     };
   
     const periodFinancials = useMemo<T.PeriodFinancials | null>(() => {
+        if (!currentPeriod || !user) return null;
         return calculatePeriodFinancials(
             currentPeriod, projects, commissions, enrichedDailyAdCosts, miscellaneousExpenses, 
             partners, taxSettings, exchangeLogs, investments, taxPayments, withdrawals, 
@@ -2519,10 +2515,11 @@ const updatePartner = async (updatedPartner: T.Partner) => {
     }, [
         currentPeriod, projects, commissions, enrichedDailyAdCosts, miscellaneousExpenses, 
         partners, taxSettings, exchangeLogs, investments, taxPayments, withdrawals, 
-        capitalInflows, periodDebtPayments, periodReceivablePayments, adDeposits
+        capitalInflows, periodDebtPayments, periodReceivablePayments, adDeposits, user
     ]);
   
     const allPartnerLedgerEntries = useMemo<T.PartnerLedgerEntry[]>(() => {
+        if (!user) return [];
         const assetMap = new Map<string, T.Asset>(assets.map(a => [a.id, a]));
         const projectMap = new Map<string, T.Project>(projects.map(p => [p.id, p]));
     
@@ -2542,7 +2539,7 @@ const updatePartner = async (updatedPartner: T.Partner) => {
             switch (tx.type) {
                 case 'capitalInflow': {
                     const capitalInflow = tx as T.CapitalInflow;
-                    const partnerId = capitalInflow.contributedByPartnerId || 'default-me';
+                    const partnerId = capitalInflow.contributedByPartnerId || user.uid;
                     const asset = assetMap.get(capitalInflow.assetId);
                     if (!asset) break;
     
@@ -2586,7 +2583,7 @@ const updatePartner = async (updatedPartner: T.Partner) => {
                         });
                     } else {
                         ledgerEntries.push({
-                            id: `rev-${commission.id}-default-me`, date: commission.date, partnerId: 'default-me',
+                            id: `rev-${commission.id}-${user.uid}`, date: commission.date, partnerId: user.uid,
                             description: `Hoa hồng dự án ${project.name}`, type: 'inflow', amount: commission.vndAmount,
                             sourceName: project.name, destinationName: asset.name,
                             workspaceId: commission.workspaceId
@@ -2597,17 +2594,20 @@ const updatePartner = async (updatedPartner: T.Partner) => {
                 // FIX: The combined 'dailyAdCost' and 'miscExpense' case was split into two separate cases and type assertions were added to handle their different properties correctly and fix property access errors on an 'unknown' type.
                 case 'dailyAdCost': {
                     const expense = tx as EnrichedDailyAdCost;
-                    const project: T.Project | undefined = expense.projectId ? projectMap.get(expense.projectId) : undefined;
+                    const project = expense.projectId ? projectMap.get(expense.projectId) : undefined;
                     
                     let shares: T.PartnerShare[] | undefined | null = null;
-                    if (project?.isPartnership && project?.partnerShares) {
+                    // FIX: Changed optional chaining to an explicit check to help type inference.
+                    if (project && project.isPartnership && project.partnerShares) {
                         shares = project.partnerShares;
                     }
                     
                     const vndAmount = expense.vndCost;
-                    const description = `Chi phí Ads cho dự án ${project?.name || expense.adAccountNumber}`;
+                    // FIX: Changed optional chaining to an explicit check to help type inference.
+                    const description = `Chi phí Ads cho dự án ${project ? project.name : expense.adAccountNumber}`;
                     const sourceName = `TK Ads ${expense.adAccountNumber}`;
-                    const destinationName = project?.name;
+                    // FIX: Changed optional chaining to an explicit check to help type inference.
+                    const destinationName = project ? project.name : undefined;
 
                     if (shares && shares.length > 0) {
                         shares.forEach(share => {
@@ -2620,7 +2620,7 @@ const updatePartner = async (updatedPartner: T.Partner) => {
                         });
                     } else {
                         ledgerEntries.push({
-                            id: `cost-${expense.id}-default-me`, date: expense.date, partnerId: 'default-me',
+                            id: `cost-${expense.id}-${user.uid}`, date: expense.date, partnerId: user.uid,
                             description, type: 'outflow', amount: vndAmount,
                             sourceName: sourceName, destinationName: destinationName,
                             workspaceId: expense.workspaceId
@@ -2630,10 +2630,11 @@ const updatePartner = async (updatedPartner: T.Partner) => {
                 }
                 case 'miscExpense': {
                     const expense = tx as T.MiscellaneousExpense;
-                    const project: T.Project | undefined = expense.projectId ? projectMap.get(expense.projectId) : undefined;
+                    const project = expense.projectId ? projectMap.get(expense.projectId) : undefined;
                     
                     let shares: T.PartnerShare[] | undefined | null = null;
-                    if (project?.isPartnership && project?.partnerShares) {
+                    // FIX: Changed optional chaining to an explicit check to help type inference.
+                    if (project && project.isPartnership && project.partnerShares) {
                         shares = project.partnerShares;
                     } else if (expense.isPartnership && expense.partnerShares) {
                         shares = expense.partnerShares;
@@ -2642,7 +2643,7 @@ const updatePartner = async (updatedPartner: T.Partner) => {
                     const vndAmount = expense.vndAmount;
                     const description = `Chi phí: ${expense.description}`;
                     const sourceName = assetMap.get(expense.assetId)?.name;
-                    const destinationName = project?.name || 'Chi phí chung';
+                    const destinationName = project ? project.name : 'Chi phí chung';
 
                     if (shares && shares.length > 0) {
                         shares.forEach(share => {
@@ -2655,7 +2656,7 @@ const updatePartner = async (updatedPartner: T.Partner) => {
                         });
                     } else {
                         ledgerEntries.push({
-                            id: `cost-${expense.id}-default-me`, date: expense.date, partnerId: 'default-me',
+                            id: `cost-${expense.id}-${user.uid}`, date: expense.date, partnerId: user.uid,
                             description, type: 'outflow', amount: vndAmount,
                             sourceName: sourceName, destinationName: destinationName,
                             workspaceId: expense.workspaceId

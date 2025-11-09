@@ -11,26 +11,23 @@ interface State {
 }
 
 class ErrorBoundary extends Component<Props, State> {
-  // FIX: Reverted to using a constructor for state initialization to resolve potential `this` context issues with the component's lifecycle methods.
-  constructor(props: Props) {
-    super(props);
-    this.state = {
-      hasError: false,
-      error: undefined,
-      errorInfo: undefined,
-    };
-  }
+  // FIX: Use a class property for state initialization to avoid potential `this` context issues.
+  public state: State = {
+    hasError: false,
+    error: undefined,
+    errorInfo: undefined,
+  };
 
-  static getDerivedStateFromError(error: Error): State {
+  public static getDerivedStateFromError(error: Error): State {
     return { hasError: true, error };
   }
 
-  componentDidCatch(error: Error, errorInfo: ErrorInfo) {
+  public componentDidCatch(error: Error, errorInfo: ErrorInfo) {
     console.error("Uncaught error:", error, errorInfo);
     this.setState({ errorInfo });
   }
 
-  render() {
+  public render() {
     if (this.state.hasError) {
       return (
         <div className="flex items-center justify-center h-screen bg-gray-900 text-gray-200 p-8">
