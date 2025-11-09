@@ -2595,8 +2595,8 @@ export const DataProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
                     // For simplicity, we omit direct ledger entries for exchanges now.
                     break;
                 }
+                // FIX: Added type assertion to ensure the transaction object conforms to the PartnerLedgerEntry type.
                 case 'manual':
-                    // FIX: Added type assertion to ensure the transaction object conforms to the PartnerLedgerEntry type.
                     ledgerEntries.push(tx as T.PartnerLedgerEntry);
                     break;
             }
