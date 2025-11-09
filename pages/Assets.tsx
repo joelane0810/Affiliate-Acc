@@ -1,6 +1,7 @@
 import React, { useState, useMemo, useEffect } from 'react';
 import { useData } from '../context/DataContext';
 import type { Asset, Withdrawal, Partner, AssetType, CapitalInflow } from '../types';
+import * as T from '../types';
 import { Header } from '../components/Header';
 import { Button } from '../components/ui/Button';
 import { Card, CardContent, CardHeader } from '../components/ui/Card';
@@ -11,6 +12,12 @@ import { NumberInput } from '../components/ui/NumberInput';
 import { Plus, Edit, Trash2, ChevronDown, ChevronRight } from '../components/icons/IconComponents';
 import { formatCurrency, formatDate } from '../lib/utils';
 import { ConfirmationModal } from '../components/ui/ConfirmationModal';
+
+const permissionLevelLabels: Record<T.PermissionLevel, string> = {
+    view: 'Chỉ xem',
+    edit: 'Chỉnh sửa',
+    full: 'Toàn quyền',
+};
 
 const AssetTypeFormModal: React.FC<{
     isOpen: boolean;
@@ -71,7 +78,7 @@ const AssetForm: React.FC<{
     const [balance, setBalance] = useState(asset?.balance || 0);
     const [currency, setCurrency] = useState<Asset['currency']>(asset?.currency || 'VND');
     const [ownershipType, setOwnershipType] = useState<Asset['ownershipType']>(asset?.ownershipType || 'personal');
-    const [sharedWith, setSharedWith] = useState<string[]>(asset?.sharedWith || []);
+    const [sharedWith, setSharedWith] = useState<T.AssetShare[]>(asset?.sharedWith || []);
     const [isAddTypeModalOpen, setIsAddTypeModalOpen] = useState(false);
 
     useEffect(() => {
@@ -83,22 +90,43 @@ const AssetForm: React.FC<{
     const handlePartnerSelection = (partnerId: string, checked: boolean) => {
         setSharedWith(prev => {
             if (checked) {
-                return [...prev, partnerId];
+                if (!prev.some(p => p.partnerId === partnerId)) {
+                    return [...prev, { partnerId, permission: 'view' }];
+                }
+                return prev;
             } else {
-                return prev.filter(id => id !== partnerId);
+                return prev.filter(p => p.partnerId !== partnerId);
             }
         });
+    };
+    
+    const handlePermissionChange = (partnerId: string, permission: T.PermissionLevel) => {
+        setSharedWith(prev => 
+            prev.map(p => p.partnerId === partnerId ? { ...p, permission } : p)
+        );
     };
 
     const handleSubmit = (e: React.FormEvent) => {
         e.preventDefault();
+        
+        let finalSharedWith = ownershipType === 'shared' ? [...sharedWith] : [];
+
+        if (ownershipType === 'shared') {
+            const meShareIndex = finalSharedWith.findIndex(s => s.partnerId === 'default-me');
+            if (meShareIndex !== -1) {
+                finalSharedWith[meShareIndex] = { partnerId: 'default-me', permission: 'full' };
+            } else {
+                finalSharedWith.push({ partnerId: 'default-me', permission: 'full' });
+            }
+        }
+
         const assetData = {
             name,
             typeId,
             balance,
             currency,
             ownershipType,
-            sharedWith: ownershipType === 'shared' ? sharedWith : [],
+            sharedWith: finalSharedWith,
         };
         onSave({ ...asset, id: asset?.id || '', ...assetData });
     };
@@ -152,22 +180,47 @@ const AssetForm: React.FC<{
 
                 {ownershipType === 'shared' && (
                     <div className="pt-4 border-t border-gray-700">
-                        <Label>Chia sẻ với</Label>
-                        <div className="grid grid-cols-2 sm:grid-cols-3 gap-3 pt-1 max-h-32 overflow-y-auto bg-gray-900/50 p-3 rounded-md">
-                            {partners.map(partner => (
-                                <label key={partner.id} className="flex items-center space-x-2 cursor-pointer">
-                                    <input 
-                                        type="checkbox" 
-                                        checked={sharedWith.includes(partner.id)} 
-                                        onChange={(e) => handlePartnerSelection(partner.id, e.target.checked)} 
-                                        className="h-4 w-4 rounded border-gray-600 bg-gray-900 text-primary-600 focus:ring-primary-500"
-                                    />
-                                    <span>{partner.name}</span>
-                                </label>
-                            ))}
+                        <Label>Chia sẻ & Phân quyền</Label>
+                        <div className="space-y-2 pt-1 max-h-40 overflow-y-auto bg-gray-900/50 p-3 rounded-md">
+                            {partners.map(partner => {
+                                const isMe = partner.id === 'default-me';
+                                const isSelected = sharedWith.some(p => p.partnerId === partner.id);
+                                return (
+                                <div key={partner.id} className="flex items-center justify-between p-2 rounded-md hover:bg-gray-800">
+                                    <label className={`flex items-center space-x-2 ${isMe ? 'cursor-not-allowed opacity-70' : 'cursor-pointer'}`}>
+                                        <input 
+                                            type="checkbox" 
+                                            checked={isMe || isSelected} 
+                                            onChange={(e) => !isMe && handlePartnerSelection(partner.id, e.target.checked)} 
+                                            className="h-4 w-4 rounded border-gray-600 bg-gray-900 text-primary-600 focus:ring-primary-500"
+                                            disabled={isMe}
+                                        />
+                                        <span>{partner.name}</span>
+                                    </label>
+                                    {(isMe || isSelected) && (
+                                        isMe ? (
+                                            <div className="px-2 py-1 text-xs bg-gray-700/50 border border-gray-600/50 rounded-md text-gray-400">
+                                                {permissionLevelLabels['full']}
+                                            </div>
+                                        ) : (
+                                            <select
+                                                value={sharedWith.find(p => p.partnerId === partner.id)?.permission || 'view'}
+                                                onChange={(e) => handlePermissionChange(partner.id, e.target.value as T.PermissionLevel)}
+                                                className="px-2 py-1 text-xs bg-gray-700 border border-gray-600 rounded-md focus:outline-none focus:ring-1 focus:ring-primary-500"
+                                                onClick={(e) => e.stopPropagation()}
+                                            >
+                                                {Object.entries(permissionLevelLabels).map(([key, label]) => (
+                                                    <option key={key} value={key}>{label}</option>
+                                                ))}
+                                            </select>
+                                        )
+                                    )}
+                                </div>
+                            )})}
                         </div>
                     </div>
                 )}
+
 
                 <div>
                     <Label htmlFor="assetBalance">Số dư ban đầu</Label>
@@ -553,7 +606,7 @@ const BalanceSheetContent = () => {
                             <TableHeader className="w-12"></TableHeader>
                             <TableHeader>Tên tài sản</TableHeader>
                             <TableHeader>Loại</TableHeader>
-                            <TableHeader>Chia sẻ với</TableHeader>
+                            <TableHeader>Sở hữu</TableHeader>
                             <TableHeader>Tiền tệ</TableHeader>
                             <TableHeader>Tiền vào</TableHeader>
                             <TableHeader>Tiền ra</TableHeader>
@@ -574,9 +627,9 @@ const BalanceSheetContent = () => {
                                         <TableCell className="font-medium text-white">{asset.name}</TableCell>
                                         <TableCell>{assetTypeMap.get(asset.typeId) || 'N/A'}</TableCell>
                                         <TableCell className="text-xs">
-                                            {asset.ownershipType === 'shared' 
-                                                ? asset.sharedWith?.map(id => partnerMap.get(id)).join(', ') || 'Chung' 
-                                                : 'Cá nhân'}
+                                            {asset.ownershipType === 'personal'
+                                                ? 'Tôi'
+                                                : (asset.sharedWith?.map(s => partnerMap.get(s.partnerId)).filter(Boolean).join(', ') || 'Hợp tác')}
                                         </TableCell>
                                         <TableCell>{asset.currency}</TableCell>
                                         <TableCell className="font-semibold text-green-400">{formatCurrency(asset.totalReceived, asset.currency)}</TableCell>

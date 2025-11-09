@@ -1,4 +1,4 @@
-import React, { ErrorInfo, ReactNode } from 'react';
+import React, { Component, ErrorInfo, ReactNode } from 'react';
 
 interface Props {
   children: ReactNode;
@@ -10,23 +10,21 @@ interface State {
   errorInfo?: ErrorInfo;
 }
 
-// FIX: Changed React.Component to Component.
-class ErrorBoundary extends React.Component<Props, State> {
-  // FIX: Initialize state as a class property to ensure `this` is correctly bound.
-  state: State = {
+class ErrorBoundary extends Component<Props, State> {
+  // FIX: Replaced the constructor with a public class field for state initialization.
+  // This is a more modern syntax and resolves the errors where `this.state`, `this.props`, and `this.setState` were not being found on the component instance.
+  public state: State = {
     hasError: false,
     error: undefined,
     errorInfo: undefined,
   };
 
   static getDerivedStateFromError(error: Error): State {
-    // This lifecycle method should return a state update object.
     return { hasError: true, error };
   }
 
   componentDidCatch(error: Error, errorInfo: ErrorInfo) {
     console.error("Uncaught error:", error, errorInfo);
-    // FIX: Use setState to update state immutably.
     this.setState({ errorInfo });
   }
 

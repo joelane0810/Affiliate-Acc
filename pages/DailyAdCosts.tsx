@@ -151,7 +151,7 @@ const AdCostForm: React.FC<{
 };
 
 const AdCostsContent = () => {
-    const { projects, adAccounts, enrichedDailyAdCosts, addDailyAdCost, updateDailyAdCost, deleteDailyAdCost, currentPeriod, isReadOnly } = useData();
+    const { projects, partners, adAccounts, enrichedDailyAdCosts, addDailyAdCost, updateDailyAdCost, deleteDailyAdCost, currentPeriod, isReadOnly } = useData();
     const [isModalOpen, setIsModalOpen] = useState(false);
     const [editingCost, setEditingCost] = useState<T.DailyAdCost | undefined>(undefined);
     const [isConfirmModalOpen, setIsConfirmModalOpen] = useState(false);
@@ -161,16 +161,18 @@ const AdCostsContent = () => {
         projects.filter(p => p.period === currentPeriod),
     [projects, currentPeriod]);
 
+    const projectMap = useMemo(() => new Map(projects.map(p => [p.id, p])), [projects]);
+    const partnerMap = useMemo(() => new Map(partners.map(p => [p.id, p.name])), [partners]);
+
     const enrichedCostsForPeriod = useMemo(() => {
-        const projectMap = new Map(projects.map(p => [p.id, p.name]));
         return enrichedDailyAdCosts
             .filter(c => isDateInPeriod(c.date, currentPeriod))
             .map(c => ({
                 ...c,
-                projectName: projectMap.get(c.projectId) || 'N/A',
+                projectName: projectMap.get(c.projectId)?.name || 'N/A',
             }))
             .sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime());
-    }, [enrichedDailyAdCosts, projects, currentPeriod]);
+    }, [enrichedDailyAdCosts, projectMap, currentPeriod]);
 
     const handleSave = (cost: Omit<T.DailyAdCost, 'id'> | T.DailyAdCost) => {
         if ('id' in cost && cost.id) {
@@ -219,6 +221,7 @@ const AdCostsContent = () => {
                                 <TableRow>
                                     <TableHeader>Ngày</TableHeader>
                                     <TableHeader>Dự án</TableHeader>
+                                    <TableHeader>Sở hữu</TableHeader>
                                     <TableHeader>Tài khoản Ads</TableHeader>
                                     <TableHeader>Chi phí (USD)</TableHeader>
                                     <TableHeader>Tỷ giá (hiệu lực)</TableHeader>
@@ -228,10 +231,17 @@ const AdCostsContent = () => {
                                 </TableRow>
                             </TableHead>
                             <TableBody>
-                                {enrichedCostsForPeriod.map(cost => (
+                                {enrichedCostsForPeriod.map(cost => {
+                                    const project = projectMap.get(cost.projectId);
+                                    return (
                                     <TableRow key={cost.id}>
                                         <TableCell>{formatDate(cost.date)}</TableCell>
                                         <TableCell className="font-medium text-white">{cost.projectName}</TableCell>
+                                        <TableCell className="text-xs">
+                                            {project?.isPartnership && project.partnerShares && project.partnerShares.length > 0
+                                                ? project.partnerShares.map(s => partnerMap.get(s.partnerId)).filter(Boolean).join(', ')
+                                                : 'Tôi'}
+                                        </TableCell>
                                         <TableCell>{cost.adAccountNumber}</TableCell>
                                         <TableCell>{formatCurrency(cost.amount, 'USD')}</TableCell>
                                         <TableCell>{cost.effectiveRate ? cost.effectiveRate.toLocaleString('vi-VN') : '—'}</TableCell>
@@ -246,7 +256,7 @@ const AdCostsContent = () => {
                                             </TableCell>
                                         )}
                                     </TableRow>
-                                ))}
+                                )})}
                             </TableBody>
                         </Table>
                     </CardContent>
@@ -624,7 +634,7 @@ const AdFundTransferForm: React.FC<{
 };
 
 const AdDepositsContent = () => {
-    const { assets, assetTypes, projects, adAccounts, adDeposits, addAdDeposit, updateAdDeposit, deleteAdDeposit, addAdFundTransfer, currentPeriod, isReadOnly } = useData();
+    const { assets, assetTypes, projects, partners, adAccounts, adDeposits, addAdDeposit, updateAdDeposit, deleteAdDeposit, addAdFundTransfer, currentPeriod, isReadOnly } = useData();
     const [isModalOpen, setIsModalOpen] = useState(false);
     const [isTransferModalOpen, setIsTransferModalOpen] = useState(false);
     const [editingDeposit, setEditingDeposit] = useState<T.AdDeposit | undefined>(undefined);
@@ -633,24 +643,24 @@ const AdDepositsContent = () => {
     
     const projectsForPeriod = useMemo(() => projects.filter(p => p.period === currentPeriod), [projects, currentPeriod]);
 
+    const projectMap = useMemo(() => new Map(projects.map(p => [p.id, p])), [projects]);
+    const partnerMap = useMemo(() => new Map(partners.map(p => [p.id, p.name])), [partners]);
+    const assetMap = useMemo(() => new Map(assets.map(a => [a.id, a.name])), [assets]);
+
     const enrichedDeposits = useMemo(() => {
-        const projectMap = new Map(projects.map(p => [p.id, p.name]));
-        const assetMap = new Map(assets.map(a => [a.id, a.name]));
         return adDeposits
             .filter(d => isDateInPeriod(d.date, currentPeriod))
             .map(d => ({
                 ...d,
-                projectName: d.projectId ? projectMap.get(d.projectId) || 'N/A' : '—',
+                projectName: d.projectId ? projectMap.get(d.projectId)?.name || 'N/A' : '—',
                 assetName: assetMap.get(d.assetId) || 'N/A',
             }))
             .sort((a,b) => new Date(b.date).getTime() - new Date(a.date).getTime());
-    }, [adDeposits, projects, assets, currentPeriod]);
+    }, [adDeposits, projectMap, assetMap, currentPeriod]);
 
     const handleSave = (depositOrDeposits: (Omit<T.AdDeposit, 'id'> | T.AdDeposit) | (Omit<T.AdDeposit, 'id'>)[]) => {
         if (Array.isArray(depositOrDeposits)) {
-            depositOrDeposits.forEach(dep => {
-                addAdDeposit(dep);
-            });
+            addAdDeposit(depositOrDeposits);
         } else {
             const deposit = depositOrDeposits;
             if ('id' in deposit && deposit.id) {
@@ -703,6 +713,7 @@ const AdDepositsContent = () => {
                                 <TableHeader>Ngày</TableHeader>
                                 <TableHeader>Số tài khoản</TableHeader>
                                 <TableHeader>Nền tảng</TableHeader>
+                                <TableHeader>Sở hữu</TableHeader>
                                 <TableHeader>Nguồn tiền chi trả</TableHeader>
                                 <TableHeader>Dự án</TableHeader>
                                 <TableHeader>Số tiền (USD)</TableHeader>
@@ -713,11 +724,18 @@ const AdDepositsContent = () => {
                             </TableRow>
                         </TableHead>
                         <TableBody>
-                            {enrichedDeposits.map(d => (
+                            {enrichedDeposits.map(d => {
+                                const project = d.projectId ? projectMap.get(d.projectId) : null;
+                                return (
                                 <TableRow key={d.id}>
                                     <TableCell>{formatDate(d.date)}</TableCell>
                                     <TableCell className="font-medium text-white">{d.adAccountNumber}</TableCell>
                                     <TableCell>{adsPlatformLabels[d.adsPlatform]}</TableCell>
+                                    <TableCell className="text-xs">
+                                        {project?.isPartnership && project.partnerShares && project.partnerShares.length > 0
+                                            ? project.partnerShares.map(s => partnerMap.get(s.partnerId)).filter(Boolean).join(', ')
+                                            : 'Tôi'}
+                                    </TableCell>
                                     <TableCell className="font-medium text-white">{d.assetName}</TableCell>
                                     <TableCell>{d.projectName}</TableCell>
                                     <TableCell>{formatCurrency(d.usdAmount, 'USD')}</TableCell>
@@ -740,7 +758,7 @@ const AdDepositsContent = () => {
                                         </TableCell>
                                     )}
                                 </TableRow>
-                            ))}
+                            )})}
                         </TableBody>
                     </Table>
                 </CardContent>

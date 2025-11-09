@@ -5,8 +5,8 @@ import { Card, CardContent, CardHeader } from './components/ui/Card';
 import { Page } from './types';
 import { Button } from './components/ui/Button';
 import { Menu } from './components/icons/IconComponents';
-// FIX: Import missing Input and Label components.
 import { Input, Label } from './components/ui/Input';
+import { Toast } from './components/notifications/Toast';
 
 
 // Dynamically import pages
@@ -280,7 +280,17 @@ const AppContent = () => {
 export default function App() {
   return (
     <DataProvider>
-      <AppContent />
+      <AppContentWithToast />
     </DataProvider>
   );
 }
+
+const AppContentWithToast: React.FC = () => {
+    const { toast, clearToast } = useData();
+    return (
+        <>
+            <AppContent />
+            <Toast toast={toast} onClear={clearToast} />
+        </>
+    );
+};

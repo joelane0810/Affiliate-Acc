@@ -2,13 +2,14 @@ import React, { useState, useRef, useEffect } from 'react';
 import type { Page } from '../types';
 import { 
   LayoutDashboard, BarChart3, Target, DollarSign, Repeat, Package, 
-  Handshake, Users, Landmark, Banknote, FileText, CalendarClock, Settings, ChevronLeft, ChevronRight, Book, X, ArrowRightLeft, PiggyBank, HelpCircle, ChevronDown
+  Handshake, Users, Landmark, Banknote, FileText, CalendarClock, Settings, ChevronLeft, ChevronRight, Book, X, ArrowRightLeft, PiggyBank, HelpCircle, ChevronDown, NotificationBell
 } from './icons/IconComponents';
 import { useData } from '../context/DataContext';
-// FIX: Import missing UI components
 import { Modal } from './ui/Modal';
 import { Input, Label } from './ui/Input';
 import { Button } from './ui/Button';
+import { NotificationPanel } from './notifications/NotificationPanel';
+
 
 interface SidebarProps {
   isExpanded: boolean;
@@ -42,14 +43,20 @@ const alwaysEnabledPages: Page[] = ['AdAccounts', 'SavingsAndInvestments', 'Asse
 export const Sidebar: React.FC<SidebarProps> = ({ isExpanded, setIsExpanded, isMobileOpen, setIsMobileOpen }) => {
   const { 
       activePeriod, viewingPeriod, currentPage, setCurrentPage, 
-      user, authIsLoading, firebaseConfig 
+      user, authIsLoading, firebaseConfig, unreadCount, markNotificationsAsRead
   } = useData();
 
+  const [isNotificationPanelOpen, setIsNotificationPanelOpen] = useState(false);
   const needsSetup = !firebaseConfig || (!authIsLoading && !user);
 
   const handleNavigation = (page: Page) => {
     setCurrentPage(page);
     setIsMobileOpen(false); // Close menu on mobile after navigation
+  };
+  
+  const handleOpenNotifications = () => {
+    setIsNotificationPanelOpen(true);
+    markNotificationsAsRead();
   };
 
   let periodLabel = '';
@@ -80,6 +87,7 @@ export const Sidebar: React.FC<SidebarProps> = ({ isExpanded, setIsExpanded, isM
   const showText = isExpanded || isMobileOpen;
 
   return (
+    <>
     <aside className={`fixed top-0 left-0 h-full bg-gray-950 flex flex-col z-40 w-64 transition-transform duration-300 ease-in-out ${isMobileOpen ? 'translate-x-0' : '-translate-x-full'} md:translate-x-0 md:transition-all ${isExpanded ? 'md:w-64' : 'md:w-20'}`}>
       {/* Header with Period Indicator */}
       <div className={`flex items-center border-b border-gray-800 h-16 shrink-0 relative ${showText ? 'pl-4' : 'justify-center'}`}>
@@ -141,16 +149,34 @@ export const Sidebar: React.FC<SidebarProps> = ({ isExpanded, setIsExpanded, isM
 
       {/* Footer with Toggle */}
       <div className="border-t border-gray-800 shrink-0">
-           <div className={`flex items-center h-16 relative ${showText ? 'p-4' : 'justify-center'}`}>
+           <div className={`flex items-center h-16 relative ${isExpanded ? 'p-4' : 'justify-center'}`}>
                 <button 
-                onClick={() => setIsExpanded(!isExpanded)} 
-                className={`hidden md:flex text-gray-400 hover:text-white p-2 rounded-lg hover:bg-gray-800 flex-shrink-0 ${isExpanded ? 'ml-auto' : 'absolute right-2 top-1/2 -translate-y-1/2'}`}
-                aria-label={isExpanded ? 'Thu gọn thanh công cụ' : 'Mở rộng thanh công cụ'}
+                    onClick={handleOpenNotifications} 
+                    className="relative text-gray-400 hover:text-white p-2 rounded-lg hover:bg-gray-800"
+                    aria-label="Mở thông báo"
                 >
-                {isExpanded ? <ChevronLeft /> : <ChevronRight />}
+                    <NotificationBell />
+                    {unreadCount > 0 && (
+                        <span className="absolute top-1 right-1 flex h-4 w-4">
+                            <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-red-400 opacity-75"></span>
+                            <span className="relative inline-flex rounded-full h-4 w-4 bg-red-500 items-center justify-center text-xs text-white">
+                                {unreadCount}
+                            </span>
+                        </span>
+                    )}
+                </button>
+
+                <button 
+                    onClick={() => setIsExpanded(!isExpanded)} 
+                    className="hidden md:flex text-gray-400 hover:text-white p-2 rounded-lg hover:bg-gray-800 ml-auto"
+                    aria-label={isExpanded ? 'Thu gọn thanh công cụ' : 'Mở rộng thanh công cụ'}
+                >
+                    {isExpanded ? <ChevronLeft /> : <ChevronRight />}
                 </button>
             </div>
       </div>
     </aside>
+    <NotificationPanel isOpen={isNotificationPanelOpen} onClose={() => setIsNotificationPanelOpen(false)} />
+    </>
   );
 };

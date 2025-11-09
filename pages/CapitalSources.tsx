@@ -26,7 +26,6 @@ const ProgressBar: React.FC<{ value: number, max: number }> = ({ value, max }) =
 
 const LiabilityForm: React.FC<{
     liability?: Liability;
-    // FIX: Updated onSave prop to omit workspaceId and other auto-generated fields, aligning it with the addLiability context function.
     onSave: (liability: Omit<Liability, 'id' | 'workspaceId' | 'currency' | 'creationDate'>) => void;
     onCancel: () => void;
 }> = ({ liability, onSave, onCancel }) => {
@@ -123,7 +122,6 @@ const LiabilityForm: React.FC<{
 const ReceivableForm: React.FC<{
     receivable?: Receivable;
     assets: Asset[];
-    // FIX: Updated onSave prop to omit workspaceId, aligning it with the addReceivable context function.
     onSave: (receivable: Omit<Receivable, 'id' | 'workspaceId'>) => void;
     onCancel: () => void;
 }> = ({ receivable, assets, onSave, onCancel }) => {
@@ -379,7 +377,6 @@ export default function CapitalSources() {
     
 
     // Liability handlers
-    // FIX: Updated formData type to omit workspaceId and other auto-generated fields.
     const handleSaveLiability = (formData: Omit<Liability, 'id' | 'workspaceId' | 'currency' | 'creationDate'>) => {
         if (editingLiability) {
             updateLiability({ ...editingLiability, ...formData });
@@ -408,7 +405,6 @@ export default function CapitalSources() {
     };
     
     // Receivable handlers
-    // FIX: Updated formData type to omit workspaceId.
     const handleSaveReceivable = (formData: Omit<Receivable, 'id' | 'workspaceId'>) => {
         if (editingReceivable) {
             updateReceivable({ ...editingReceivable, ...formData });

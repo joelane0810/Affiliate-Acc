@@ -33,6 +33,13 @@ const projectStatusLabels: Record<T.ProjectStatus, string> = {
     stopped: 'Đã dừng'
 };
 
+const permissionLevelLabels: Record<T.PermissionLevel, string> = {
+    view: 'Chỉ xem',
+    edit: 'Chỉnh sửa',
+    full: 'Toàn quyền',
+};
+
+
 const AddPartnerModal: React.FC<{
     isOpen: boolean;
     onClose: () => void;
@@ -105,7 +112,7 @@ const ProjectForm: React.FC<{ project?: T.Project; onSave: (project: Omit<T.Proj
             
             partners.forEach(p => {
                 if (!partnerIdsInShares.has(p.id)) {
-                    newShares.push({ partnerId: p.id, sharePercentage: 0 });
+                    newShares.push({ partnerId: p.id, sharePercentage: 0, permission: 'view' });
                 }
             });
             
@@ -120,6 +127,12 @@ const ProjectForm: React.FC<{ project?: T.Project; onSave: (project: Omit<T.Proj
     const handleShareChange = (partnerId: string, percentage: number) => {
         setShares(currentShares =>
             currentShares.map(s => s.partnerId === partnerId ? { ...s, sharePercentage: percentage } : s)
+        );
+    };
+
+    const handlePermissionChange = (partnerId: string, permission: T.PermissionLevel) => {
+        setShares(currentShares =>
+            currentShares.map(s => (s.partnerId === partnerId ? { ...s, permission } : s))
         );
     };
     
@@ -190,13 +203,21 @@ const ProjectForm: React.FC<{ project?: T.Project; onSave: (project: Omit<T.Proj
             return;
         }
 
+        const finalShares = isPartnership 
+            ? shares.map(s => 
+                s.partnerId === 'default-me' 
+                    ? { ...s, permission: 'full' as T.PermissionLevel } 
+                    : s
+              ).filter(s => s.sharePercentage > 0)
+            : [];
+
         const projectData = {
             name,
             adsPlatforms,
             projectType,
             status,
             isPartnership,
-            partnerShares: isPartnership ? shares.filter(s => s.sharePercentage > 0) : [],
+            partnerShares: finalShares,
             categoryId: categoryId || undefined,
             nicheId: nicheId || undefined,
             affiliateUrls,
@@ -312,7 +333,7 @@ const ProjectForm: React.FC<{ project?: T.Project; onSave: (project: Omit<T.Proj
                  <div className="border-t border-gray-700 pt-4 space-y-3">
                     <div className="flex justify-between items-center">
                          <div className="flex items-center gap-3">
-                             <h4 className="font-semibold text-white">Phân chia lợi nhuận</h4>
+                             <h4 className="font-semibold text-white">Phân chia & Phân quyền</h4>
                              <Button type="button" variant="secondary" onClick={() => setIsAddPartnerModalOpen(true)} className="!py-1 !px-2 !text-xs">
                                  <span className="flex items-center gap-1"><Plus width={14} height={14} /> Thêm đối tác</span>
                              </Button>
@@ -324,13 +345,29 @@ const ProjectForm: React.FC<{ project?: T.Project; onSave: (project: Omit<T.Proj
                     {shares.map(share => {
                          const partner = partners.find(p => p.id === share.partnerId);
                          if (!partner) return null;
+                         const isMe = share.partnerId === 'default-me';
                          return (
-                            <div key={share.partnerId} className="flex items-center gap-4">
-                                <Label htmlFor={`share-${share.partnerId}`} className="flex-1 mb-0">{partner.name}</Label>
-                                <div className="relative w-32">
+                            <div key={share.partnerId} className="flex items-center gap-2">
+                                <Label htmlFor={`share-${share.partnerId}`} className="w-1/3 mb-0">{partner.name}</Label>
+                                <div className="relative w-1/4">
                                     <NumberInput id={`share-${share.partnerId}`} value={share.sharePercentage} onValueChange={val => handleShareChange(share.partnerId, val)} className="pr-8" />
                                     <span className="absolute right-3 top-1/2 -translate-y-1/2 text-gray-400 pointer-events-none">%</span>
                                 </div>
+                                {isMe ? (
+                                    <div className={`${selectClassName} flex-grow bg-gray-800 flex items-center px-3`}>
+                                        <span className="text-gray-400">{permissionLevelLabels['full']}</span>
+                                    </div>
+                                ) : (
+                                    <select
+                                        value={share.permission || 'view'}
+                                        onChange={(e) => handlePermissionChange(share.partnerId, e.target.value as T.PermissionLevel)}
+                                        className={`${selectClassName} flex-grow`}
+                                    >
+                                        {Object.entries(permissionLevelLabels).map(([key, label]) => (
+                                            <option key={key} value={key}>{label}</option>
+                                        ))}
+                                    </select>
+                                )}
                             </div>
                          )
                     })}
@@ -433,11 +470,12 @@ const ProjectFilters: React.FC<{
 
 const ProjectListContent: React.FC<{ 
     enrichedProjects: any[];
+    partnerMap: Map<string, string>;
     onProjectClick: (project: T.Project) => void;
     onEditClick: (project: T.Project) => void; 
     onDeleteClick: (project: T.Project) => void;
     isReadOnly: boolean;
-}> = ({ enrichedProjects, onProjectClick, onEditClick, onDeleteClick, isReadOnly }) => {
+}> = ({ enrichedProjects, partnerMap, onProjectClick, onEditClick, onDeleteClick, isReadOnly }) => {
     
     const totals = useMemo(() => {
         return enrichedProjects.reduce((acc, p) => {
@@ -455,6 +493,7 @@ const ProjectListContent: React.FC<{
                     <TableHead>
                         <TableRow>
                             <TableHeader>Tên dự án</TableHeader>
+                            <TableHeader>Sở hữu</TableHeader>
                             <TableHeader>Nền tảng</TableHeader>
                             <TableHeader>Loại</TableHeader>
                             <TableHeader>Trạng thái</TableHeader>
@@ -477,7 +516,12 @@ const ProjectListContent: React.FC<{
                                     </button>
                                     {p.isPartnership && <Users className="inline-block ml-2 text-primary-400" width={16} height={16} />}
                                 </TableCell>
-                                <TableCell>{p.adsPlatforms.map(ap => adsPlatformLabels[ap]).join(', ')}</TableCell>
+                                <TableCell className="text-xs">
+                                    {p.isPartnership && p.partnerShares && p.partnerShares.length > 0
+                                        ? p.partnerShares.map((s: T.PartnerShare) => partnerMap.get(s.partnerId)).filter(Boolean).join(', ')
+                                        : 'Tôi'}
+                                </TableCell>
+                                <TableCell>{p.adsPlatforms.map((ap: T.AdsPlatform) => adsPlatformLabels[ap]).join(', ')}</TableCell>
                                 <TableCell>{projectTypeLabels[p.projectType]}</TableCell>
                                 <TableCell>
                                     <span className={`px-2 inline-flex text-xs leading-5 font-semibold rounded-full ${p.status === 'running' ? 'bg-green-200 text-green-800' : 'bg-gray-200 text-gray-800'}`}>
@@ -502,7 +546,7 @@ const ProjectListContent: React.FC<{
                     </TableBody>
                     <tfoot className="border-t-2 border-gray-700 bg-gray-800">
                         <TableRow className="hover:bg-gray-800">
-                            <TableHeader colSpan={4} className="text-center !font-bold text-base text-white">Tổng cộng</TableHeader>
+                            <TableHeader colSpan={5} className="text-center !font-bold text-base text-white">Tổng cộng</TableHeader>
                             <TableCell className="font-bold text-primary-400">{formatCurrency(totals.revenue)}</TableCell>
                             <TableCell className="font-bold text-red-400">{formatCurrency(totals.cost)}</TableCell>
                             <TableCell className={`font-bold ${totals.profit >= 0 ? 'text-green-400' : 'text-red-400'}`}>{formatCurrency(totals.profit)}</TableCell>
@@ -747,7 +791,7 @@ const UrlListModal: React.FC<{
 export default function Projects() {
     const { 
         isReadOnly, addProject, updateProject, deleteProject, currentPeriod, 
-        projects, commissions, enrichedDailyAdCosts, miscellaneousExpenses 
+        projects, partners, commissions, enrichedDailyAdCosts, miscellaneousExpenses 
     } = useData();
     const [activeTab, setActiveTab] = useState<'list' | 'trends'>('list');
 
@@ -755,6 +799,7 @@ export default function Projects() {
     const [editingProject, setEditingProject] = useState<T.Project | undefined>(undefined);
     const [projectToDelete, setProjectToDelete] = useState<T.Project | null>(null);
     const [urlModalProject, setUrlModalProject] = useState<T.Project | null>(null);
+    const partnerMap = useMemo(() => new Map(partners.map(p => [p.id, p.name])), [partners]);
 
     // Filter states
     const [selectedProjectIds, setSelectedProjectIds] = useState<string[]>([]);
@@ -877,6 +922,7 @@ export default function Projects() {
                     />
                     <ProjectListContent 
                         enrichedProjects={filteredAndEnrichedProjects} 
+                        partnerMap={partnerMap}
                         onProjectClick={handleProjectClick}
                         onEditClick={handleEditClick}
                         onDeleteClick={handleDeleteClick}

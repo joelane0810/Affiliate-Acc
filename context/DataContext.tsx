@@ -1,7 +1,7 @@
 import React, { createContext, useContext, ReactNode, useMemo, useState, useEffect } from 'react';
 import { useLocalStorage } from '../hooks/useLocalStorage';
 import * as T from '../types';
-import { Page, PeriodAssetDetail, FirebaseConfig, EnrichedAdAccount, AdAccountTransaction, EnrichedPartner, PeriodFinancials } from '../types';
+import { Page, PeriodAssetDetail, FirebaseConfig, EnrichedAdAccount, AdAccountTransaction, EnrichedPartner, PeriodFinancials, Notification } from '../types';
 import { isDateInPeriod, formatCurrency } from '../lib/utils';
 import { initializeFirebase, auth, onAuthStateChanged, User } from '../lib/firebase';
 import { 
@@ -210,6 +210,12 @@ interface DataContextType {
   authIsLoading: boolean;
   permissionError: string | null;
   sharerName: string | null;
+  // FIX: Add missing properties for toast and notifications
+  toast: Notification | null;
+  clearToast: () => void;
+  notifications: Notification[];
+  unreadCount: number;
+  markNotificationsAsRead: () => void;
 }
 
 const DataContext = createContext<DataContextType | undefined>(undefined);
@@ -306,7 +312,8 @@ const seedInitialData = async (db: Firestore) => {
     const vcbAssetRef = doc(collection(db, 'assets'));
     batch.set(vcbAssetRef, { name: 'Vietcombank', typeId: 'bank', balance: 0, currency: 'VND', ownershipType: 'personal' });
     const clickbankAssetRef = doc(collection(db, 'assets'));
-    batch.set(clickbankAssetRef, { name: 'ClickBank', typeId: 'platform', balance: 0, currency: 'USD', ownershipType: 'shared', sharedWith: ['default-me'] });
+    // FIX: Changed `sharedWith` from an array of strings to an array of AssetShare objects.
+    batch.set(clickbankAssetRef, { name: 'ClickBank', typeId: 'platform', balance: 0, currency: 'USD', ownershipType: 'shared', sharedWith: [{ partnerId: 'default-me', permission: 'full' }] });
 
     // 6. Projects
     const project1Ref = doc(collection(db, 'projects'));
@@ -439,6 +446,15 @@ export const DataProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
   const [authIsLoading, setAuthIsLoading] = useState(true);
   const [permissionError, setPermissionError] = useState<string | null>(null);
   const [sharerName, setSharerName] = useState<string | null>(null);
+  const [toast, setToast] = useState<T.Notification | null>(null);
+  const [notifications, setNotifications] = useState<T.Notification[]>([]);
+  
+  const clearToast = () => setToast(null);
+  const unreadCount = useMemo(() => notifications.filter(n => !n.read).length, [notifications]);
+  const markNotificationsAsRead = () => {
+      setNotifications(prev => prev.map(n => ({...n, read: true})));
+  };
+
 
   useEffect(() => {
     if (firebaseConfig) {
@@ -509,9 +525,34 @@ export const DataProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
         };
 
         const fetchGlobalCollection = async <T,>(collectionName: string, setter: React.Dispatch<React.SetStateAction<T[]>>) => {
-            const q = collectionName === 'partners' 
-                ? query(collection(firestoreDb, 'partners'), where("ownerUid", "==", effectiveUid))
-                : collection(firestoreDb, collectionName);
+            let q;
+            if (collectionName === 'partners') {
+                const isOwner = user.uid === effectiveUid;
+
+                // If the user is the owner, ensure their default "me" partner record exists and is correct.
+                // This acts as a self-healing mechanism for new accounts or older data structures.
+                if (isOwner) {
+                    const mePartnerRef = doc(firestoreDb, 'partners', 'default-me');
+                    const mePartnerSnap = await getDoc(mePartnerRef);
+                    const currentMeName = mePartnerSnap.exists() ? mePartnerSnap.data().name : 'Tôi';
+                    
+                    if (!mePartnerSnap.exists() || mePartnerSnap.data().ownerUid !== user.uid) {
+                        await setDoc(mePartnerRef, {
+                            name: currentMeName,
+                            ownerUid: user.uid,
+                            ownerName: currentMeName, // For partners they create, the owner is 'me'
+                        }, { merge: true });
+                    }
+                }
+                
+                // This query will now correctly fetch all partners created by the workspace owner,
+                // including the 'default-me' partner which is now guaranteed to have the correct ownerUid.
+                q = query(collection(firestoreDb, 'partners'), where("ownerUid", "==", effectiveUid));
+
+            } else {
+                // This is for collections that are not workspace-specific, like asset types.
+                q = collection(firestoreDb, collectionName);
+            }
 
             const dataSnapshot = await getDocs(q);
             const dataList = dataSnapshot.docs.map(doc => ({ ...doc.data(), id: doc.id })) as T[];
@@ -1469,7 +1510,8 @@ export const DataProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
         
         let partnerId = 'default-me';
         if (asset.ownershipType === 'shared') {
-             const assetSharers = new Set(asset.sharedWith || []);
+             // FIX: The `sharedWith` property contains objects, not strings. We need to map to partnerId.
+             const assetSharers = new Set((asset.sharedWith || []).map(s => s.partnerId));
              const inflowPartner = inflow.contributedByPartnerId || 'default-me';
              if (assetSharers.has(inflowPartner)) {
                 partnerId = inflowPartner;
@@ -1491,7 +1533,8 @@ export const DataProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
         transactions[comm.assetId].inflows.push({ date: comm.date, amount, description: `Hoa hồng dự án ${project.name}` });
 
         const assetOwners = ownerBalances[comm.assetId];
-        const assetSharers = new Set(asset.sharedWith || []);
+        // FIX: The `sharedWith` property contains objects, not strings. We need to map to partnerId.
+        const assetSharers = new Set((asset.sharedWith || []).map(s => s.partnerId));
 
         if (asset.ownershipType === 'shared' && project.isPartnership && project.partnerShares) {
             project.partnerShares.forEach(share => {
@@ -1528,7 +1571,8 @@ export const DataProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
       const receivingAssetOwners = ownerBalances[log.receivingAssetId];
 
       if (sellingAsset && receivingAsset && sellingAssetOwners && receivingAssetOwners) {
-          const receivingAssetSharers = new Set(receivingAsset.sharedWith || []);
+          // FIX: The `sharedWith` property contains objects, not strings. We need to map to partnerId.
+          const receivingAssetSharers = new Set((receivingAsset.sharedWith || []).map(s => s.partnerId));
           const totalBalanceInSellingAsset = Object.values(sellingAssetOwners).reduce((sum, owner) => sum + (owner.received - owner.withdrawn), 0);
 
           if (totalBalanceInSellingAsset > 0.01) {
@@ -1587,7 +1631,8 @@ export const DataProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
       }
 
       if (isShared && shares) {
-          const assetSharers = new Set(asset.sharedWith || []);
+          // FIX: The `sharedWith` property contains objects, not strings. We need to map to partnerId.
+          const assetSharers = new Set((asset.sharedWith || []).map(s => s.partnerId));
           shares.forEach((share: T.PartnerShare) => {
               const shareAmount = exp.amount * (share.sharePercentage / 100);
               const targetPartnerId = assetSharers.has(share.partnerId) ? share.partnerId : 'default-me';
@@ -1621,7 +1666,8 @@ export const DataProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
       }
 
       if (project && project.isPartnership && project.partnerShares) {
-          const assetSharers = new Set(asset.sharedWith || []);
+          // FIX: The `sharedWith` property contains objects, not strings. We need to map to partnerId.
+          const assetSharers = new Set((asset.sharedWith || []).map(s => s.partnerId));
           project.partnerShares.forEach(share => {
               const shareAmount = deposit.vndAmount * (share.sharePercentage / 100);
               const targetPartnerId = assetSharers.has(share.partnerId) ? share.partnerId : 'default-me';
@@ -2724,6 +2770,11 @@ export const DataProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
     authIsLoading,
     permissionError,
     sharerName,
+    toast,
+    clearToast,
+    notifications,
+    unreadCount,
+    markNotificationsAsRead,
   };
 
   return <DataContext.Provider value={value}>{children}</DataContext.Provider>;

@@ -1,6 +1,7 @@
 import React, { useState, useMemo, useEffect } from 'react';
 import { useData } from '../context/DataContext';
 import type { MiscellaneousExpense, Asset, Project, Partner, PartnerShare } from '../types';
+import * as T from '../types';
 import { Header } from '../components/Header';
 import { Button } from '../components/ui/Button';
 import { Card, CardContent } from '../components/ui/Card';
@@ -11,6 +12,12 @@ import { NumberInput } from '../components/ui/NumberInput';
 import { Plus, Edit, Trash2, Users } from '../components/icons/IconComponents';
 import { formatCurrency, formatDate, isDateInPeriod } from '../lib/utils';
 import { ConfirmationModal } from '../components/ui/ConfirmationModal';
+
+const permissionLevelLabels: Record<T.PermissionLevel, string> = {
+    view: 'Chỉ xem',
+    edit: 'Chỉnh sửa',
+    full: 'Toàn quyền',
+};
 
 const AddPartnerModal: React.FC<{
     isOpen: boolean;
@@ -79,7 +86,7 @@ const ExpenseForm: React.FC<{
             
             partners.forEach(p => {
                 if (!partnerIdsInShares.has(p.id)) {
-                    newShares.push({ partnerId: p.id, sharePercentage: 0 });
+                    newShares.push({ partnerId: p.id, sharePercentage: 0, permission: 'view' });
                 }
             });
             
@@ -95,6 +102,12 @@ const ExpenseForm: React.FC<{
             currentShares.map(s => s.partnerId === partnerId ? { ...s, sharePercentage: percentage } : s)
         );
     };
+    
+    const handlePermissionChange = (partnerId: string, permission: T.PermissionLevel) => {
+        setShares(currentShares =>
+            currentShares.map(s => (s.partnerId === partnerId ? { ...s, permission } : s))
+        );
+    };
 
     const totalShare = useMemo(() => shares.reduce((sum, s) => sum + (Number(s.sharePercentage) || 0), 0), [shares]);
 
@@ -105,7 +118,11 @@ const ExpenseForm: React.FC<{
             return;
         }
 
-        const vndAmount = selectedAsset?.currency === 'USD' ? (amount * (expense?.rate || 25000)) : amount;
+        const vndAmount = selectedAsset?.currency === 'USD' ? (amount * 25000) : amount;
+
+        const finalShares = !projectId && isPartnership 
+            ? shares.map(s => s.partnerId === 'default-me' ? { ...s, permission: 'full' as T.PermissionLevel } : s).filter(s => s.sharePercentage > 0)
+            : undefined;
 
         const dataForSave: Partial<Omit<MiscellaneousExpense, 'id'>> = {
             date,
@@ -115,7 +132,7 @@ const ExpenseForm: React.FC<{
             vndAmount,
             vatRate,
             isPartnership: !projectId && isPartnership,
-            partnerShares: !projectId && isPartnership ? shares.filter(s => s.sharePercentage > 0) : undefined,
+            partnerShares: finalShares,
         };
 
         if (expense) { // Update
@@ -202,7 +219,7 @@ const ExpenseForm: React.FC<{
                      <div className="border-t border-gray-700 pt-4 space-y-3">
                         <div className="flex justify-between items-center">
                              <div className="flex items-center gap-3">
-                                 <h4 className="font-semibold text-white">Phân chia chi phí</h4>
+                                 <h4 className="font-semibold text-white">Phân chia chi phí & Phân quyền</h4>
                                  <Button type="button" variant="secondary" onClick={() => setIsAddPartnerModalOpen(true)} className="!py-1 !px-2 !text-xs">
                                      <span className="flex items-center gap-1"><Plus width={14} height={14} /> Thêm đối tác</span>
                                  </Button>
@@ -214,13 +231,29 @@ const ExpenseForm: React.FC<{
                         {shares.map(share => {
                              const partner = partners.find(p => p.id === share.partnerId);
                              if (!partner) return null;
+                             const isMe = share.partnerId === 'default-me';
                              return (
-                                <div key={share.partnerId} className="flex items-center gap-4">
-                                    <Label htmlFor={`share-${share.partnerId}`} className="flex-1 mb-0">{partner.name}</Label>
-                                    <div className="relative w-32">
+                                <div key={share.partnerId} className="flex items-center gap-2">
+                                    <Label htmlFor={`share-${share.partnerId}`} className="w-1/3 mb-0">{partner.name}</Label>
+                                    <div className="relative w-1/4">
                                         <NumberInput id={`share-${share.partnerId}`} value={share.sharePercentage} onValueChange={val => handleShareChange(share.partnerId, val)} className="pr-8" />
                                         <span className="absolute right-3 top-1/2 -translate-y-1/2 text-gray-400 pointer-events-none">%</span>
                                     </div>
+                                    {isMe ? (
+                                        <div className={`${selectClassName} flex-grow bg-gray-800 flex items-center px-3`}>
+                                            <span className="text-gray-400">{permissionLevelLabels['full']}</span>
+                                        </div>
+                                    ) : (
+                                        <select
+                                            value={share.permission || 'view'}
+                                            onChange={(e) => handlePermissionChange(share.partnerId, e.target.value as T.PermissionLevel)}
+                                            className={`${selectClassName} flex-grow`}
+                                        >
+                                            {Object.entries(permissionLevelLabels).map(([key, label]) => (
+                                                <option key={key} value={key}>{label}</option>
+                                            ))}
+                                        </select>
+                                    )}
                                 </div>
                              )
                         })}
@@ -247,19 +280,20 @@ export default function MiscellaneousExpenses() {
     const [expenseToDelete, setExpenseToDelete] = useState<MiscellaneousExpense | null>(null);
 
     const projectsForPeriod = useMemo(() => projects.filter(p => p.period === currentPeriod), [projects, currentPeriod]);
+    const projectMap = useMemo(() => new Map(projects.map(p => [p.id, p])), [projects]);
+    const partnerMap = useMemo(() => new Map(partners.map(p => [p.id, p.name])), [partners]);
+    const assetMap = useMemo(() => new Map(assets.map(a => [a.id, { name: a.name, currency: a.currency }])), [assets]);
     
     const enrichedExpenses = useMemo(() => {
-        const projectMap = new Map(projects.map(p => [p.id, p.name]));
-        const assetMap = new Map(assets.map(a => [a.id, { name: a.name, currency: a.currency }]));
         return miscellaneousExpenses
             .filter(e => isDateInPeriod(e.date, currentPeriod))
             .map(e => ({
                 ...e,
-                projectName: e.projectId ? projectMap.get(e.projectId) || 'N/A' : '—',
-                assetInfo: assetMap.get(e.assetId) || { name: 'N/A', currency: 'VND' },
+                projectName: e.projectId ? projectMap.get(e.projectId)?.name || 'N/A' : '—',
+                assetInfo: assetMap.get(e.assetId) || { name: 'N/A', currency: 'VND' as const },
             }))
             .sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime());
-    }, [miscellaneousExpenses, projects, assets, currentPeriod]);
+    }, [miscellaneousExpenses, projectMap, assetMap, currentPeriod]);
 
     const handleSave = (expense: Omit<MiscellaneousExpense, 'id'> | MiscellaneousExpense) => {
         if ('id' in expense && expense.id) {
@@ -296,6 +330,7 @@ export default function MiscellaneousExpenses() {
                                 <TableHeader>Ngày</TableHeader>
                                 <TableHeader>Mô tả</TableHeader>
                                 <TableHeader>Dự án</TableHeader>
+                                <TableHeader>Sở hữu</TableHeader>
                                 <TableHeader>Tài sản chi</TableHeader>
                                 <TableHeader>Số tiền</TableHeader>
                                 <TableHeader>VAT</TableHeader>
@@ -303,11 +338,20 @@ export default function MiscellaneousExpenses() {
                             </TableRow>
                         </TableHead>
                         <TableBody>
-                            {enrichedExpenses.map(e => (
+                            {enrichedExpenses.map(e => {
+                                let ownershipDisplay = 'Tôi';
+                                const project = e.projectId ? projectMap.get(e.projectId) : null;
+                                if (project?.isPartnership && project.partnerShares && project.partnerShares.length > 0) {
+                                    ownershipDisplay = project.partnerShares.map(s => partnerMap.get(s.partnerId)).filter(Boolean).join(', ');
+                                } else if (!project && e.isPartnership && e.partnerShares && e.partnerShares.length > 0) {
+                                    ownershipDisplay = e.partnerShares.map(s => partnerMap.get(s.partnerId)).filter(Boolean).join(', ');
+                                }
+                                return (
                                 <TableRow key={e.id}>
                                     <TableCell>{formatDate(e.date)}</TableCell>
                                     <TableCell className="font-medium text-white">{e.description}</TableCell>
                                     <TableCell>{e.projectName}</TableCell>
+                                    <TableCell className="text-xs">{ownershipDisplay}</TableCell>
                                     <TableCell>{e.assetInfo.name}</TableCell>
                                     <TableCell className="font-semibold text-red-400">{formatCurrency(e.amount, e.assetInfo.currency)}</TableCell>
                                     <TableCell className="text-yellow-400">{formatCurrency(e.vndAmount * (e.vatRate || 0) / 100)}</TableCell>
@@ -320,7 +364,7 @@ export default function MiscellaneousExpenses() {
                                         </TableCell>
                                     )}
                                 </TableRow>
-                            ))}
+                            )})}
                         </TableBody>
                     </Table>
                 </CardContent>

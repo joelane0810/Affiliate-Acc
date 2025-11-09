@@ -3,6 +3,7 @@ export type Page = 'Dashboard' | 'Projects' | 'DailyAdCosts' | 'Commissions' | '
 export type AdsPlatform = 'google' | 'youtube' | 'tiktok' | 'facebook' | 'other';
 export type ProjectType = 'test' | 'deployment';
 export type ProjectStatus = 'running' | 'stopped';
+export type PermissionLevel = 'view' | 'edit' | 'full';
 
 export interface FirebaseConfig {
   apiKey: string;
@@ -16,6 +17,7 @@ export interface FirebaseConfig {
 export interface PartnerShare {
     partnerId: string;
     sharePercentage: number;
+    permission: PermissionLevel;
 }
 
 export interface AffiliateUrl {
@@ -72,6 +74,11 @@ export interface AssetType {
     name: string;
 }
 
+export interface AssetShare {
+    partnerId: string;
+    permission: PermissionLevel;
+}
+
 export interface Asset {
     id: string;
     name: string;
@@ -79,7 +86,7 @@ export interface Asset {
     balance: number; // initial balance
     currency: 'VND' | 'USD';
     ownershipType: 'personal' | 'shared';
-    sharedWith?: string[]; // array of partner IDs
+    sharedWith?: AssetShare[];
 }
 
 export interface AdDeposit {
@@ -411,4 +418,12 @@ export interface PeriodFinancials {
         beginningBalance: number;
         endBalance: number;
     };
+}
+
+export interface Notification {
+    id: string;
+    timestamp: number;
+    message: string;
+    type: 'system' | 'partner';
+    read: boolean;
 }

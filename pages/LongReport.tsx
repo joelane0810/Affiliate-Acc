@@ -591,7 +591,7 @@ const ProjectArchiveContent = () => {
         });
 
         projects.forEach(project => {
-            const key = `${project.name.trim().toLowerCase()}-${project.categoryId || 'none'}-${project.nicheId || 'none'}`;
+            const key = `${project.workspaceId}-${project.name.trim().toLowerCase()}-${project.categoryId || 'none'}-${project.nicheId || 'none'}`;
             
             const master = masterProjectStats.get(key) || {
                 name: project.name,
