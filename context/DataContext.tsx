@@ -611,14 +611,29 @@ export const DataProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
                 fetchGlobalCollection<T.AssetType>('assetTypes'),
             ]);
 
+            // **BUG FIX**: After fetching, filter items from trusted workspaces to only include those explicitly shared with the current user.
+            const myRepresentationIds = new Set(partnerEntriesForMe.map(p => p.id));
+            const filterShared = <T extends { workspaceId: string; isPartnership?: boolean; partnerShares?: T.PartnerShare[]; }>(item: T): boolean => {
+                if (item.workspaceId === user.uid) {
+                    return true; // Always include user's own items.
+                }
+                if (trustedWorkspaceIds.has(item.workspaceId)) {
+                    // For items from a trusted partner, only include it if it's explicitly shared with me.
+                    if (item.isPartnership && item.partnerShares) {
+                        return item.partnerShares.some(share => myRepresentationIds.has(share.partnerId));
+                    }
+                }
+                return false; // Exclude by default if from another workspace and not shared.
+            };
+
             // Set all state
             setPartners(allPartners);
-            setProjects(fetchedProjects);
+            setProjects(fetchedProjects.filter(filterShared));
             setAdAccounts(fetchedAdAccounts);
             setDailyAdCosts(fetchedDailyAdCosts);
             setCommissions(fetchedCommissions);
             setExchangeLogs(fetchedExchangeLogs);
-            setMiscellaneousExpenses(fetchedMiscExpenses);
+            setMiscellaneousExpenses(fetchedMiscExpenses.filter(filterShared));
             setAdDeposits(fetchedAdDeposits);
             setAdFundTransfers(fetchedAdFundTransfers);
             setLiabilities(fetchedLiabilities);
@@ -2521,7 +2536,7 @@ const updatePartner = async (updatedPartner: T.Partner) => {
             ...miscellaneousExpenses.map(e => ({ ...e, type: 'miscExpense' })),
             ...exchangeLogs.map(log => ({ ...log, type: 'exchange' })),
             ...partnerLedgerEntries.map(e => ({ ...e, type: 'manual' })),
-        ].sort((a, b) => a.date.localeCompare(b.date) || a.id.localeCompare(a.id));
+        ].sort((a, b) => a.date.localeCompare(b.date) || a.id.localeCompare(b.id));
     
         transactions.forEach(tx => {
             switch (tx.type) {
