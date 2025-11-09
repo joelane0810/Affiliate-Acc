@@ -61,14 +61,17 @@ const AssetTypeFormModal: React.FC<{
 const AssetForm: React.FC<{
     asset?: Asset;
     assetTypes: AssetType[];
+    partners: Partner[];
     onSave: (asset: Omit<Asset, 'id'> | Asset) => void;
     onCancel: () => void;
     onAddAssetType: (assetType: Omit<AssetType, 'id'>) => void;
-}> = ({ asset, assetTypes, onSave, onCancel, onAddAssetType }) => {
+}> = ({ asset, assetTypes, partners, onSave, onCancel, onAddAssetType }) => {
     const [name, setName] = useState(asset?.name || '');
     const [typeId, setTypeId] = useState<string>(asset?.typeId || (assetTypes[0]?.id || ''));
     const [balance, setBalance] = useState(asset?.balance || 0);
     const [currency, setCurrency] = useState<Asset['currency']>(asset?.currency || 'VND');
+    const [ownershipType, setOwnershipType] = useState<Asset['ownershipType']>(asset?.ownershipType || 'personal');
+    const [sharedWith, setSharedWith] = useState<string[]>(asset?.sharedWith || []);
     const [isAddTypeModalOpen, setIsAddTypeModalOpen] = useState(false);
 
     useEffect(() => {
@@ -77,9 +80,27 @@ const AssetForm: React.FC<{
         }
     }, [assetTypes, typeId]);
 
+    const handlePartnerSelection = (partnerId: string, checked: boolean) => {
+        setSharedWith(prev => {
+            if (checked) {
+                return [...prev, partnerId];
+            } else {
+                return prev.filter(id => id !== partnerId);
+            }
+        });
+    };
+
     const handleSubmit = (e: React.FormEvent) => {
         e.preventDefault();
-        onSave({ ...asset, id: asset?.id || '', name, typeId, balance, currency });
+        const assetData = {
+            name,
+            typeId,
+            balance,
+            currency,
+            ownershipType,
+            sharedWith: ownershipType === 'shared' ? sharedWith : [],
+        };
+        onSave({ ...asset, id: asset?.id || '', ...assetData });
     };
 
     const handleSaveAssetType = (assetType: Omit<AssetType, 'id'> | AssetType) => {
@@ -115,6 +136,39 @@ const AssetForm: React.FC<{
                         </select>
                     </div>
                 </div>
+                <div>
+                    <Label>Loại hình sở hữu</Label>
+                    <div className="flex space-x-4 mt-2">
+                        <label className="flex items-center space-x-2 cursor-pointer">
+                            <input type="radio" value="personal" checked={ownershipType === 'personal'} onChange={() => setOwnershipType('personal')} className="h-4 w-4 text-primary-600 bg-gray-700 border-gray-600 focus:ring-primary-500" />
+                            <span>Cá nhân</span>
+                        </label>
+                        <label className="flex items-center space-x-2 cursor-pointer">
+                            <input type="radio" value="shared" checked={ownershipType === 'shared'} onChange={() => setOwnershipType('shared')} className="h-4 w-4 text-primary-600 bg-gray-700 border-gray-600 focus:ring-primary-500" />
+                            <span>Chung với đối tác</span>
+                        </label>
+                    </div>
+                </div>
+
+                {ownershipType === 'shared' && (
+                    <div className="pt-4 border-t border-gray-700">
+                        <Label>Chia sẻ với</Label>
+                        <div className="grid grid-cols-2 sm:grid-cols-3 gap-3 pt-1 max-h-32 overflow-y-auto bg-gray-900/50 p-3 rounded-md">
+                            {partners.map(partner => (
+                                <label key={partner.id} className="flex items-center space-x-2 cursor-pointer">
+                                    <input 
+                                        type="checkbox" 
+                                        checked={sharedWith.includes(partner.id)} 
+                                        onChange={(e) => handlePartnerSelection(partner.id, e.target.checked)} 
+                                        className="h-4 w-4 rounded border-gray-600 bg-gray-900 text-primary-600 focus:ring-primary-500"
+                                    />
+                                    <span>{partner.name}</span>
+                                </label>
+                            ))}
+                        </div>
+                    </div>
+                )}
+
                 <div>
                     <Label htmlFor="assetBalance">Số dư ban đầu</Label>
                     <NumberInput id="assetBalance" value={balance} onValueChange={setBalance} disabled={!!asset} />
@@ -238,7 +292,7 @@ const CapitalInflowForm: React.FC<{
     inflow?: CapitalInflow;
     assets: Asset[];
     partners: Partner[];
-    onSave: (inflow: Omit<CapitalInflow, 'id'>) => void;
+    onSave: (inflow: Omit<CapitalInflow, 'id' | 'workspaceId'>) => void;
     onCancel: () => void;
 }> = ({ inflow, assets, partners, onSave, onCancel }) => {
     const [date, setDate] = useState(inflow?.date || new Date().toISOString().split('T')[0]);
@@ -269,7 +323,7 @@ const CapitalInflowForm: React.FC<{
     const handleSubmit = (e: React.FormEvent) => {
         e.preventDefault();
         
-        const newInflow: Omit<CapitalInflow, 'id'> & { [key: string]: any } = {
+        const newInflow: Omit<CapitalInflow, 'id' | 'workspaceId'> & { [key: string]: any } = {
             date,
             description,
             assetId,
@@ -398,6 +452,7 @@ const BalanceSheetContent = () => {
     const [expandedRows, setExpandedRows] = useState<Set<string>>(new Set());
 
     const assetTypeMap = useMemo(() => new Map(assetTypes.map(at => [at.id, at.name])), [assetTypes]);
+    const partnerMap = useMemo(() => new Map(partners.map(p => [p.id, p.name])), [partners]);
 
     const toggleRow = (id: string) => {
         const newSet = new Set(expandedRows);
@@ -450,9 +505,9 @@ const BalanceSheetContent = () => {
     }, [withdrawals, assets, partners]);
 
     // Capital Inflow handlers
-    const handleSaveCapitalInflow = (formData: Omit<CapitalInflow, 'id'>) => {
+    const handleSaveCapitalInflow = (formData: Omit<CapitalInflow, 'id' | 'workspaceId'>) => {
         if (editingCapitalInflow) {
-            updateCapitalInflow({ ...editingCapitalInflow, ...formData });
+            updateCapitalInflow({ ...editingCapitalInflow, ...formData, workspaceId: editingCapitalInflow.workspaceId });
         } else {
             addCapitalInflow(formData);
         }
@@ -498,6 +553,7 @@ const BalanceSheetContent = () => {
                             <TableHeader className="w-12"></TableHeader>
                             <TableHeader>Tên tài sản</TableHeader>
                             <TableHeader>Loại</TableHeader>
+                            <TableHeader>Chia sẻ với</TableHeader>
                             <TableHeader>Tiền tệ</TableHeader>
                             <TableHeader>Tiền vào</TableHeader>
                             <TableHeader>Tiền ra</TableHeader>
@@ -517,6 +573,11 @@ const BalanceSheetContent = () => {
                                         </TableCell>
                                         <TableCell className="font-medium text-white">{asset.name}</TableCell>
                                         <TableCell>{assetTypeMap.get(asset.typeId) || 'N/A'}</TableCell>
+                                        <TableCell className="text-xs">
+                                            {asset.ownershipType === 'shared' 
+                                                ? asset.sharedWith?.map(id => partnerMap.get(id)).join(', ') || 'Chung' 
+                                                : 'Cá nhân'}
+                                        </TableCell>
                                         <TableCell>{asset.currency}</TableCell>
                                         <TableCell className="font-semibold text-green-400">{formatCurrency(asset.totalReceived, asset.currency)}</TableCell>
                                         <TableCell className="font-semibold text-red-400">{formatCurrency(asset.totalWithdrawn, asset.currency)}</TableCell>
@@ -532,7 +593,7 @@ const BalanceSheetContent = () => {
                                         <>
                                             <TableRow className="bg-gray-900/50">
                                                 <TableCell></TableCell>
-                                                <TableCell colSpan={!isReadOnly ? 7 : 6} className="!py-2 !px-4 !text-left">
+                                                <TableCell colSpan={!isReadOnly ? 8 : 7} className="!py-2 !px-4 !text-left">
                                                     <h4 className="font-semibold text-white">Phân bổ theo đối tác</h4>
                                                 </TableCell>
                                             </TableRow>
@@ -540,6 +601,7 @@ const BalanceSheetContent = () => {
                                                 <TableRow key={owner.id} className="bg-gray-900/50 hover:bg-gray-800/70">
                                                     <TableCell></TableCell>
                                                     <TableCell className="pl-12 text-gray-300">{owner.name}</TableCell>
+                                                    <TableCell></TableCell>
                                                     <TableCell></TableCell>
                                                     <TableCell></TableCell>
                                                     <TableCell className="text-green-400">{formatCurrency(owner.received, asset.currency)}</TableCell>
@@ -632,7 +694,7 @@ const BalanceSheetContent = () => {
             {!isReadOnly && (
                 <>
                     <Modal isOpen={isAssetModalOpen} onClose={() => setIsAssetModalOpen(false)} title={editingAsset ? 'Sửa tài sản' : 'Thêm tài sản mới'}>
-                        <AssetForm asset={editingAsset} assetTypes={assetTypes} onSave={handleSaveAsset} onCancel={() => setIsAssetModalOpen(false)} onAddAssetType={handleAddAssetType} />
+                        <AssetForm asset={editingAsset} assetTypes={assetTypes} partners={partners} onSave={handleSaveAsset} onCancel={() => setIsAssetModalOpen(false)} onAddAssetType={handleAddAssetType} />
                     </Modal>
                     <ConfirmationModal isOpen={!!assetToDelete} onClose={() => setAssetToDelete(null)} onConfirm={handleConfirmDeleteAsset} title="Xác nhận xóa tài sản" message={`Bạn có chắc muốn xóa tài sản "${assetToDelete?.name}" không?`} />
 

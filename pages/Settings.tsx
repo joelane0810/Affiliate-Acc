@@ -9,6 +9,7 @@ import { ConfirmationModal } from '../components/ui/ConfirmationModal';
 import { FirebaseConfig } from '../types';
 import { FirebaseError, initializeApp, deleteApp, getApp } from 'firebase/app';
 import { getAuth, signInWithEmailAndPassword, signOut } from 'firebase/auth';
+// FIX: Import db and firestore functions.
 import { db } from '../lib/firebase';
 import { collection, getDocs, writeBatch, doc, getDoc, setDoc, deleteDoc, getFirestore } from 'firebase/firestore';
 
@@ -220,7 +221,8 @@ const COLLECTION_NAMES = [
     'assetTypes', 'assets', 'liabilities', 'receivables', 'receivablePayments', 
     'exchangeLogs', 'miscellaneousExpenses', 'partners', 'withdrawals', 
     'debtPayments', 'taxPayments', 'capitalInflows', 'categories', 'niches',
-    'adAccounts', // This was missing
+    // FIX: This was missing
+    'adAccounts', 
     'periodLiabilities', 'periodReceivables', 'periodDebtPayments', 'periodReceivablePayments'
 ];
 

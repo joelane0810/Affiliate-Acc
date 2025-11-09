@@ -186,7 +186,7 @@ const SavingsContent = () => {
 // --- Investments Components ---
 const InvestmentForm: React.FC<{
     investment?: T.Investment;
-    onSave: (investment: Omit<T.Investment, 'id'> | T.Investment) => void;
+    onSave: (investment: Omit<T.Investment, 'id' | 'workspaceId'> | T.Investment) => void;
     onCancel: () => void;
     assets: T.Asset[];
 }> = ({ investment, onSave, onCancel, assets }) => {
@@ -211,8 +211,7 @@ const InvestmentForm: React.FC<{
             return;
         }
 
-        const dataToSave: T.Investment = {
-            id: investment?.id || '',
+        const commonData = {
             description,
             assetId,
             investmentAmount,
@@ -228,8 +227,12 @@ const InvestmentForm: React.FC<{
             alert('Vui lòng nhập ngày thanh lý và tài sản nhận tiền.');
             return;
         }
-
-        onSave(dataToSave);
+        
+        if (investment) {
+            onSave({ ...investment, ...commonData });
+        } else {
+            onSave(commonData);
+        }
     };
 
     const selectClassName = "w-full px-3 py-2 bg-gray-900 border border-gray-600 rounded-md focus:outline-none focus:ring-2 focus:ring-primary-500";
@@ -304,13 +307,14 @@ const InvestmentsContent = () => {
 
     const assetMap = useMemo(() => new Map(assets.map(a => [a.id, a.name])), [assets]);
     
-    const handleSave = (investmentData: Omit<T.Investment, 'id'> | T.Investment) => {
+    const handleSave = (investmentData: Omit<T.Investment, 'id' | 'workspaceId'> | T.Investment) => {
         if ('id' in investmentData && investmentData.id) {
             updateInvestment(investmentData as T.Investment);
         } else {
-            addInvestment(investmentData as Omit<T.Investment, 'id'>);
+            addInvestment(investmentData as Omit<T.Investment, 'id' | 'workspaceId'>);
         }
         setIsModalOpen(false);
+        setEditingInvestment(undefined);
     };
 
     const handleDelete = () => {
@@ -329,36 +333,38 @@ const InvestmentsContent = () => {
             </Header>
             <Card>
                 <CardContent>
-                     <Table>
+                    <Table>
                         <TableHead>
                             <TableRow>
                                 <TableHeader>Mô tả</TableHeader>
-                                <TableHeader>Ngày đầu tư</TableHeader>
+                                <TableHeader>Tài sản nguồn</TableHeader>
                                 <TableHeader>Số tiền đầu tư</TableHeader>
-                                <TableHeader>Ngày thanh lý</TableHeader>
-                                <TableHeader>Số tiền thu về</TableHeader>
-                                <TableHeader>Lãi/Lỗ</TableHeader>
+                                <TableHeader>Ngày đầu tư</TableHeader>
                                 <TableHeader>Trạng thái</TableHeader>
+                                <TableHeader>Ngày thanh lý</TableHeader>
+                                <TableHeader>Tiền thu về</TableHeader>
+                                <TableHeader>Lãi/Lỗ</TableHeader>
                                 <TableHeader>Hành động</TableHeader>
                             </TableRow>
                         </TableHead>
                         <TableBody>
-                             {sortedInvestments.map(i => {
-                                const profit = i.status === 'liquidated' ? (i.liquidationAmount || 0) - i.investmentAmount : null;
+                            {sortedInvestments.map(i => {
+                                const gainLoss = i.status === 'liquidated' ? (i.liquidationAmount || 0) - i.investmentAmount : 0;
                                 return (
                                 <TableRow key={i.id}>
                                     <TableCell className="font-medium text-white">{i.description}</TableCell>
+                                    <TableCell>{assetMap.get(i.assetId) || 'N/A'}</TableCell>
+                                    <TableCell className="font-semibold text-primary-400">{formatCurrency(i.investmentAmount, i.currency)}</TableCell>
                                     <TableCell>{formatDate(i.date)}</TableCell>
-                                    <TableCell className="font-semibold text-red-400">{formatCurrency(i.investmentAmount, i.currency)}</TableCell>
-                                    <TableCell>{i.liquidationDate ? formatDate(i.liquidationDate) : '—'}</TableCell>
-                                    <TableCell className={i.liquidationAmount ? "font-semibold text-green-400" : ""}>{i.liquidationAmount ? formatCurrency(i.liquidationAmount, i.currency) : '—'}</TableCell>
-                                    <TableCell className={`font-bold ${profit === null ? '' : (profit >= 0 ? 'text-green-400' : 'text-red-400')}`}>
-                                        {profit !== null ? formatCurrency(profit, i.currency) : '—'}
-                                    </TableCell>
                                     <TableCell>
                                         <span className={`px-2 inline-flex text-xs leading-5 font-semibold rounded-full ${i.status === 'ongoing' ? 'bg-blue-200 text-blue-800' : 'bg-gray-200 text-gray-800'}`}>
                                             {i.status === 'ongoing' ? 'Đang đầu tư' : 'Đã thanh lý'}
                                         </span>
+                                    </TableCell>
+                                    <TableCell>{i.liquidationDate ? formatDate(i.liquidationDate) : '—'}</TableCell>
+                                    <TableCell>{i.liquidationAmount ? formatCurrency(i.liquidationAmount, i.currency) : '—'}</TableCell>
+                                    <TableCell className={`font-semibold ${gainLoss >= 0 ? 'text-green-400' : 'text-red-400'}`}>
+                                        {i.status === 'liquidated' ? formatCurrency(gainLoss, i.currency) : '—'}
                                     </TableCell>
                                     <TableCell>
                                         <div className="flex items-center space-x-3 justify-center">
@@ -367,13 +373,12 @@ const InvestmentsContent = () => {
                                         </div>
                                     </TableCell>
                                 </TableRow>
-                                )}
-                             )}
+                            )})}
                         </TableBody>
                     </Table>
                 </CardContent>
             </Card>
-             <Modal isOpen={isModalOpen} onClose={() => setIsModalOpen(false)} title={editingInvestment ? 'Sửa khoản đầu tư' : 'Thêm khoản đầu tư'}>
+            <Modal isOpen={isModalOpen} onClose={() => setIsModalOpen(false)} title={editingInvestment ? 'Sửa khoản đầu tư' : 'Thêm khoản đầu tư'}>
                 <InvestmentForm investment={editingInvestment} onSave={handleSave} onCancel={() => setIsModalOpen(false)} assets={assets} />
             </Modal>
             <ConfirmationModal isOpen={!!investmentToDelete} onClose={() => setInvestmentToDelete(null)} onConfirm={handleDelete} title="Xác nhận xóa" message={`Bạn có chắc muốn xóa khoản đầu tư "${investmentToDelete?.description}" không?`} />
@@ -381,7 +386,6 @@ const InvestmentsContent = () => {
     );
 };
 
-// --- Main Page Component ---
 export default function SavingsAndInvestments() {
     const [activeTab, setActiveTab] = useState<'savings' | 'investments'>('savings');
 
@@ -389,8 +393,12 @@ export default function SavingsAndInvestments() {
         <div>
             <Header title="Tiết kiệm & Đầu tư" />
             <div className="flex flex-wrap border-b border-gray-700 mb-6" role="tablist">
-                <TabButton active={activeTab === 'savings'} onClick={() => setActiveTab('savings')}>Tiết kiệm</TabButton>
-                <TabButton active={activeTab === 'investments'} onClick={() => setActiveTab('investments')}>Đầu tư</TabButton>
+                <TabButton active={activeTab === 'savings'} onClick={() => setActiveTab('savings')}>
+                    Tiết kiệm
+                </TabButton>
+                <TabButton active={activeTab === 'investments'} onClick={() => setActiveTab('investments')}>
+                    Đầu tư
+                </TabButton>
             </div>
             {activeTab === 'savings' && <SavingsContent />}
             {activeTab === 'investments' && <InvestmentsContent />}

@@ -26,7 +26,8 @@ const ProgressBar: React.FC<{ value: number, max: number }> = ({ value, max }) =
 
 const LiabilityForm: React.FC<{
     liability?: Liability;
-    onSave: (liability: Omit<Liability, 'id' | 'currency' | 'creationDate'>) => void;
+    // FIX: Updated onSave prop to omit workspaceId and other auto-generated fields, aligning it with the addLiability context function.
+    onSave: (liability: Omit<Liability, 'id' | 'workspaceId' | 'currency' | 'creationDate'>) => void;
     onCancel: () => void;
 }> = ({ liability, onSave, onCancel }) => {
     const [description, setDescription] = useState(liability?.description || '');
@@ -38,7 +39,7 @@ const LiabilityForm: React.FC<{
 
     const handleSubmit = (e: React.FormEvent) => {
         e.preventDefault();
-        const newLiability: Omit<Liability, 'id' | 'currency' | 'creationDate'> & { [key: string]: any } = {
+        const newLiability: Omit<Liability, 'id' | 'workspaceId' | 'currency' | 'creationDate'> & { [key: string]: any } = {
             description,
             totalAmount,
             type,
@@ -122,7 +123,8 @@ const LiabilityForm: React.FC<{
 const ReceivableForm: React.FC<{
     receivable?: Receivable;
     assets: Asset[];
-    onSave: (receivable: Omit<Receivable, 'id'>) => void;
+    // FIX: Updated onSave prop to omit workspaceId, aligning it with the addReceivable context function.
+    onSave: (receivable: Omit<Receivable, 'id' | 'workspaceId'>) => void;
     onCancel: () => void;
 }> = ({ receivable, assets, onSave, onCancel }) => {
     const [description, setDescription] = useState(receivable?.description || '');
@@ -144,7 +146,7 @@ const ReceivableForm: React.FC<{
             return;
         }
         
-        const newReceivable: Omit<Receivable, 'id'> & { [key: string]: any } = {
+        const newReceivable: Omit<Receivable, 'id' | 'workspaceId'> & { [key: string]: any } = {
             description,
             totalAmount,
             type,
@@ -377,7 +379,8 @@ export default function CapitalSources() {
     
 
     // Liability handlers
-    const handleSaveLiability = (formData: Omit<Liability, 'id' | 'currency' | 'creationDate'>) => {
+    // FIX: Updated formData type to omit workspaceId and other auto-generated fields.
+    const handleSaveLiability = (formData: Omit<Liability, 'id' | 'workspaceId' | 'currency' | 'creationDate'>) => {
         if (editingLiability) {
             updateLiability({ ...editingLiability, ...formData });
         } else {
@@ -405,7 +408,8 @@ export default function CapitalSources() {
     };
     
     // Receivable handlers
-    const handleSaveReceivable = (formData: Omit<Receivable, 'id'>) => {
+    // FIX: Updated formData type to omit workspaceId.
+    const handleSaveReceivable = (formData: Omit<Receivable, 'id' | 'workspaceId'>) => {
         if (editingReceivable) {
             updateReceivable({ ...editingReceivable, ...formData });
         } else {

@@ -5,6 +5,8 @@ import { Card, CardContent, CardHeader } from './components/ui/Card';
 import { Page } from './types';
 import { Button } from './components/ui/Button';
 import { Menu } from './components/icons/IconComponents';
+// FIX: Import missing Input and Label components.
+import { Input, Label } from './components/ui/Input';
 
 
 // Dynamically import pages
@@ -244,8 +246,9 @@ const AppContent = () => {
   if (authIsLoading) {
     return <LoadingSpinner message={"Đang xác thực..."} />;
   }
-  // Only show "Loading data" spinner if config exists, otherwise the app is just waiting for setup.
-  if (firebaseConfig && isLoading) {
+
+  // Only show "Loading data" spinner if logged in.
+  if (user && isLoading) {
     return <LoadingSpinner message={"Đang tải dữ liệu..."} />;
   }
 

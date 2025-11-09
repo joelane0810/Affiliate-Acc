@@ -1,10 +1,14 @@
-import React from 'react';
+import React, { useState, useRef, useEffect } from 'react';
 import type { Page } from '../types';
 import { 
   LayoutDashboard, BarChart3, Target, DollarSign, Repeat, Package, 
-  Handshake, Users, Landmark, Banknote, FileText, CalendarClock, Settings, ChevronLeft, ChevronRight, Book, X, ArrowRightLeft, PiggyBank, HelpCircle
+  Handshake, Users, Landmark, Banknote, FileText, CalendarClock, Settings, ChevronLeft, ChevronRight, Book, X, ArrowRightLeft, PiggyBank, HelpCircle, ChevronDown
 } from './icons/IconComponents';
 import { useData } from '../context/DataContext';
+// FIX: Import missing UI components
+import { Modal } from './ui/Modal';
+import { Input, Label } from './ui/Input';
+import { Button } from './ui/Button';
 
 interface SidebarProps {
   isExpanded: boolean;
@@ -83,7 +87,7 @@ export const Sidebar: React.FC<SidebarProps> = ({ isExpanded, setIsExpanded, isM
             <X />
         </button>
         <div className="flex items-center min-w-0">
-          {showIndicator && (
+          {showIndicator ? (
               <div className="flex items-center">
                   <Book className={`flex-shrink-0 ${statusColor}`} />
                   {showText && (
@@ -93,6 +97,11 @@ export const Sidebar: React.FC<SidebarProps> = ({ isExpanded, setIsExpanded, isM
                       </div>
                   )}
               </div>
+          ) : (
+            <div className={`flex items-center ${showText ? 'flex-1 min-w-0' : ''}`}>
+                <Banknote className="w-8 h-8 text-primary-500 flex-shrink-0" />
+                {showText && <h1 className="text-xl font-bold ml-3 text-white truncate">Affiliate Acc.</h1>}
+            </div>
           )}
         </div>
       </div>
@@ -130,19 +139,17 @@ export const Sidebar: React.FC<SidebarProps> = ({ isExpanded, setIsExpanded, isM
         </ul>
       </nav>
 
-      {/* Footer with App Name and Toggle */}
-      <div className={`flex items-center border-t border-gray-800 shrink-0 h-16 relative ${showText ? 'p-4' : 'justify-center'}`}>
-        <div className={`flex items-center ${showText ? 'flex-1 min-w-0' : ''}`}>
-            <Banknote className="w-8 h-8 text-primary-500 flex-shrink-0" />
-            {showText && <h1 className="text-xl font-bold ml-3 text-white truncate">Affiliate Acc.</h1>}
-        </div>
-        <button 
-          onClick={() => setIsExpanded(!isExpanded)} 
-          className={`hidden md:flex text-gray-400 hover:text-white p-2 rounded-lg hover:bg-gray-800 flex-shrink-0 ${isExpanded ? '' : 'absolute right-2 top-1/2 -translate-y-1/2'}`}
-          aria-label={isExpanded ? 'Thu gọn thanh công cụ' : 'Mở rộng thanh công cụ'}
-        >
-          {isExpanded ? <ChevronLeft /> : <ChevronRight />}
-        </button>
+      {/* Footer with Toggle */}
+      <div className="border-t border-gray-800 shrink-0">
+           <div className={`flex items-center h-16 relative ${showText ? 'p-4' : 'justify-center'}`}>
+                <button 
+                onClick={() => setIsExpanded(!isExpanded)} 
+                className={`hidden md:flex text-gray-400 hover:text-white p-2 rounded-lg hover:bg-gray-800 flex-shrink-0 ${isExpanded ? 'ml-auto' : 'absolute right-2 top-1/2 -translate-y-1/2'}`}
+                aria-label={isExpanded ? 'Thu gọn thanh công cụ' : 'Mở rộng thanh công cụ'}
+                >
+                {isExpanded ? <ChevronLeft /> : <ChevronRight />}
+                </button>
+            </div>
       </div>
     </aside>
   );

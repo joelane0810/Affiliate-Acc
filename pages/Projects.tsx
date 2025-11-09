@@ -71,7 +71,7 @@ const AddPartnerModal: React.FC<{
 };
 
 
-const ProjectForm: React.FC<{ project?: T.Project; onSave: (project: Omit<T.Project, 'id' | 'period'> | T.Project) => void; onCancel: () => void; }> = ({ project, onSave, onCancel }) => {
+const ProjectForm: React.FC<{ project?: T.Project; onSave: (project: Omit<T.Project, 'id' | 'period' | 'workspaceId'> | T.Project) => void; onCancel: () => void; }> = ({ project, onSave, onCancel }) => {
     const { partners, addPartner, categories, niches, masterProjects, projects, currentPeriod } = useData();
     const [name, setName] = useState(project?.name || '');
     const [adsPlatforms, setAdsPlatforms] = useState<T.AdsPlatform[]>(project?.adsPlatforms || ['google']);
@@ -810,11 +810,11 @@ export default function Projects() {
         selectedProjectIds, dateRange
       ]);
 
-    const handleSave = (project: Omit<T.Project, 'id' | 'period'> | T.Project) => {
+    const handleSave = (project: Omit<T.Project, 'id' | 'period' | 'workspaceId'> | T.Project) => {
         if ('id' in project && project.id) {
             updateProject(project as T.Project);
         } else {
-            addProject(project as Omit<T.Project, 'id' | 'period'>);
+            addProject(project as Omit<T.Project, 'id' | 'period' | 'workspaceId'>);
         }
         setIsModalOpen(false);
         setEditingProject(undefined);

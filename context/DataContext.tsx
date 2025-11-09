@@ -46,32 +46,32 @@ export type EnrichedTransaction = {
 interface DataContextType {
   isLoading: boolean;
   projects: T.Project[];
-  addProject: (project: Omit<T.Project, 'id' | 'period'>) => Promise<void>;
+  addProject: (project: Omit<T.Project, 'id' | 'period' | 'workspaceId'>) => Promise<void>;
   updateProject: (project: T.Project) => Promise<void>;
   deleteProject: (id: string) => Promise<void>;
 
   adAccounts: T.AdAccount[];
-  addAdAccount: (account: Omit<T.AdAccount, 'id'>) => Promise<void>;
+  addAdAccount: (account: Omit<T.AdAccount, 'id' | 'workspaceId'>) => Promise<void>;
   updateAdAccount: (account: T.AdAccount) => Promise<void>;
   deleteAdAccount: (id: string) => Promise<void>;
 
   dailyAdCosts: T.DailyAdCost[];
-  addDailyAdCost: (cost: Omit<T.DailyAdCost, 'id'>) => Promise<void>;
+  addDailyAdCost: (cost: Omit<T.DailyAdCost, 'id' | 'workspaceId'>) => Promise<void>;
   updateDailyAdCost: (cost: T.DailyAdCost) => Promise<void>;
   deleteDailyAdCost: (id: string) => Promise<void>;
 
   adDeposits: T.AdDeposit[];
-  addAdDeposit: (deposit: Omit<T.AdDeposit, 'id'>) => Promise<void>;
+  addAdDeposit: (deposit: Omit<T.AdDeposit, 'id' | 'workspaceId'>) => Promise<void>;
   updateAdDeposit: (deposit: T.AdDeposit) => Promise<void>;
   deleteAdDeposit: (id: string) => Promise<void>;
 
   adFundTransfers: T.AdFundTransfer[];
-  addAdFundTransfer: (transfer: Omit<T.AdFundTransfer, 'id'>) => Promise<void>;
+  addAdFundTransfer: (transfer: Omit<T.AdFundTransfer, 'id' | 'workspaceId'>) => Promise<void>;
   updateAdFundTransfer: (transfer: T.AdFundTransfer) => Promise<void>;
   deleteAdFundTransfer: (id: string) => Promise<void>;
 
   commissions: T.Commission[];
-  addCommission: (commission: Omit<T.Commission, 'id'>) => Promise<void>;
+  addCommission: (commission: Omit<T.Commission, 'id' | 'workspaceId'>) => Promise<void>;
   updateCommission: (commission: T.Commission) => Promise<void>;
   deleteCommission: (id: string) => Promise<void>;
   
@@ -86,27 +86,27 @@ interface DataContextType {
   deleteAsset: (id: string) => Promise<void>;
 
   liabilities: T.Liability[];
-  addLiability: (liability: Omit<T.Liability, 'id'>) => Promise<void>;
+  addLiability: (liability: Omit<T.Liability, 'id' | 'workspaceId'>) => Promise<void>;
   updateLiability: (liability: T.Liability) => Promise<void>;
   deleteLiability: (id: string) => Promise<void>;
 
   receivables: T.Receivable[];
-  addReceivable: (receivable: Omit<T.Receivable, 'id'>) => Promise<void>;
+  addReceivable: (receivable: Omit<T.Receivable, 'id' | 'workspaceId'>) => Promise<void>;
   updateReceivable: (receivable: T.Receivable) => Promise<void>;
   deleteReceivable: (id: string) => Promise<void>;
 
   receivablePayments: T.ReceivablePayment[];
-  addReceivablePayment: (payment: Omit<T.ReceivablePayment, 'id'>) => Promise<void>;
+  addReceivablePayment: (payment: Omit<T.ReceivablePayment, 'id' | 'workspaceId'>) => Promise<void>;
   updateReceivablePayment: (payment: T.ReceivablePayment) => Promise<void>;
   deleteReceivablePayment: (id: string) => Promise<void>;
 
   exchangeLogs: T.ExchangeLog[];
-  addExchangeLog: (log: Omit<T.ExchangeLog, 'id'>) => Promise<void>;
+  addExchangeLog: (log: Omit<T.ExchangeLog, 'id' | 'workspaceId'>) => Promise<void>;
   updateExchangeLog: (log: T.ExchangeLog) => Promise<void>;
   deleteExchangeLog: (id: string) => Promise<void>;
 
   miscellaneousExpenses: T.MiscellaneousExpense[];
-  addMiscellaneousExpense: (expense: Omit<T.MiscellaneousExpense, 'id'>) => Promise<void>;
+  addMiscellaneousExpense: (expense: Omit<T.MiscellaneousExpense, 'id' | 'workspaceId'>) => Promise<void>;
   updateMiscellaneousExpense: (expense: T.MiscellaneousExpense) => Promise<void>;
   deleteMiscellaneousExpense: (id: string) => Promise<void>;
   
@@ -116,20 +116,20 @@ interface DataContextType {
   deletePartner: (id: string) => Promise<void>;
 
   withdrawals: T.Withdrawal[];
-  addWithdrawal: (withdrawal: Omit<T.Withdrawal, 'id'>) => Promise<void>;
+  addWithdrawal: (withdrawal: Omit<T.Withdrawal, 'id' | 'workspaceId'>) => Promise<void>;
   updateWithdrawal: (withdrawal: T.Withdrawal) => Promise<void>;
   deleteWithdrawal: (id: string) => Promise<void>;
 
   debtPayments: T.DebtPayment[];
-  addDebtPayment: (payment: Omit<T.DebtPayment, 'id'>) => Promise<void>;
+  addDebtPayment: (payment: Omit<T.DebtPayment, 'id' | 'workspaceId'>) => Promise<void>;
   updateDebtPayment: (payment: T.DebtPayment) => Promise<void>;
   deleteDebtPayment: (id: string) => Promise<void>;
 
   taxPayments: T.TaxPayment[];
-  addTaxPayment: (payment: Omit<T.TaxPayment, 'id'>) => Promise<void>;
+  addTaxPayment: (payment: Omit<T.TaxPayment, 'id' | 'workspaceId'>) => Promise<void>;
 
   capitalInflows: T.CapitalInflow[];
-  addCapitalInflow: (inflow: Omit<T.CapitalInflow, 'id'>) => Promise<void>;
+  addCapitalInflow: (inflow: Omit<T.CapitalInflow, 'id' | 'workspaceId'>) => Promise<void>;
   updateCapitalInflow: (inflow: T.CapitalInflow) => Promise<void>;
   deleteCapitalInflow: (id: string) => Promise<void>;
 
@@ -157,12 +157,12 @@ interface DataContextType {
   periodAssetDetails: PeriodAssetDetail[];
   
   categories: T.Category[];
-  addCategory: (category: Omit<T.Category, 'id'>) => Promise<void>;
+  addCategory: (category: Omit<T.Category, 'id' | 'workspaceId'>) => Promise<void>;
   updateCategory: (category: T.Category) => Promise<void>;
   deleteCategory: (id: string) => Promise<boolean>;
 
   niches: T.Niche[];
-  addNiche: (niche: Omit<T.Niche, 'id'>) => Promise<void>;
+  addNiche: (niche: Omit<T.Niche, 'id' | 'workspaceId'>) => Promise<void>;
   updateNiche: (niche: T.Niche) => Promise<void>;
   deleteNiche: (id: string) => Promise<boolean>;
 
@@ -173,36 +173,36 @@ interface DataContextType {
 
   // Add full support for period-specific debts/receivables.
   periodLiabilities: T.PeriodLiability[];
-  addPeriodLiability: (liability: Omit<T.PeriodLiability, 'id' | 'period'>) => Promise<void>;
+  addPeriodLiability: (liability: Omit<T.PeriodLiability, 'id' | 'period' | 'workspaceId'>) => Promise<void>;
   updatePeriodLiability: (liability: T.PeriodLiability) => Promise<void>;
   deletePeriodLiability: (id: string) => Promise<void>;
   periodDebtPayments: T.PeriodDebtPayment[];
-  addPeriodDebtPayment: (payment: Omit<T.PeriodDebtPayment, 'id'>) => Promise<void>;
+  addPeriodDebtPayment: (payment: Omit<T.PeriodDebtPayment, 'id' | 'workspaceId'>) => Promise<void>;
 
   periodReceivables: T.PeriodReceivable[];
-  addPeriodReceivable: (receivable: Omit<T.PeriodReceivable, 'id' | 'period'>) => Promise<void>;
+  addPeriodReceivable: (receivable: Omit<T.PeriodReceivable, 'id' | 'period' | 'workspaceId'>) => Promise<void>;
   updatePeriodReceivable: (receivable: T.PeriodReceivable) => Promise<void>;
   deletePeriodReceivable: (id: string) => Promise<void>;
   periodReceivablePayments: T.PeriodReceivablePayment[];
-  addPeriodReceivablePayment: (payment: Omit<T.PeriodReceivablePayment, 'id'>) => Promise<void>;
+  addPeriodReceivablePayment: (payment: Omit<T.PeriodReceivablePayment, 'id' | 'workspaceId'>) => Promise<void>;
   allTransactions: EnrichedTransaction[];
   enrichedAdAccounts: EnrichedAdAccount[];
   adAccountTransactions: AdAccountTransaction[];
 
   savings: T.Saving[];
-  addSaving: (saving: Omit<T.Saving, 'id'>) => Promise<void>;
+  addSaving: (saving: Omit<T.Saving, 'id' | 'workspaceId'>) => Promise<void>;
   updateSaving: (saving: T.Saving) => Promise<void>;
   deleteSaving: (id: string) => Promise<void>;
 
   investments: T.Investment[];
-  addInvestment: (investment: Omit<T.Investment, 'id'>) => Promise<void>;
+  addInvestment: (investment: Omit<T.Investment, 'id' | 'workspaceId'>) => Promise<void>;
   updateInvestment: (investment: T.Investment) => Promise<void>;
   deleteInvestment: (id: string) => Promise<void>;
 
   enrichedPartners: EnrichedPartner[];
   partnerLedgerEntries: T.PartnerLedgerEntry[];
   allPartnerLedgerEntries: T.PartnerLedgerEntry[];
-  addPartnerLedgerEntry: (entry: Omit<T.PartnerLedgerEntry, 'id'>) => Promise<void>;
+  addPartnerLedgerEntry: (entry: Omit<T.PartnerLedgerEntry, 'id' | 'workspaceId'>) => Promise<void>;
   updatePartnerLedgerEntry: (entry: T.PartnerLedgerEntry) => Promise<void>;
   deletePartnerLedgerEntry: (id: string) => Promise<void>;
   partnerAssetBalances: Map<string, { assetId: string, assetName: string, balance: number, currency: 'VND' | 'USD' }[]>;
@@ -242,6 +242,7 @@ const wipeAllFirestoreData = async (db: Firestore) => {
         throw new Error("DB not connected");
     }
     
+    // FIX: Changed COLLECTION_NAMES to COLLECTION_NAMES_FOR_SEED, which is defined in this scope.
     for (const collectionName of COLLECTION_NAMES_FOR_SEED) {
         const snapshot = await getDocs(collection(db, collectionName));
         if(snapshot.empty) continue;
@@ -302,9 +303,9 @@ const seedInitialData = async (db: Firestore) => {
 
     // 5. Assets
     const vcbAssetRef = doc(collection(db, 'assets'));
-    batch.set(vcbAssetRef, { name: 'Vietcombank', typeId: 'bank', balance: 0, currency: 'VND' });
+    batch.set(vcbAssetRef, { name: 'Vietcombank', typeId: 'bank', balance: 0, currency: 'VND', ownershipType: 'personal' });
     const clickbankAssetRef = doc(collection(db, 'assets'));
-    batch.set(clickbankAssetRef, { name: 'ClickBank', typeId: 'platform', balance: 0, currency: 'USD' });
+    batch.set(clickbankAssetRef, { name: 'ClickBank', typeId: 'platform', balance: 0, currency: 'USD', ownershipType: 'shared', sharedWith: ['default-me'] });
 
     // 6. Projects
     const project1Ref = doc(collection(db, 'projects'));
@@ -476,8 +477,16 @@ export const DataProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
         setIsLoading(true);
         setPermissionError(null);
 
-        const fetchCollection = async <T,>(collectionName: string, setter: React.Dispatch<React.SetStateAction<T[]>>) => {
-            // No need for individual try/catch if we have a global one
+        const workspaceIds = [user.uid, 'shared'];
+
+        const fetchWorkspaceCollection = async <T,>(collectionName: string, setter: React.Dispatch<React.SetStateAction<T[]>>) => {
+            const q = query(collection(firestoreDb, collectionName), where("workspaceId", "in", workspaceIds));
+            const dataSnapshot = await getDocs(q);
+            const dataList = dataSnapshot.docs.map(doc => ({ ...doc.data(), id: doc.id })) as T[];
+            setter(dataList);
+        };
+
+        const fetchGlobalCollection = async <T,>(collectionName: string, setter: React.Dispatch<React.SetStateAction<T[]>>) => {
             const dataCollection = collection(firestoreDb, collectionName);
             const dataSnapshot = await getDocs(dataCollection);
             const dataList = dataSnapshot.docs.map(doc => ({ ...doc.data(), id: doc.id })) as T[];
@@ -485,23 +494,25 @@ export const DataProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
         };
         
         const fetchSettings = async () => {
-            const taxDocRef = doc(firestoreDb, 'settings', 'tax');
+            const taxDocRef = doc(firestoreDb, 'workspaces', user.uid, 'settings', 'tax');
             const taxDocSnap = await getDoc(taxDocRef);
             if (taxDocSnap.exists()) {
                 setTaxSettings(taxDocSnap.data() as T.TaxSettings);
             } else {
-                console.log("No tax settings found, using default.");
+                console.log("No tax settings found, creating default for new user.");
+                await setDoc(taxDocRef, defaultTaxSettings);
                 setTaxSettings(defaultTaxSettings);
             }
 
-            const periodsDocRef = doc(firestoreDb, 'settings', 'periods');
+            const periodsDocRef = doc(firestoreDb, 'workspaces', user.uid, 'settings', 'periods');
             const periodsDocSnap = await getDoc(periodsDocRef);
             if (periodsDocSnap.exists()) {
                 const data = periodsDocSnap.data();
                 setActivePeriod(data.activePeriod as string || null);
                 setClosedPeriods(data.closedPeriods as T.ClosedPeriod[] || []);
             } else {
-                console.log("No period settings found, using default.");
+                console.log("No period settings found, creating default for new user.");
+                await setDoc(periodsDocRef, { activePeriod: null, closedPeriods: [] });
                 setActivePeriod(null);
                 setClosedPeriods([]);
             }
@@ -510,36 +521,37 @@ export const DataProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
         try {
             await Promise.all([
                 fetchSettings(),
-                fetchCollection<T.Project>('projects', setProjects),
-                fetchCollection<T.AdAccount>('adAccounts', setAdAccounts),
-                fetchCollection<T.DailyAdCost>('dailyAdCosts', setDailyAdCosts),
-                fetchCollection<T.Asset>('assets', setAssets),
-                fetchCollection<T.Commission>('commissions', setCommissions),
-                fetchCollection<T.ExchangeLog>('exchangeLogs', setExchangeLogs),
-                fetchCollection<T.MiscellaneousExpense>('miscellaneousExpenses', setMiscellaneousExpenses),
-                fetchCollection<T.AdDeposit>('adDeposits', setAdDeposits),
-                fetchCollection<T.AdFundTransfer>('adFundTransfers', setAdFundTransfers),
-                fetchCollection<T.Liability>('liabilities', setLiabilities),
-                fetchCollection<T.Receivable>('receivables', setReceivables),
-                fetchCollection<T.ReceivablePayment>('receivablePayments', setReceivablePayments),
-                fetchCollection<T.Withdrawal>('withdrawals', setWithdrawals),
-                fetchCollection<T.DebtPayment>('debtPayments', setDebtPayments),
-                fetchCollection<T.TaxPayment>('taxPayments', setTaxPayments),
-                fetchCollection<T.CapitalInflow>('capitalInflows', setCapitalInflows),
-                fetchCollection<T.Partner>('partners', setPartners),
-                fetchCollection<T.AssetType>('assetTypes', setAssetTypes),
-                fetchCollection<T.Category>('categories', setCategories),
-                fetchCollection<T.Niche>('niches', setNiches),
-                fetchCollection<T.Saving>('savings', setSavings),
-                fetchCollection<T.Investment>('investments', setInvestments),
-                fetchCollection<T.PartnerLedgerEntry>('partnerLedger', setPartnerLedgerEntries),
-                // Fetch period-specific data.
-                fetchCollection<T.PeriodLiability>('periodLiabilities', setPeriodLiabilities),
-                fetchCollection<T.PeriodDebtPayment>('periodDebtPayments', setPeriodDebtPayments),
-                fetchCollection<T.PeriodReceivable>('periodReceivables', setPeriodReceivables),
-                fetchCollection<T.PeriodReceivablePayment>('periodReceivablePayments', setPeriodReceivablePayments),
+                // Workspace collections
+                fetchWorkspaceCollection<T.Project>('projects', setProjects),
+                fetchWorkspaceCollection<T.AdAccount>('adAccounts', setAdAccounts),
+                fetchWorkspaceCollection<T.DailyAdCost>('dailyAdCosts', setDailyAdCosts),
+                fetchWorkspaceCollection<T.Commission>('commissions', setCommissions),
+                fetchWorkspaceCollection<T.ExchangeLog>('exchangeLogs', setExchangeLogs),
+                fetchWorkspaceCollection<T.MiscellaneousExpense>('miscellaneousExpenses', setMiscellaneousExpenses),
+                fetchWorkspaceCollection<T.AdDeposit>('adDeposits', setAdDeposits),
+                fetchWorkspaceCollection<T.AdFundTransfer>('adFundTransfers', setAdFundTransfers),
+                fetchWorkspaceCollection<T.Liability>('liabilities', setLiabilities),
+                fetchWorkspaceCollection<T.Receivable>('receivables', setReceivables),
+                fetchWorkspaceCollection<T.ReceivablePayment>('receivablePayments', setReceivablePayments),
+                fetchWorkspaceCollection<T.Withdrawal>('withdrawals', setWithdrawals),
+                fetchWorkspaceCollection<T.DebtPayment>('debtPayments', setDebtPayments),
+                fetchWorkspaceCollection<T.TaxPayment>('taxPayments', setTaxPayments),
+                fetchWorkspaceCollection<T.CapitalInflow>('capitalInflows', setCapitalInflows),
+                fetchWorkspaceCollection<T.Category>('categories', setCategories),
+                fetchWorkspaceCollection<T.Niche>('niches', setNiches),
+                fetchWorkspaceCollection<T.Saving>('savings', setSavings),
+                fetchWorkspaceCollection<T.Investment>('investments', setInvestments),
+                fetchWorkspaceCollection<T.PartnerLedgerEntry>('partnerLedger', setPartnerLedgerEntries),
+                fetchWorkspaceCollection<T.PeriodLiability>('periodLiabilities', setPeriodLiabilities),
+                fetchWorkspaceCollection<T.PeriodDebtPayment>('periodDebtPayments', setPeriodDebtPayments),
+                fetchWorkspaceCollection<T.PeriodReceivable>('periodReceivables', setPeriodReceivables),
+                fetchWorkspaceCollection<T.PeriodReceivablePayment>('periodReceivablePayments', setPeriodReceivablePayments),
+                // Global collections
+                fetchGlobalCollection<T.Partner>('partners', setPartners),
+                fetchGlobalCollection<T.Asset>('assets', setAssets),
+                fetchGlobalCollection<T.AssetType>('assetTypes', setAssetTypes),
             ]);
-            console.log("All data fetched successfully.");
+            console.log("All data fetched successfully for user:", user.uid);
         } catch (error: any) {
             console.error("Error during data fetch:", error);
             const errorMessage = error.message ? error.message.toLowerCase() : '';
@@ -576,12 +588,13 @@ export const DataProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
   };
 
 
-  const addProject = async (project: Omit<T.Project, 'id' | 'period'>) => {
-    if (!activePeriod || !firestoreDb) return;
+  const addProject = async (project: Omit<T.Project, 'id' | 'period' | 'workspaceId'>) => {
+    if (!activePeriod || !firestoreDb || !user) return;
     if (projects.some((p: T.Project) => p.name.trim().toLowerCase() === project.name.trim().toLowerCase() && p.period === activePeriod)) {
       alert('Tên dự án đã tồn tại trong kỳ này. Vui lòng chọn tên khác.'); return;
     }
-    const newProjectData = { ...project, period: activePeriod };
+    const workspaceId = project.isPartnership ? 'shared' : user.uid;
+    const newProjectData = { ...project, period: activePeriod, workspaceId };
     try {
         const docRef = await addDoc(collection(firestoreDb, 'projects'), newProjectData);
         setProjects(prev => [...prev, { ...newProjectData, id: docRef.id }]);
@@ -635,15 +648,16 @@ export const DataProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
       }
   };
 
-  const addAdAccount = async (account: Omit<T.AdAccount, 'id'>) => {
-    if (!firestoreDb) return;
+  const addAdAccount = async (account: Omit<T.AdAccount, 'id' | 'workspaceId'>) => {
+    if (!firestoreDb || !user) return;
     if (adAccounts.some(acc => acc.accountNumber.trim().toLowerCase() === account.accountNumber.trim().toLowerCase())) {
         alert('Số tài khoản Ads đã tồn tại.');
         return;
     }
+    const newAccountData = { ...account, workspaceId: user.uid };
     try {
-        const docRef = await addDoc(collection(firestoreDb, 'adAccounts'), account);
-        setAdAccounts(prev => [...prev, { ...account, id: docRef.id }]);
+        const docRef = await addDoc(collection(firestoreDb, 'adAccounts'), newAccountData);
+        setAdAccounts(prev => [...prev, { ...newAccountData, id: docRef.id }]);
     } catch (e) { console.error("Error adding ad account: ", e); }
   };
   const updateAdAccount = async (updatedAccount: T.AdAccount) => {
@@ -681,11 +695,15 @@ export const DataProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
     } catch (e) { console.error("Error deleting ad account: ", e); }
   };
 
-  const addDailyAdCost = async (cost: Omit<T.DailyAdCost, 'id'>) => {
-    if (!firestoreDb) return;
+  const addDailyAdCost = async (cost: Omit<T.DailyAdCost, 'id' | 'workspaceId'>) => {
+    if (!firestoreDb || !user) return;
+    const project = projects.find(p => p.id === cost.projectId);
+    if (!project) { console.error("Project not found"); return; }
+    
+    const newCostData = { ...cost, workspaceId: project.workspaceId };
     try {
-        const docRef = await addDoc(collection(firestoreDb, 'dailyAdCosts'), cost);
-        setDailyAdCosts(prev => [...prev, { ...cost, id: docRef.id }]);
+        const docRef = await addDoc(collection(firestoreDb, 'dailyAdCosts'), newCostData);
+        setDailyAdCosts(prev => [...prev, { ...newCostData, id: docRef.id }]);
     } catch (e) { console.error("Error adding daily ad cost: ", e); }
   };
   const updateDailyAdCost = async (updatedCost: T.DailyAdCost) => {
@@ -704,11 +722,14 @@ export const DataProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
     } catch (e) { console.error("Error deleting daily ad cost: ", e); }
   };
 
-  const addAdDeposit = async (deposit: Omit<T.AdDeposit, 'id'>) => {
-        if (!firestoreDb) return;
+  const addAdDeposit = async (deposit: Omit<T.AdDeposit, 'id' | 'workspaceId'>) => {
+        if (!firestoreDb || !user) return;
+        const project = deposit.projectId ? projects.find(p => p.id === deposit.projectId) : null;
+        const workspaceId = project ? project.workspaceId : user.uid; // Default to user's workspace if no project
+        const newDepositData = { ...deposit, workspaceId };
         try {
-            const docRef = await addDoc(collection(firestoreDb, 'adDeposits'), deposit);
-            setAdDeposits(prev => [...prev, { ...deposit, id: docRef.id }]);
+            const docRef = await addDoc(collection(firestoreDb, 'adDeposits'), newDepositData);
+            setAdDeposits(prev => [...prev, { ...newDepositData, id: docRef.id }]);
         } catch (e) { console.error("Error adding ad deposit: ", e); }
     };
   const updateAdDeposit = async (updatedDeposit: T.AdDeposit) => {
@@ -727,11 +748,12 @@ export const DataProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
         } catch (e) { console.error("Error deleting ad deposit: ", e); }
     };
 
-  const addAdFundTransfer = async (transfer: Omit<T.AdFundTransfer, 'id'>) => {
-        if (!firestoreDb) return;
+  const addAdFundTransfer = async (transfer: Omit<T.AdFundTransfer, 'id' | 'workspaceId'>) => {
+        if (!firestoreDb || !user) return;
+        const newTransferData = { ...transfer, workspaceId: user.uid };
         try {
-            const docRef = await addDoc(collection(firestoreDb, 'adFundTransfers'), transfer);
-            setAdFundTransfers(prev => [...prev, { ...transfer, id: docRef.id }]);
+            const docRef = await addDoc(collection(firestoreDb, 'adFundTransfers'), newTransferData);
+            setAdFundTransfers(prev => [...prev, { ...newTransferData, id: docRef.id }]);
         } catch (e) { console.error("Error adding ad fund transfer: ", e); }
     };
   const updateAdFundTransfer = async (updatedTransfer: T.AdFundTransfer) => {
@@ -750,11 +772,14 @@ export const DataProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
         } catch (e) { console.error("Error deleting ad fund transfer: ", e); }
     };
 
-  const addCommission = async (commission: Omit<T.Commission, 'id'>) => {
-    if (!firestoreDb) return;
+  const addCommission = async (commission: Omit<T.Commission, 'id' | 'workspaceId'>) => {
+    if (!firestoreDb || !user) return;
+    const project = projects.find(p => p.id === commission.projectId);
+    if (!project) { console.error("Project not found"); return; }
+    const newCommissionData = { ...commission, workspaceId: project.workspaceId };
     try {
-      const docRef = await addDoc(collection(firestoreDb, 'commissions'), commission);
-      setCommissions(prev => [...prev, { ...commission, id: docRef.id }]);
+      const docRef = await addDoc(collection(firestoreDb, 'commissions'), newCommissionData);
+      setCommissions(prev => [...prev, { ...newCommissionData, id: docRef.id }]);
     } catch (e) { console.error("Error adding commission: ", e); }
   };
   const updateCommission = async (updatedCommission: T.Commission) => {
@@ -802,8 +827,9 @@ export const DataProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
   const addAsset = async (asset: Omit<T.Asset, 'id'>) => {
         if (!firestoreDb) return;
         try {
-            const docRef = await addDoc(collection(firestoreDb, 'assets'), asset);
-            setAssets(prev => [...prev, { ...asset, id: docRef.id }]);
+            const newAssetData = { ...asset, ownershipType: asset.ownershipType || 'personal' };
+            const docRef = await addDoc(collection(firestoreDb, 'assets'), newAssetData);
+            setAssets(prev => [...prev, { ...newAssetData, id: docRef.id }]);
         } catch (e) { console.error("Error adding asset: ", e); }
     };
   const updateAsset = async (updatedAsset: T.Asset) => {
@@ -839,11 +865,12 @@ export const DataProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
         } catch (e) { console.error("Error deleting asset: ", e); }
     };
 
-  const addLiability = async (liability: Omit<T.Liability, 'id'>) => {
-        if (!firestoreDb) return;
+  const addLiability = async (liability: Omit<T.Liability, 'id' | 'workspaceId'>) => {
+        if (!firestoreDb || !user) return;
+        const newLiabilityData = { ...liability, workspaceId: user.uid };
         try {
-            const docRef = await addDoc(collection(firestoreDb, 'liabilities'), liability);
-            setLiabilities(prev => [...prev, { ...liability, id: docRef.id }]);
+            const docRef = await addDoc(collection(firestoreDb, 'liabilities'), newLiabilityData);
+            setLiabilities(prev => [...prev, { ...newLiabilityData, id: docRef.id }]);
         } catch (e) { console.error("Error adding liability: ", e); }
     };
   const updateLiability = async (updatedLiability: T.Liability) => {
@@ -868,11 +895,12 @@ export const DataProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
         } catch (e) { console.error("Error deleting liability and payments: ", e); }
     };
   
-  const addReceivable = async (receivable: Omit<T.Receivable, 'id'>) => {
-        if (!firestoreDb) return;
+  const addReceivable = async (receivable: Omit<T.Receivable, 'id' | 'workspaceId'>) => {
+        if (!firestoreDb || !user) return;
+        const newReceivableData = { ...receivable, workspaceId: user.uid };
         try {
-            const docRef = await addDoc(collection(firestoreDb, 'receivables'), receivable);
-            setReceivables(prev => [...prev, { ...receivable, id: docRef.id }]);
+            const docRef = await addDoc(collection(firestoreDb, 'receivables'), newReceivableData);
+            setReceivables(prev => [...prev, { ...newReceivableData, id: docRef.id }]);
         } catch (e) { console.error("Error adding receivable: ", e); }
     };
   const updateReceivable = async (updatedReceivable: T.Receivable) => {
@@ -897,11 +925,14 @@ export const DataProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
         } catch (e) { console.error("Error deleting receivable and payments: ", e); }
     };
 
-  const addReceivablePayment = async (payment: Omit<T.ReceivablePayment, 'id'>) => {
-        if (!firestoreDb) return;
+  const addReceivablePayment = async (payment: Omit<T.ReceivablePayment, 'id' | 'workspaceId'>) => {
+        if (!firestoreDb || !user) return;
+        const receivable = receivables.find(r => r.id === payment.receivableId);
+        if (!receivable) { console.error("Receivable not found"); return; }
+        const newPaymentData = { ...payment, workspaceId: receivable.workspaceId };
         try {
-            const docRef = await addDoc(collection(firestoreDb, 'receivablePayments'), payment);
-            setReceivablePayments(prev => [...prev, { ...payment, id: docRef.id }]);
+            const docRef = await addDoc(collection(firestoreDb, 'receivablePayments'), newPaymentData);
+            setReceivablePayments(prev => [...prev, { ...newPaymentData, id: docRef.id }]);
         } catch (e) { console.error("Error adding receivable payment: ", e); }
     };
   const updateReceivablePayment = async (updatedPayment: T.ReceivablePayment) => {
@@ -920,11 +951,12 @@ export const DataProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
         } catch (e) { console.error("Error deleting receivable payment: ", e); }
     };
 
-  const addExchangeLog = async (log: Omit<T.ExchangeLog, 'id'>) => {
-    if (!firestoreDb) return;
+  const addExchangeLog = async (log: Omit<T.ExchangeLog, 'id' | 'workspaceId'>) => {
+    if (!firestoreDb || !user) return;
+    const newLogData = { ...log, workspaceId: user.uid };
     try {
-      const docRef = await addDoc(collection(firestoreDb, 'exchangeLogs'), log);
-      setExchangeLogs(prev => [...prev, { ...log, id: docRef.id }]);
+      const docRef = await addDoc(collection(firestoreDb, 'exchangeLogs'), newLogData);
+      setExchangeLogs(prev => [...prev, { ...newLogData, id: docRef.id }]);
     } catch (e) { console.error("Error adding exchange log: ", e); }
   };
   const updateExchangeLog = async (updatedLog: T.ExchangeLog) => {
@@ -943,11 +975,19 @@ export const DataProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
     } catch (e) { console.error("Error deleting exchange log: ", e); }
   };
   
-  const addMiscellaneousExpense = async (expense: Omit<T.MiscellaneousExpense, 'id'>) => {
-    if (!firestoreDb) return;
+  const addMiscellaneousExpense = async (expense: Omit<T.MiscellaneousExpense, 'id' | 'workspaceId'>) => {
+    if (!firestoreDb || !user) return;
+    let workspaceId = user.uid;
+    if (expense.projectId) {
+        const project = projects.find(p => p.id === expense.projectId);
+        if(project) workspaceId = project.workspaceId;
+    } else if (expense.isPartnership) {
+        workspaceId = 'shared';
+    }
+    const newExpenseData = { ...expense, workspaceId };
     try {
-      const docRef = await addDoc(collection(firestoreDb, 'miscellaneousExpenses'), expense);
-      setMiscellaneousExpenses(prev => [...prev, { ...expense, id: docRef.id }]);
+      const docRef = await addDoc(collection(firestoreDb, 'miscellaneousExpenses'), newExpenseData);
+      setMiscellaneousExpenses(prev => [...prev, { ...newExpenseData, id: docRef.id }]);
     } catch (e) { console.error("Error adding miscellaneous expense: ", e); }
   };
   const updateMiscellaneousExpense = async (updatedExpense: T.MiscellaneousExpense) => {
@@ -1026,11 +1066,12 @@ export const DataProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
         } catch (e) { console.error("Error deleting partner: ", e); }
     };
 
-  const addWithdrawal = async (withdrawal: Omit<T.Withdrawal, 'id'>) => {
-        if (!firestoreDb) return;
+  const addWithdrawal = async (withdrawal: Omit<T.Withdrawal, 'id' | 'workspaceId'>) => {
+        if (!firestoreDb || !user) return;
+        const newWithdrawalData = { ...withdrawal, workspaceId: user.uid };
         try {
-            const docRef = await addDoc(collection(firestoreDb, 'withdrawals'), withdrawal);
-            setWithdrawals(prev => [...prev, { ...withdrawal, id: docRef.id }]);
+            const docRef = await addDoc(collection(firestoreDb, 'withdrawals'), newWithdrawalData);
+            setWithdrawals(prev => [...prev, { ...newWithdrawalData, id: docRef.id }]);
         } catch (e) { console.error("Error adding withdrawal: ", e); }
     };
   const updateWithdrawal = async (updatedWithdrawal: T.Withdrawal) => {
@@ -1049,11 +1090,14 @@ export const DataProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
         } catch (e) { console.error("Error deleting withdrawal: ", e); }
     };
 
-  const addDebtPayment = async (payment: Omit<T.DebtPayment, 'id'>) => {
-        if (!firestoreDb) return;
+  const addDebtPayment = async (payment: Omit<T.DebtPayment, 'id' | 'workspaceId'>) => {
+        if (!firestoreDb || !user) return;
+        const liability = liabilities.find(l => l.id === payment.liabilityId);
+        if (!liability) { console.error("Liability not found"); return; }
+        const newPaymentData = { ...payment, workspaceId: liability.workspaceId };
         try {
-            const docRef = await addDoc(collection(firestoreDb, 'debtPayments'), payment);
-            setDebtPayments(prev => [...prev, { ...payment, id: docRef.id }]);
+            const docRef = await addDoc(collection(firestoreDb, 'debtPayments'), newPaymentData);
+            setDebtPayments(prev => [...prev, { ...newPaymentData, id: docRef.id }]);
         } catch (e) { console.error("Error adding debt payment: ", e); }
     };
   const updateDebtPayment = async (updatedPayment: T.DebtPayment) => {
@@ -1072,19 +1116,21 @@ export const DataProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
         } catch (e) { console.error("Error deleting debt payment: ", e); }
     };
   
-  const addTaxPayment = async (payment: Omit<T.TaxPayment, 'id'>) => {
-        if (!firestoreDb) return;
+  const addTaxPayment = async (payment: Omit<T.TaxPayment, 'id' | 'workspaceId'>) => {
+        if (!firestoreDb || !user) return;
+        const newPaymentData = { ...payment, workspaceId: user.uid };
         try {
-            const docRef = await addDoc(collection(firestoreDb, 'taxPayments'), payment);
-            setTaxPayments(prev => [...prev, { ...payment, id: docRef.id }]);
+            const docRef = await addDoc(collection(firestoreDb, 'taxPayments'), newPaymentData);
+            setTaxPayments(prev => [...prev, { ...newPaymentData, id: docRef.id }]);
         } catch (e) { console.error("Error adding tax payment: ", e); }
     };
 
-  const addCapitalInflow = async (inflow: Omit<T.CapitalInflow, 'id'>) => {
-        if (!firestoreDb) return;
+  const addCapitalInflow = async (inflow: Omit<T.CapitalInflow, 'id' | 'workspaceId'>) => {
+        if (!firestoreDb || !user) return;
+        const newInflowData = { ...inflow, workspaceId: user.uid };
         try {
-            const docRef = await addDoc(collection(firestoreDb, 'capitalInflows'), inflow);
-            setCapitalInflows(prev => [...prev, { ...inflow, id: docRef.id }]);
+            const docRef = await addDoc(collection(firestoreDb, 'capitalInflows'), newInflowData);
+            setCapitalInflows(prev => [...prev, { ...newInflowData, id: docRef.id }]);
         } catch (e) { console.error("Error adding capital inflow: ", e); }
     };
   const updateCapitalInflow = async (updatedInflow: T.CapitalInflow) => {
@@ -1103,11 +1149,12 @@ export const DataProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
         } catch (e) { console.error("Error deleting capital inflow: ", e); }
     };
 
-  const addCategory = async (category: Omit<T.Category, 'id'>) => {
-    if(!firestoreDb) return;
+  const addCategory = async (category: Omit<T.Category, 'id' | 'workspaceId'>) => {
+    if(!firestoreDb || !user) return;
+    const newCategoryData = { ...category, workspaceId: user.uid };
     try {
-        const docRef = await addDoc(collection(firestoreDb, 'categories'), category);
-        setCategories(prev => [...prev, { ...category, id: docRef.id}]);
+        const docRef = await addDoc(collection(firestoreDb, 'categories'), newCategoryData);
+        setCategories(prev => [...prev, { ...newCategoryData, id: docRef.id}]);
     } catch(e) { console.error("Error adding category:", e); }
   };
 
@@ -1140,11 +1187,12 @@ export const DataProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
     }
   };
 
-  const addNiche = async (niche: Omit<T.Niche, 'id'>) => {
-    if(!firestoreDb) return;
+  const addNiche = async (niche: Omit<T.Niche, 'id' | 'workspaceId'>) => {
+    if(!firestoreDb || !user) return;
+    const newNicheData = { ...niche, workspaceId: user.uid };
     try {
-        const docRef = await addDoc(collection(firestoreDb, 'niches'), niche);
-        setNiches(prev => [...prev, { ...niche, id: docRef.id }]);
+        const docRef = await addDoc(collection(firestoreDb, 'niches'), newNicheData);
+        setNiches(prev => [...prev, { ...newNicheData, id: docRef.id }]);
     } catch(e) { console.error("Error adding niche:", e); }
   };
 
@@ -1174,11 +1222,12 @@ export const DataProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
   };
 
 
-  const addSaving = async (saving: Omit<T.Saving, 'id'>) => {
-    if(!firestoreDb) return;
+  const addSaving = async (saving: Omit<T.Saving, 'id' | 'workspaceId'>) => {
+    if(!firestoreDb || !user) return;
+    const newSavingData = { ...saving, workspaceId: user.uid };
     try {
-      const docRef = await addDoc(collection(firestoreDb, 'savings'), saving);
-      setSavings(prev => [...prev, { ...saving, id: docRef.id }]);
+      const docRef = await addDoc(collection(firestoreDb, 'savings'), newSavingData);
+      setSavings(prev => [...prev, { ...newSavingData, id: docRef.id }]);
     } catch(e) { console.error("Error adding saving:", e); }
   };
   const updateSaving = async (saving: T.Saving) => {
@@ -1197,11 +1246,12 @@ export const DataProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
     } catch(e) { console.error("Error deleting saving:", e); }
   };
   
-  const addInvestment = async (investment: Omit<T.Investment, 'id'>) => {
-    if(!firestoreDb) return;
+  const addInvestment = async (investment: Omit<T.Investment, 'id' | 'workspaceId'>) => {
+    if(!firestoreDb || !user) return;
+    const newInvestmentData = { ...investment, workspaceId: user.uid };
     try {
-      const docRef = await addDoc(collection(firestoreDb, 'investments'), investment);
-      setInvestments(prev => [...prev, { ...investment, id: docRef.id }]);
+      const docRef = await addDoc(collection(firestoreDb, 'investments'), newInvestmentData);
+      setInvestments(prev => [...prev, { ...newInvestmentData, id: docRef.id }]);
     } catch(e) { console.error("Error adding investment:", e); }
   };
   const updateInvestment = async (investment: T.Investment) => {
@@ -1220,11 +1270,12 @@ export const DataProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
     } catch(e) { console.error("Error deleting investment:", e); }
   };
   
-  const addPartnerLedgerEntry = async (entry: Omit<T.PartnerLedgerEntry, 'id'>) => {
-    if(!firestoreDb) return;
+  const addPartnerLedgerEntry = async (entry: Omit<T.PartnerLedgerEntry, 'id' | 'workspaceId'>) => {
+    if(!firestoreDb || !user) return;
+    const newEntryData = { ...entry, workspaceId: user.uid };
     try {
-      const docRef = await addDoc(collection(firestoreDb, 'partnerLedger'), entry);
-      setPartnerLedgerEntries(prev => [...prev, { ...entry, id: docRef.id }]);
+      const docRef = await addDoc(collection(firestoreDb, 'partnerLedger'), newEntryData);
+      setPartnerLedgerEntries(prev => [...prev, { ...newEntryData, id: docRef.id }]);
     } catch(e) { console.error("Error adding partner ledger entry:", e); }
   };
   const updatePartnerLedgerEntry = async (entry: T.PartnerLedgerEntry) => {
@@ -1243,9 +1294,9 @@ export const DataProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
     } catch(e) { console.error("Error deleting partner ledger entry:", e); }
   };
 
-  const addPeriodLiability = async (liability: Omit<T.PeriodLiability, 'id' | 'period'>) => {
-    if (!activePeriod || !firestoreDb) return;
-    const newLiability = { ...liability, period: activePeriod };
+  const addPeriodLiability = async (liability: Omit<T.PeriodLiability, 'id' | 'period' | 'workspaceId'>) => {
+    if (!activePeriod || !firestoreDb || !user) return;
+    const newLiability = { ...liability, period: activePeriod, workspaceId: user.uid };
     try {
         const docRef = await addDoc(collection(firestoreDb, 'periodLiabilities'), newLiability);
         setPeriodLiabilities(prev => [...prev, { ...newLiability, id: docRef.id }]);
@@ -1272,17 +1323,20 @@ export const DataProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
         setPeriodDebtPayments(prev => prev.filter(p => p.periodLiabilityId !== id));
     } catch (e) { console.error("Error deleting period liability: ", e); }
   };
-  const addPeriodDebtPayment = async (payment: Omit<T.PeriodDebtPayment, 'id'>) => {
-    if (!firestoreDb) return;
+  const addPeriodDebtPayment = async (payment: Omit<T.PeriodDebtPayment, 'id' | 'workspaceId'>) => {
+    if (!firestoreDb || !user) return;
+    const liability = periodLiabilities.find(l => l.id === payment.periodLiabilityId);
+    if(!liability) { console.error("Period liability not found"); return; }
+    const newPaymentData = { ...payment, workspaceId: liability.workspaceId };
     try {
-        const docRef = await addDoc(collection(firestoreDb, 'periodDebtPayments'), payment);
-        setPeriodDebtPayments(prev => [...prev, { ...payment, id: docRef.id }]);
+        const docRef = await addDoc(collection(firestoreDb, 'periodDebtPayments'), newPaymentData);
+        setPeriodDebtPayments(prev => [...prev, { ...newPaymentData, id: docRef.id }]);
     } catch (e) { console.error("Error adding period debt payment: ", e); }
   };
   
-  const addPeriodReceivable = async (receivable: Omit<T.PeriodReceivable, 'id' | 'period'>) => {
-    if (!activePeriod || !firestoreDb) return;
-    const newReceivable = { ...receivable, period: activePeriod };
+  const addPeriodReceivable = async (receivable: Omit<T.PeriodReceivable, 'id' | 'period' | 'workspaceId'>) => {
+    if (!activePeriod || !firestoreDb || !user) return;
+    const newReceivable = { ...receivable, period: activePeriod, workspaceId: user.uid };
     try {
         const docRef = await addDoc(collection(firestoreDb, 'periodReceivables'), newReceivable);
         setPeriodReceivables(prev => [...prev, { ...newReceivable, id: docRef.id }]);
@@ -1309,11 +1363,14 @@ export const DataProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
         setPeriodReceivablePayments(prev => prev.filter(p => p.periodReceivableId !== id));
     } catch (e) { console.error("Error deleting period receivable: ", e); }
   };
-  const addPeriodReceivablePayment = async (payment: Omit<T.PeriodReceivablePayment, 'id'>) => {
-    if (!firestoreDb) return;
+  const addPeriodReceivablePayment = async (payment: Omit<T.PeriodReceivablePayment, 'id' | 'workspaceId'>) => {
+    if (!firestoreDb || !user) return;
+    const receivable = periodReceivables.find(r => r.id === payment.periodReceivableId);
+    if (!receivable) { console.error("Period receivable not found"); return; }
+    const newPaymentData = { ...payment, workspaceId: receivable.workspaceId };
     try {
-        const docRef = await addDoc(collection(firestoreDb, 'periodReceivablePayments'), payment);
-        setPeriodReceivablePayments(prev => [...prev, { ...payment, id: docRef.id }]);
+        const docRef = await addDoc(collection(firestoreDb, 'periodReceivablePayments'), newPaymentData);
+        setPeriodReceivablePayments(prev => [...prev, { ...newPaymentData, id: docRef.id }]);
     } catch (e) { console.error("Error adding period receivable payment: ", e); }
   };
 
@@ -1322,15 +1379,9 @@ export const DataProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
   const isReadOnly = !!viewingPeriod;
 
   const enrichedAssets = useMemo(() => {
-    // Add explicit types to Map constructors to prevent type inference failures.
     const assetMap = new Map<string, T.Asset>(assets.map(a => [a.id, a]));
     const projectMap = new Map<string, T.Project>(projects.map(p => [p.id, p]));
-    // Add explicit types to Map constructors to prevent type inference failures.
     const partnerMap = new Map<string, string>(partners.map(p => [p.id, p.name]));
-    // Add explicit types to Map constructors to prevent type inference failures.
-    const liabilityMap = new Map<string, T.Liability>(liabilities.map(l => [l.id, l]));
-    // Add explicit types to Map constructors to prevent type inference failures.
-    const receivableMap = new Map<string, T.Receivable>(receivables.map(r => [r.id, r]));
 
     const transactions: Record<string, {
         inflows: { date: string, amount: number, description: string }[];
@@ -1358,142 +1409,178 @@ export const DataProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
     const getAssetName = (assetId: string) => assetMap.get(assetId)?.name || 'Không rõ';
 
     capitalInflows.forEach(inflow => {
-      if (transactions[inflow.assetId]) {
+        const asset = assetMap.get(inflow.assetId);
+        if (!asset || !transactions[inflow.assetId]) return;
+
         transactions[inflow.assetId].inflows.push({ date: inflow.date, amount: inflow.amount, description: `Vốn góp: ${inflow.description}`});
-        const partnerId = inflow.contributedByPartnerId || 'default-me';
+        
+        let partnerId = 'default-me';
+        if (asset.ownershipType === 'shared') {
+             const assetSharers = new Set(asset.sharedWith || []);
+             const inflowPartner = inflow.contributedByPartnerId || 'default-me';
+             if (assetSharers.has(inflowPartner)) {
+                partnerId = inflowPartner;
+             }
+        }
+
         if (!ownerBalances[inflow.assetId][partnerId]) {
             ownerBalances[inflow.assetId][partnerId] = { received: 0, withdrawn: 0 };
         }
         ownerBalances[inflow.assetId][partnerId].received += inflow.amount;
-      }
     });
 
     commissions.forEach(comm => {
         const project = projectMap.get(comm.projectId);
-        if (transactions[comm.assetId] && project) {
-            const amount = assetMap.get(comm.assetId)?.currency === 'USD' ? comm.usdAmount : comm.vndAmount;
-            transactions[comm.assetId].inflows.push({ date: comm.date, amount, description: `Hoa hồng dự án ${project.name}` });
+        const asset = assetMap.get(comm.assetId);
+        if (!asset || !transactions[comm.assetId] || !project) return;
+        
+        const amount = asset.currency === 'USD' ? comm.usdAmount : comm.vndAmount;
+        transactions[comm.assetId].inflows.push({ date: comm.date, amount, description: `Hoa hồng dự án ${project.name}` });
 
-            const assetOwners = ownerBalances[comm.assetId];
-            if (!assetOwners) return;
+        const assetOwners = ownerBalances[comm.assetId];
+        const assetSharers = new Set(asset.sharedWith || []);
 
-            if (project.isPartnership && project.partnerShares) {
-                project.partnerShares.forEach(share => {
-                    if (!assetOwners[share.partnerId]) {
-                        assetOwners[share.partnerId] = { received: 0, withdrawn: 0 };
-                    }
-                    assetOwners[share.partnerId].received += amount * (share.sharePercentage / 100);
-                });
-            } else {
-                const me = assetOwners['default-me'] || (assetOwners['default-me'] = { received: 0, withdrawn: 0 });
-                me.received += amount;
-            }
+        if (asset.ownershipType === 'shared' && project.isPartnership && project.partnerShares) {
+            project.partnerShares.forEach(share => {
+                const shareAmount = amount * (share.sharePercentage / 100);
+                const targetPartnerId = assetSharers.has(share.partnerId) ? share.partnerId : 'default-me';
+
+                if (!assetOwners[targetPartnerId]) {
+                    assetOwners[targetPartnerId] = { received: 0, withdrawn: 0 };
+                }
+                assetOwners[targetPartnerId].received += shareAmount;
+            });
+        } else {
+            const me = assetOwners['default-me'] || (assetOwners['default-me'] = { received: 0, withdrawn: 0 });
+            me.received += amount;
         }
     });
     
     exchangeLogs.forEach(log => {
-      if (transactions[log.sellingAssetId]) {
-        transactions[log.sellingAssetId].outflows.push({
-          date: log.date,
-          amount: log.usdAmount,
-          description: `Bán USD nhận vào ${getAssetName(log.receivingAssetId)}`
-        });
-      }
-      if (transactions[log.receivingAssetId]) {
-        transactions[log.receivingAssetId].inflows.push({
-          date: log.date,
-          amount: log.vndAmount,
-          description: `Nhận tiền từ bán ${formatCurrency(log.usdAmount, 'USD')} tại ${getAssetName(log.sellingAssetId)}`
-        });
-      }
+      const sellingAsset = assetMap.get(log.sellingAssetId);
+      const receivingAsset = assetMap.get(log.receivingAssetId);
 
+      if (sellingAsset && transactions[log.sellingAssetId]) {
+        transactions[log.sellingAssetId].outflows.push({
+          date: log.date, amount: log.usdAmount, description: `Bán USD nhận vào ${getAssetName(log.receivingAssetId)}`
+        });
+      }
+      if (receivingAsset && transactions[log.receivingAssetId]) {
+        transactions[log.receivingAssetId].inflows.push({
+          date: log.date, amount: log.vndAmount, description: `Nhận tiền từ bán ${formatCurrency(log.usdAmount, 'USD')} tại ${getAssetName(log.sellingAssetId)}`
+        });
+      }
+      
       const sellingAssetOwners = ownerBalances[log.sellingAssetId];
       const receivingAssetOwners = ownerBalances[log.receivingAssetId];
 
-      if (sellingAssetOwners && receivingAssetOwners) {
-        const totalBalanceInSellingAsset = Object.values(sellingAssetOwners).reduce((sum, owner) => sum + (owner.received - owner.withdrawn), 0);
-        
-        if (totalBalanceInSellingAsset > 0.01) { 
-            Object.keys(sellingAssetOwners).forEach(partnerId => {
-                const partner = sellingAssetOwners[partnerId];
-                const partnerBalance = partner.received - partner.withdrawn;
-                const share = partnerBalance > 0 ? partnerBalance / totalBalanceInSellingAsset : 0;
+      if (sellingAsset && receivingAsset && sellingAssetOwners && receivingAssetOwners) {
+          const receivingAssetSharers = new Set(receivingAsset.sharedWith || []);
+          const totalBalanceInSellingAsset = Object.values(sellingAssetOwners).reduce((sum, owner) => sum + (owner.received - owner.withdrawn), 0);
 
-                if (share > 0) {
-                    partner.withdrawn += log.usdAmount * share;
-                    if (!receivingAssetOwners[partnerId]) {
-                        receivingAssetOwners[partnerId] = { received: 0, withdrawn: 0 };
-                    }
-                    receivingAssetOwners[partnerId].received += log.vndAmount * share;
-                }
-            });
-        } else {
-            const meSelling = sellingAssetOwners['default-me'] || (sellingAssetOwners['default-me'] = { received: 0, withdrawn: 0 });
-            meSelling.withdrawn += log.usdAmount;
-            
-            const meReceiving = receivingAssetOwners['default-me'] || (receivingAssetOwners['default-me'] = { received: 0, withdrawn: 0 });
-            meReceiving.received += log.vndAmount;
-        }
+          if (totalBalanceInSellingAsset > 0.01) {
+              Object.keys(sellingAssetOwners).forEach(partnerId => {
+                  const partner = sellingAssetOwners[partnerId];
+                  const partnerBalance = partner.received - partner.withdrawn;
+                  const share = partnerBalance > 0 ? partnerBalance / totalBalanceInSellingAsset : 0;
+                  
+                  if (share > 0) {
+                      const usdShare = log.usdAmount * share;
+                      const vndShare = log.vndAmount * share;
+                      partner.withdrawn += usdShare;
+
+                      const targetPartnerId = receivingAssetSharers.has(partnerId) ? partnerId : 'default-me';
+
+                      if (!receivingAssetOwners[targetPartnerId]) {
+                          receivingAssetOwners[targetPartnerId] = { received: 0, withdrawn: 0 };
+                      }
+                      receivingAssetOwners[targetPartnerId].received += vndShare;
+                  }
+              });
+          } else {
+              const meSelling = sellingAssetOwners['default-me'] || (sellingAssetOwners['default-me'] = { received: 0, withdrawn: 0 });
+              meSelling.withdrawn += log.usdAmount;
+              const meReceiving = receivingAssetOwners['default-me'] || (receivingAssetOwners['default-me'] = { received: 0, withdrawn: 0 });
+              meReceiving.received += log.vndAmount;
+          }
       }
     });
 
     miscellaneousExpenses.forEach(exp => {
-      if (transactions[exp.assetId]) {
-          const project = exp.projectId ? projectMap.get(exp.projectId) : null;
-          transactions[exp.assetId].outflows.push({ date: exp.date, amount: exp.amount, description: `Chi phí: ${exp.description}` });
-          
-          const assetOwners = ownerBalances[exp.assetId];
-          if (!assetOwners) return;
+      const asset = assetMap.get(exp.assetId);
+      if (!asset || !transactions[exp.assetId]) return;
+      
+      const project = exp.projectId ? projectMap.get(exp.projectId) : null;
+      transactions[exp.assetId].outflows.push({ date: exp.date, amount: exp.amount, description: `Chi phí: ${exp.description}` });
+      
+      const assetOwners = ownerBalances[exp.assetId];
+      if (!assetOwners) return;
+      
+      if (asset.ownershipType === 'personal') {
+          const me = assetOwners['default-me'] || (assetOwners['default-me'] = { received: 0, withdrawn: 0 });
+          me.withdrawn += exp.amount;
+          return;
+      }
 
-          let shares: T.PartnerShare[] | undefined;
-          let isShared = false;
+      let shares: T.PartnerShare[] | undefined;
+      let isShared = false;
 
-          if(project && project.isPartnership && project.partnerShares) {
-              shares = project.partnerShares;
-              isShared = true;
-          } else if (!project && exp.isPartnership && exp.partnerShares) {
-              shares = exp.partnerShares;
-              isShared = true;
-          }
-          if (isShared && shares) {
-              shares.forEach((share: T.PartnerShare) => {
-                  if (!assetOwners[share.partnerId]) {
-                      assetOwners[share.partnerId] = { received: 0, withdrawn: 0 };
-                  }
-                  assetOwners[share.partnerId].withdrawn += exp.amount * (share.sharePercentage / 100);
-              });
-          } else {
-              const me = assetOwners['default-me'] || (assetOwners['default-me'] = { received: 0, withdrawn: 0 });
-              me.withdrawn += exp.amount;
-          }
+      if(project && project.isPartnership && project.partnerShares) {
+          shares = project.partnerShares;
+          isShared = true;
+      } else if (!project && exp.isPartnership && exp.partnerShares) {
+          shares = exp.partnerShares;
+          isShared = true;
+      }
+
+      if (isShared && shares) {
+          const assetSharers = new Set(asset.sharedWith || []);
+          shares.forEach((share: T.PartnerShare) => {
+              const shareAmount = exp.amount * (share.sharePercentage / 100);
+              const targetPartnerId = assetSharers.has(share.partnerId) ? share.partnerId : 'default-me';
+              
+              if (!assetOwners[targetPartnerId]) {
+                  assetOwners[targetPartnerId] = { received: 0, withdrawn: 0 };
+              }
+              assetOwners[targetPartnerId].withdrawn += shareAmount;
+          });
+      } else {
+          const me = assetOwners['default-me'] || (assetOwners['default-me'] = { received: 0, withdrawn: 0 });
+          me.withdrawn += exp.amount;
       }
     });
 
     adDeposits.forEach(deposit => {
-      if (transactions[deposit.assetId]) {
-        const project = projectMap.get(deposit.projectId || '');
-        const description = `Nạp tiền Ads: TK ${deposit.adAccountNumber}` + (project ? ` cho dự án ${project.name}` : '');
-        transactions[deposit.assetId].outflows.push({ date: deposit.date, amount: deposit.vndAmount, description });
-        
-        const assetOwners = ownerBalances[deposit.assetId];
-        if (!assetOwners) return;
+      const asset = assetMap.get(deposit.assetId);
+      if (!asset || !transactions[deposit.assetId]) return;
 
-        let shares: T.PartnerShare[] | undefined;
-        if(project && project.isPartnership && project.partnerShares) {
-            shares = project.partnerShares;
-        }
+      const project = projectMap.get(deposit.projectId || '');
+      const description = `Nạp tiền Ads: TK ${deposit.adAccountNumber}` + (project ? ` cho dự án ${project.name}` : '');
+      transactions[deposit.assetId].outflows.push({ date: deposit.date, amount: deposit.vndAmount, description });
+      
+      const assetOwners = ownerBalances[deposit.assetId];
+      if (!assetOwners) return;
 
-        if (shares) {
-            shares.forEach(share => {
-                if (!assetOwners[share.partnerId]) {
-                    assetOwners[share.partnerId] = { received: 0, withdrawn: 0 };
-                }
-                assetOwners[share.partnerId].withdrawn += deposit.vndAmount * (share.sharePercentage / 100);
-            });
-        } else {
-            const me = assetOwners['default-me'] || (assetOwners['default-me'] = { received: 0, withdrawn: 0 });
-            me.withdrawn += deposit.vndAmount;
-        }
+      if (asset.ownershipType === 'personal') {
+          const me = assetOwners['default-me'] || (assetOwners['default-me'] = { received: 0, withdrawn: 0 });
+          me.withdrawn += deposit.vndAmount;
+          return;
+      }
+
+      if (project && project.isPartnership && project.partnerShares) {
+          const assetSharers = new Set(asset.sharedWith || []);
+          project.partnerShares.forEach(share => {
+              const shareAmount = deposit.vndAmount * (share.sharePercentage / 100);
+              const targetPartnerId = assetSharers.has(share.partnerId) ? share.partnerId : 'default-me';
+
+              if (!assetOwners[targetPartnerId]) {
+                  assetOwners[targetPartnerId] = { received: 0, withdrawn: 0 };
+              }
+              assetOwners[targetPartnerId].withdrawn += shareAmount;
+          });
+      } else {
+          const me = assetOwners['default-me'] || (assetOwners['default-me'] = { received: 0, withdrawn: 0 });
+          me.withdrawn += deposit.vndAmount;
       }
     });
 
@@ -2245,7 +2332,8 @@ export const DataProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
                         id: `ci-${capitalInflow.id}`, date: capitalInflow.date, partnerId,
                         description: `Vốn góp: ${capitalInflow.description}`, type: 'inflow', amount: capitalInflow.amount,
                         sourceName: capitalInflow.externalInvestorName || 'Nguồn vốn bên ngoài',
-                        destinationName: asset.name
+                        destinationName: asset.name,
+                        workspaceId: capitalInflow.workspaceId
                     });
                     break;
                 }
@@ -2255,7 +2343,8 @@ export const DataProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
                         id: `wd-${withdrawal.id}`, date: withdrawal.date, partnerId: withdrawal.withdrawnBy,
                         description: `Rút tiền: ${withdrawal.description}`, type: 'outflow', amount: withdrawal.vndAmount,
                         sourceName: assetMap.get(withdrawal.assetId)?.name || 'Không rõ',
-                        destinationName: 'Rút ra ngoài'
+                        destinationName: 'Rút ra ngoài',
+                        workspaceId: withdrawal.workspaceId
                     });
                     break;
                 }
@@ -2273,14 +2362,16 @@ export const DataProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
                             ledgerEntries.push({
                                 id: `rev-${commission.id}-${share.partnerId}`, date: commission.date, partnerId: share.partnerId,
                                 description: `Hoa hồng dự án ${project.name}`, type: 'inflow', amount: commission.vndAmount * (share.sharePercentage / 100),
-                                sourceName: project.name, destinationName: asset.name
+                                sourceName: project.name, destinationName: asset.name,
+                                workspaceId: commission.workspaceId
                             });
                         });
                     } else {
                         ledgerEntries.push({
                             id: `rev-${commission.id}-default-me`, date: commission.date, partnerId: 'default-me',
                             description: `Hoa hồng dự án ${project.name}`, type: 'inflow', amount: commission.vndAmount,
-                            sourceName: project.name, destinationName: asset.name
+                            sourceName: project.name, destinationName: asset.name,
+                            workspaceId: commission.workspaceId
                         });
                     }
                     break;
@@ -2305,14 +2396,16 @@ export const DataProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
                             ledgerEntries.push({
                                 id: `cost-${expense.id}-${share.partnerId}`, date: expense.date, partnerId: share.partnerId,
                                 description, type: 'outflow', amount: vndAmount * (share.sharePercentage / 100),
-                                sourceName: sourceName, destinationName: destinationName
+                                sourceName: sourceName, destinationName: destinationName,
+                                workspaceId: expense.workspaceId
                             });
                         });
                     } else {
                         ledgerEntries.push({
                             id: `cost-${expense.id}-default-me`, date: expense.date, partnerId: 'default-me',
                             description, type: 'outflow', amount: vndAmount,
-                            sourceName: sourceName, destinationName: destinationName
+                            sourceName: sourceName, destinationName: destinationName,
+                            workspaceId: expense.workspaceId
                         });
                     }
                     break;
@@ -2338,14 +2431,16 @@ export const DataProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
                             ledgerEntries.push({
                                 id: `cost-${expense.id}-${share.partnerId}`, date: expense.date, partnerId: share.partnerId,
                                 description, type: 'outflow', amount: vndAmount * (share.sharePercentage / 100),
-                                sourceName: sourceName, destinationName: destinationName
+                                sourceName: sourceName, destinationName: destinationName,
+                                workspaceId: expense.workspaceId
                             });
                         });
                     } else {
                         ledgerEntries.push({
                             id: `cost-${expense.id}-default-me`, date: expense.date, partnerId: 'default-me',
                             description, type: 'outflow', amount: vndAmount,
-                            sourceName: sourceName, destinationName: destinationName
+                            sourceName: sourceName, destinationName: destinationName,
+                            workspaceId: expense.workspaceId
                         });
                     }
                     break;
@@ -2383,7 +2478,8 @@ export const DataProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
                             type: pnl.profit > 0 ? 'inflow' : 'outflow',
                             amount: Math.abs(pnl.profit),
                             sourceName: 'Kết chuyển Lãi/Lỗ',
-                            destinationName: 'Vốn chủ sở hữu'
+                            destinationName: 'Vốn chủ sở hữu',
+                            workspaceId: user?.uid || '' // PNL is a personal event
                         });
                     }
                 });
@@ -2394,7 +2490,7 @@ export const DataProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
     }, [
         assets, capitalInflows, withdrawals, commissions, miscellaneousExpenses,
         exchangeLogs, partnerLedgerEntries, projects, partners, closedPeriods, taxSettings,
-        investments, taxPayments, periodDebtPayments, periodReceivablePayments, enrichedDailyAdCosts
+        investments, taxPayments, periodDebtPayments, periodReceivablePayments, enrichedDailyAdCosts, user
     ]);
 
 
@@ -2486,9 +2582,9 @@ export const DataProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
 }, [currentPeriod, assets, allTransactions]);
 
   const updateTaxSettings = async (settings: T.TaxSettings) => {
-    if (!firestoreDb) return;
+    if (!firestoreDb || !user) return;
     try {
-        await setDoc(doc(firestoreDb, 'settings', 'tax'), settings);
+        await setDoc(doc(firestoreDb, 'workspaces', user.uid, 'settings', 'tax'), settings);
         setTaxSettings(settings);
     } catch (e) {
         console.error("Error updating tax settings: ", e);
@@ -2496,9 +2592,9 @@ export const DataProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
   };
 
   const openPeriod = async (period: string) => {
-    if (!firestoreDb) return;
+    if (!firestoreDb || !user) return;
     try {
-        await setDoc(doc(firestoreDb, 'settings', 'periods'), { activePeriod: period, closedPeriods });
+        await setDoc(doc(firestoreDb, 'workspaces', user.uid, 'settings', 'periods'), { activePeriod: period, closedPeriods });
         setActivePeriod(period);
     } catch (e) {
         console.error("Error opening period: ", e);
@@ -2506,10 +2602,10 @@ export const DataProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
   };
 
   const closePeriod = async (period: string) => {
-      if (!firestoreDb || period !== activePeriod) return;
+      if (!firestoreDb || period !== activePeriod || !user) return;
       try {
           const newClosedPeriods = [...closedPeriods, { period, closedAt: new Date().toISOString() }];
-          await setDoc(doc(firestoreDb, 'settings', 'periods'), { activePeriod: null, closedPeriods: newClosedPeriods });
+          await setDoc(doc(firestoreDb, 'workspaces', user.uid, 'settings', 'periods'), { activePeriod: null, closedPeriods: newClosedPeriods });
           setActivePeriod(null);
           setClosedPeriods(newClosedPeriods);
       } catch (e) {

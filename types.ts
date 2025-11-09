@@ -1,27 +1,17 @@
-// This file contains type definitions for the entire application.
-
-export type Page = 
-  | 'Dashboard' 
-  | 'Projects' 
-  | 'DailyAdCosts' 
-  | 'Commissions' 
-  | 'ExchangeLog' 
-  | 'MiscellaneousExpenses' 
-  | 'CapitalSources' 
-  | 'Partners' 
-  | 'AdAccounts'
-  | 'SavingsAndInvestments'
-  | 'Assets' 
-  | 'Tax' 
-  | 'Reports' 
-  | 'LongReport'
-  | 'DebtsReceivables'
-  | 'Guide'
-  | 'Settings';
+export type Page = 'Dashboard' | 'Projects' | 'DailyAdCosts' | 'Commissions' | 'ExchangeLog' | 'MiscellaneousExpenses' | 'CapitalSources' | 'Partners' | 'AdAccounts' | 'SavingsAndInvestments' | 'Assets' | 'Tax' | 'Reports' | 'LongReport' | 'Settings' | 'DebtsReceivables' | 'Guide';
 
 export type AdsPlatform = 'google' | 'youtube' | 'tiktok' | 'facebook' | 'other';
 export type ProjectType = 'test' | 'deployment';
 export type ProjectStatus = 'running' | 'stopped';
+
+export interface FirebaseConfig {
+  apiKey: string;
+  authDomain: string;
+  projectId: string;
+  storageBucket: string;
+  messagingSenderId: string;
+  appId: string;
+}
 
 export interface PartnerShare {
     partnerId: string;
@@ -39,9 +29,10 @@ export interface Project {
     adsPlatforms: AdsPlatform[];
     projectType: ProjectType;
     status: ProjectStatus;
+    period: string; // YYYY-MM
     isPartnership: boolean;
     partnerShares?: PartnerShare[];
-    period: string;
+    workspaceId: string;
     categoryId?: string;
     nicheId?: string;
     affiliateUrls?: AffiliateUrl[];
@@ -52,48 +43,28 @@ export interface AdAccount {
     accountNumber: string;
     adsPlatform: AdsPlatform;
     status: 'running' | 'stopped' | 'cancelled';
+    workspaceId: string;
 }
 
 export interface DailyAdCost {
     id: string;
     projectId: string;
     adAccountNumber: string;
-    date: string;
-    amount: number; // USD amount
-    vatRate?: number;
-}
-
-export interface AdDeposit {
-    id: string;
-    date: string;
-    adsPlatform: AdsPlatform;
-    adAccountNumber: string;
-    projectId?: string;
-    assetId: string; // The asset (bank, cash, OR agency) used to pay
-    usdAmount: number;
-    rate: number;
-    vndAmount: number;
-    status: 'running' | 'stopped' | 'cancelled';
-}
-
-export interface AdFundTransfer {
-    id: string;
-    date: string;
-    adsPlatform: AdsPlatform;
-    fromAdAccountNumber: string;
-    toAdAccountNumber: string;
+    date: string; // YYYY-MM-DD
     amount: number; // USD
-    description?: string;
+    vatRate?: number; // percentage
+    workspaceId: string;
 }
 
 export interface Commission {
     id: string;
     projectId: string;
-    date: string;
-    assetId: string; // The asset (platform) receiving the commission
+    date: string; // YYYY-MM-DD
+    assetId: string; // ID of the receiving asset
     usdAmount: number;
     predictedRate: number;
     vndAmount: number;
+    workspaceId: string;
 }
 
 export interface AssetType {
@@ -107,6 +78,85 @@ export interface Asset {
     typeId: string;
     balance: number; // initial balance
     currency: 'VND' | 'USD';
+    ownershipType: 'personal' | 'shared';
+    sharedWith?: string[]; // array of partner IDs
+}
+
+export interface AdDeposit {
+    id: string;
+    date: string;
+    adsPlatform: AdsPlatform;
+    adAccountNumber: string;
+    projectId?: string;
+    assetId: string; // paying asset ID
+    usdAmount: number;
+    rate: number;
+    vndAmount: number;
+    status: 'running' | 'stopped' | 'cancelled';
+    workspaceId: string;
+}
+
+export interface AdFundTransfer {
+    id: string;
+    date: string;
+    adsPlatform: AdsPlatform;
+    fromAdAccountNumber: string;
+    toAdAccountNumber: string;
+    amount: number; // USD
+    description: string;
+    workspaceId: string;
+}
+
+export interface ExchangeLog {
+    id: string;
+    date: string;
+    sellingAssetId: string; // USD asset
+    receivingAssetId: string; // VND asset
+    usdAmount: number;
+    rate: number;
+    vndAmount: number;
+    workspaceId: string;
+}
+
+export interface MiscellaneousExpense {
+    id: string;
+    date: string;
+    description: string;
+    assetId: string;
+    amount: number; // Can be USD or VND depending on asset
+    vndAmount: number; // Always VND for calculation
+    projectId?: string;
+    vatRate?: number;
+    isPartnership?: boolean;
+    partnerShares?: PartnerShare[];
+    workspaceId: string;
+}
+
+export interface Partner {
+    id: string;
+    name: string;
+}
+
+export interface Withdrawal {
+    id: string;
+    date: string;
+    assetId: string;
+    amount: number; // in asset's currency
+    vndAmount: number; // always VND equivalent for PnL
+    withdrawnBy: string; // partner ID
+    description: string;
+    workspaceId: string;
+}
+
+export interface CapitalInflow {
+    id: string;
+    date: string;
+    assetId: string;
+    amount: number;
+    description: string;
+    contributedByPartnerId?: string; // partner ID
+    externalInvestorName?: string;
+    workspaceId: string;
 }
 
 export interface Liability {
@@ -117,10 +167,20 @@ export interface Liability {
     type: 'short-term' | 'long-term';
     creationDate: string;
     completionDate?: string;
-    inflowAssetId?: string; // If this liability resulted in a cash inflow to an asset
+    inflowAssetId?: string;
     isInstallment?: boolean;
     startDate?: string;
     numberOfInstallments?: number;
+    workspaceId: string;
+}
+
+export interface DebtPayment {
+    id: string;
+    liabilityId: string;
+    date: string;
+    amount: number;
+    assetId: string;
+    workspaceId: string;
 }
 
 export interface Receivable {
@@ -135,6 +195,7 @@ export interface Receivable {
     isInstallment?: boolean;
     startDate?: string;
     numberOfInstallments?: number;
+    workspaceId: string;
 }
 
 export interface ReceivablePayment {
@@ -143,104 +204,14 @@ export interface ReceivablePayment {
     date: string;
     amount: number;
     assetId: string;
-}
-
-export interface ExchangeLog {
-    id: string;
-    date: string;
-    sellingAssetId: string;
-    receivingAssetId: string;
-    usdAmount: number;
-    rate: number;
-    vndAmount: number;
-}
-
-export interface MiscellaneousExpense {
-    id: string;
-    date: string;
-    description: string;
-    assetId: string;
-    projectId?: string;
-    amount: number; // Can be USD or VND depending on asset currency
-    rate?: number; // if asset is USD
-    vndAmount: number;
-    vatRate?: number;
-    notes?: string;
-    isPartnership?: boolean;
-    partnerShares?: PartnerShare[];
-}
-
-export interface Partner {
-    id: string;
-    name: string;
-}
-
-export interface Withdrawal {
-    id: string;
-    date: string;
-    assetId: string;
-    amount: number;
-    vndAmount: number;
-    withdrawnBy: string; // partnerId
-    description: string;
-}
-
-export interface DebtPayment {
-    id: string;
-    liabilityId: string;
-    date: string;
-    amount: number;
-    assetId: string;
-}
-
-export interface TaxPayment {
-    id: string;
-    period: string;
-    date: string;
-    amount: number;
-    assetId: string;
-}
-
-export interface CapitalInflow {
-    id: string;
-    date: string;
-    assetId: string;
-    amount: number;
-    description: string;
-    contributedByPartnerId?: string;
-    externalInvestorName?: string;
-}
-
-export interface Saving {
-    id:string;
-    description: string;
-    assetId: string;
-    principalAmount: number;
-    startDate: string;
-    endDate: string;
-    interestRate: number;
-    status: 'active' | 'matured';
-    currency: 'VND' | 'USD';
-}
-
-export interface Investment {
-    id: string;
-    description: string;
-    assetId: string; // The asset used to invest
-    investmentAmount: number;
-    date: string;
-    status: 'ongoing' | 'liquidated';
-    currency: 'VND' | 'USD';
-    liquidationDate?: string;
-    liquidationAmount?: number;
-    liquidationAssetId?: string; // The asset that receives the liquidated amount
+    workspaceId: string;
 }
 
 export interface TaxSettings {
     method: 'revenue' | 'profit_vat';
-    revenueRate: number;
-    vatRate: number;
-    incomeRate: number;
+    revenueRate: number; // for revenue method
+    vatRate: number; // for profit_vat method
+    incomeRate: number; // for profit_vat method
     vatInputMethod: 'auto_sum' | 'manual';
     manualInputVat: number;
     incomeTaxBase: 'personal' | 'total';
@@ -250,16 +221,137 @@ export interface TaxSettings {
     periodClosingDay: number;
 }
 
-export interface ClosedPeriod {
+export interface TaxPayment {
+    id: string;
     period: string;
-    closedAt: string;
+    date: string;
+    amount: number;
+    assetId: string;
+    workspaceId: string;
 }
 
-export interface TaxCalculationResult {
-    taxPayable: number;
-    incomeTax: number;
-    netVat: number;
-    outputVat: number;
+export interface ClosedPeriod {
+    period: string; // YYYY-MM
+    closedAt: string; // ISO date string
+}
+
+export interface Category {
+    id: string;
+    name: string;
+    workspaceId: string;
+}
+
+export interface Niche {
+    id: string;
+    name: string;
+    categoryId: string;
+    workspaceId: string;
+}
+
+export interface PeriodAssetDetail {
+    id: string;
+    name: string;
+    currency: 'VND' | 'USD';
+    openingBalance: number;
+    change: number;
+    closingBalance: number;
+}
+
+export interface AdAccountTransaction {
+    id: string;
+    date: string;
+    adAccountNumber: string;
+    description: string;
+    deposit: number;
+    spent: number;
+    balance: number;
+}
+
+export interface EnrichedAdAccount extends AdAccount {
+    balance: number;
+}
+
+export interface EnrichedPartner extends Partner {
+    totalInflow: number;
+    totalOutflow: number;
+    balance: number;
+}
+
+export interface PartnerLedgerEntry {
+    id: string;
+    date: string;
+    partnerId: string;
+    description: string;
+    type: 'inflow' | 'outflow';
+    amount: number;
+    sourceName?: string;
+    destinationName?: string;
+    workspaceId: string;
+}
+
+export interface Saving {
+    id: string;
+    description: string;
+    assetId: string;
+    principalAmount: number;
+    currency: 'VND' | 'USD';
+    startDate: string;
+    endDate: string;
+    interestRate: number;
+    status: 'active' | 'matured';
+    workspaceId: string;
+}
+
+export interface Investment {
+    id: string;
+    description: string;
+    assetId: string;
+    investmentAmount: number;
+    currency: 'VND' | 'USD';
+    date: string;
+    status: 'ongoing' | 'liquidated';
+    liquidationDate?: string;
+    liquidationAmount?: number;
+    liquidationAssetId?: string;
+    workspaceId: string;
+}
+
+export interface PeriodLiability {
+    id: string;
+    date: string;
+    description: string;
+    amount: number;
+    currency: 'VND' | 'USD';
+    period: string;
+    workspaceId: string;
+}
+
+export interface PeriodDebtPayment {
+    id: string;
+    periodLiabilityId: string;
+    date: string;
+    amount: number;
+    assetId: string;
+    workspaceId: string;
+}
+
+export interface PeriodReceivable {
+    id: string;
+    date: string;
+    description: string;
+    amount: number;
+    currency: 'VND' | 'USD';
+    period: string;
+    workspaceId: string;
+}
+
+export interface PeriodReceivablePayment {
+    id: string;
+    periodReceivableId: string;
+    date: string;
+    amount: number;
+    assetId: string;
+    workspaceId: string;
 }
 
 export interface PartnerPnl {
@@ -272,9 +364,11 @@ export interface PartnerPnl {
     taxPayable: number;
 }
 
-export interface CashFlowDetails {
-    label: string;
-    amount: number;
+export interface TaxCalculationResult {
+    taxPayable: number;
+    incomeTax: number;
+    netVat: number;
+    outputVat: number;
 }
 
 export interface PeriodFinancials {
@@ -307,104 +401,11 @@ export interface PeriodFinancials {
     adCostDetails: { name: string; amount: number }[];
     miscCostDetails: { name: string; amount: number }[];
     cashFlow: {
-        operating: { inflows: CashFlowDetails[]; outflows: CashFlowDetails[]; net: number };
-        investing: { inflows: CashFlowDetails[]; outflows: CashFlowDetails[]; net: number };
-        financing: { inflows: CashFlowDetails[]; outflows: CashFlowDetails[]; net: number };
+        operating: { inflows: { label: string, amount: number }[]; outflows: { label: string, amount: number }[]; net: number; };
+        investing: { inflows: { label: string, amount: number }[]; outflows: { label: string, amount: number }[]; net: number; };
+        financing: { inflows: { label: string, amount: number }[]; outflows: { label: string, amount: number }[]; net: number; };
         netChange: number;
         beginningBalance: number;
         endBalance: number;
     };
-}
-
-export interface PeriodAssetDetail {
-    id: string;
-    name: string;
-    currency: 'VND' | 'USD';
-    openingBalance: number;
-    change: number;
-    closingBalance: number;
-}
-
-export interface Category {
-    id: string;
-    name: string;
-}
-
-export interface Niche {
-    id: string;
-    name: string;
-    categoryId: string;
-}
-
-export interface FirebaseConfig {
-    apiKey: string;
-    authDomain: string;
-    projectId: string;
-    storageBucket: string;
-    messagingSenderId: string;
-    appId: string;
-}
-
-export interface PeriodLiability {
-    id: string;
-    period: string;
-    date: string;
-    description: string;
-    amount: number;
-    currency: 'VND' | 'USD';
-}
-  
-export interface PeriodReceivable {
-    id: string;
-    period: string;
-    date: string;
-    description: string;
-    amount: number;
-    currency: 'VND' | 'USD';
-}
-
-export interface PeriodDebtPayment {
-    id: string;
-    periodLiabilityId: string;
-    date: string;
-    amount: number;
-    assetId: string;
-}
-
-export interface PeriodReceivablePayment {
-    id: string;
-    periodReceivableId: string;
-    date: string;
-    amount: number;
-    assetId: string;
-}
-
-export interface PartnerLedgerEntry {
-    id: string;
-    date: string;
-    partnerId: string;
-    description: string;
-    type: 'inflow' | 'outflow';
-    amount: number; // Always positive
-    sourceName?: string;
-    destinationName?: string;
-}
-export interface EnrichedPartner extends Partner {
-    totalInflow: number;
-    totalOutflow: number;
-    balance: number;
-}
-
-export interface EnrichedAdAccount extends AdAccount {
-    balance: number;
-}
-
-export interface AdAccountTransaction {
-    id: string;
-    date: string;
-    adAccountNumber: string;
-    description: string;
-    deposit: number; // USD
-    spent: number; // USD
-    balance: number; // USD
 }
