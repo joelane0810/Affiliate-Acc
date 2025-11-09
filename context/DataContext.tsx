@@ -450,7 +450,23 @@ export const DataProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
   const [notifications, setNotifications] = useState<T.Notification[]>([]);
   
   const clearToast = () => setToast(null);
+
+  const addNotification = (message: string, type: T.Notification['type']) => {
+    const newNotification: T.Notification = {
+        id: `${type}-${Date.now()}`,
+        timestamp: Date.now(),
+        message,
+        type,
+        read: false,
+    };
+    setNotifications(prev => [newNotification, ...prev].slice(0, 50)); // Keep last 50
+    if (type === 'partner') {
+        setToast(newNotification);
+    }
+  };
+
   const unreadCount = useMemo(() => notifications.filter(n => !n.read).length, [notifications]);
+  
   const markNotificationsAsRead = () => {
       setNotifications(prev => prev.map(n => ({...n, read: true})));
   };
@@ -1073,16 +1089,32 @@ export const DataProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
   const addMiscellaneousExpense = async (expense: Omit<T.MiscellaneousExpense, 'id' | 'workspaceId'>) => {
     if (!firestoreDb || !user) return;
     let workspaceId = user.uid;
-    if (expense.projectId) {
-        const project = projects.find(p => p.id === expense.projectId);
-        if(project) workspaceId = project.workspaceId;
+    const project = expense.projectId ? projects.find(p => p.id === expense.projectId) : null;
+    
+    if (project?.isPartnership) {
+        workspaceId = 'shared';
     } else if (expense.isPartnership) {
         workspaceId = 'shared';
     }
+
     const newExpenseData = { ...expense, workspaceId };
     try {
       const docRef = await addDoc(collection(firestoreDb, 'miscellaneousExpenses'), newExpenseData);
       setMiscellaneousExpenses(prev => [...prev, { ...newExpenseData, id: docRef.id }]);
+
+      // Send notifications to partners
+      const isShared = (project?.isPartnership && project.partnerShares) || (expense.isPartnership && expense.partnerShares);
+      if (isShared) {
+        const shares = project?.partnerShares || expense.partnerShares || [];
+        const me = partners.find(p => p.id === 'default-me');
+        shares.forEach(share => {
+            if (share.partnerId !== 'default-me') {
+                const partner = partners.find(p => p.id === share.partnerId);
+                const message = `${me?.name || 'Chủ sở hữu'} đã thêm chi phí chung "${expense.description}" trị giá ${formatCurrency(expense.vndAmount)} mà bạn có tham gia.`;
+                addNotification(message, 'partner');
+            }
+        });
+      }
     } catch (e) { console.error("Error adding miscellaneous expense: ", e); }
   };
   const updateMiscellaneousExpense = async (updatedExpense: T.MiscellaneousExpense) => {
@@ -1091,6 +1123,19 @@ export const DataProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
     try {
       await updateDoc(doc(firestoreDb, 'miscellaneousExpenses', id), expenseData);
       setMiscellaneousExpenses(prev => prev.map(e => (e.id === id ? updatedExpense : e)));
+
+      const project = updatedExpense.projectId ? projects.find(p => p.id === updatedExpense.projectId) : null;
+      const isShared = (project?.isPartnership && project.partnerShares) || (updatedExpense.isPartnership && updatedExpense.partnerShares);
+      if (isShared) {
+        const shares = project?.partnerShares || updatedExpense.partnerShares || [];
+         const me = partners.find(p => p.id === 'default-me');
+        shares.forEach(share => {
+            if (share.partnerId !== 'default-me') {
+                 const message = `${me?.name || 'Chủ sở hữu'} đã cập nhật chi phí chung "${updatedExpense.description}" mà bạn có tham gia.`;
+                 addNotification(message, 'partner');
+            }
+        });
+      }
     } catch (e) { console.error("Error updating miscellaneous expense: ", e); }
   };
   const deleteMiscellaneousExpense = async (id: string) => {
