@@ -15,14 +15,15 @@ import { ConfirmationModal } from '../components/ui/ConfirmationModal';
 // Form for adding/editing a partner
 const PartnerForm: React.FC<{
     partner?: Partner;
-    onSave: (partner: Omit<Partner, 'id'> | Partner) => void;
+    onSave: (partner: Partial<Omit<Partner, 'id' | 'ownerUid' | 'ownerName'>> | Partner) => void;
     onCancel: () => void;
 }> = ({ partner, onSave, onCancel }) => {
     const [name, setName] = useState(partner?.name || '');
+    const [loginEmail, setLoginEmail] = useState(partner?.loginEmail || '');
     
     const handleSubmit = (e: React.FormEvent) => {
         e.preventDefault();
-        onSave({ id: partner?.id || '', name });
+        onSave({ id: partner?.id || '', name, loginEmail });
     };
 
     return (
@@ -30,6 +31,17 @@ const PartnerForm: React.FC<{
             <div>
                 <Label htmlFor="partnerName">Tên đối tác</Label>
                 <Input id="partnerName" value={name} onChange={e => setName(e.target.value)} required autoFocus />
+            </div>
+            <div>
+                <Label htmlFor="loginEmail">Email đăng nhập (Tùy chọn)</Label>
+                <Input 
+                    id="loginEmail" 
+                    type="email"
+                    value={loginEmail} 
+                    onChange={e => setLoginEmail(e.target.value)} 
+                    placeholder="partner@example.com"
+                />
+                <p className="text-xs text-gray-400 mt-1">Nếu được cung cấp, đối tác có thể dùng email này để đăng nhập và xem dữ liệu được chia sẻ.</p>
             </div>
             <div className="mt-6 flex justify-end space-x-3">
                 <Button type="button" variant="secondary" onClick={onCancel}>Hủy</Button>
@@ -42,9 +54,10 @@ const PartnerForm: React.FC<{
 // Form for adding a manual ledger entry
 const LedgerEntryForm: React.FC<{
     partnerId: string;
-    onSave: (entry: Omit<PartnerLedgerEntry, 'id'>) => void;
+    onSave: (entry: Omit<PartnerLedgerEntry, 'id' | 'workspaceId'>) => void;
     onCancel: () => void;
 }> = ({ partnerId, onSave, onCancel }) => {
+    const { user } = useData();
     const [date, setDate] = useState(new Date().toISOString().split('T')[0]);
     const [description, setDescription] = useState('');
     const [type, setType] = useState<'inflow' | 'outflow'>('outflow');
@@ -56,6 +69,7 @@ const LedgerEntryForm: React.FC<{
             alert("Số tiền phải lớn hơn 0.");
             return;
         }
+        // workspaceId will be added by context
         onSave({ partnerId, date, description, type, amount });
     };
 
@@ -108,11 +122,11 @@ export default function Partners() {
     const [ledgerEntryToDelete, setLedgerEntryToDelete] = useState<PartnerLedgerEntry | null>(null);
     
     // Partner handlers
-    const handleSavePartner = (partner: Omit<Partner, 'id'> | Partner) => {
-        if ('id' in partner && partner.id) {
-            updatePartner(partner as Partner);
+    const handleSavePartner = (partnerData: Partial<Omit<Partner, 'id' | 'ownerUid' | 'ownerName'>> | Partner) => {
+        if ('id' in partnerData && partnerData.id) {
+            updatePartner(partnerData as Partner);
         } else {
-            addPartner(partner as Omit<Partner, 'id'>);
+            addPartner(partnerData as Omit<Partner, 'id' | 'ownerUid' | 'ownerName'>);
         }
         setIsPartnerModalOpen(false);
     };
@@ -124,7 +138,7 @@ export default function Partners() {
     };
     
     // Ledger handlers
-    const handleSaveLedgerEntry = (entry: Omit<PartnerLedgerEntry, 'id'>) => {
+    const handleSaveLedgerEntry = (entry: Omit<PartnerLedgerEntry, 'id' | 'workspaceId'>) => {
         addPartnerLedgerEntry(entry);
         setIsLedgerModalOpen(false);
     };

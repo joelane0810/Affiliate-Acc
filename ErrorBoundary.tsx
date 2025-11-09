@@ -1,4 +1,4 @@
-import React, { ErrorInfo, ReactNode, Component } from 'react';
+import React, { ErrorInfo, ReactNode } from 'react';
 
 interface Props {
   children: ReactNode;
@@ -11,7 +11,7 @@ interface State {
 }
 
 // FIX: Changed React.Component to Component.
-class ErrorBoundary extends Component<Props, State> {
+class ErrorBoundary extends React.Component<Props, State> {
   // FIX: Initialize state as a class property to ensure `this` is correctly bound.
   state: State = {
     hasError: false,

@@ -135,6 +135,9 @@ export interface MiscellaneousExpense {
 export interface Partner {
     id: string;
     name: string;
+    loginEmail?: string;
+    ownerUid: string;
+    ownerName: string;
 }
 
 export interface Withdrawal {

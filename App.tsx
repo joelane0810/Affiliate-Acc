@@ -165,6 +165,19 @@ const ViewingModeIndicator = () => {
     );
 };
 
+const SharerIndicator = () => {
+    const { sharerName } = useData();
+    if (!sharerName) return null;
+
+    return (
+        <div className="fixed top-4 left-1/2 -translate-x-1/2 bg-purple-900/80 backdrop-blur-sm border border-purple-700 text-white text-sm rounded-lg shadow-lg z-50 p-2 px-4">
+            <p>
+                Được chia sẻ bởi: <span className="font-bold">{sharerName}</span>
+            </p>
+        </div>
+    );
+};
+
 const MainAppLayout = () => {
   const [isSidebarExpanded, setIsSidebarExpanded] = useState(true);
   const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false);
@@ -205,6 +218,7 @@ const MainAppLayout = () => {
       )}
       
       <ViewingModeIndicator />
+      <SharerIndicator />
       <Sidebar 
         isExpanded={isSidebarExpanded}
         setIsExpanded={setIsSidebarExpanded}
