@@ -470,12 +470,12 @@ const ProjectFilters: React.FC<{
 
 const ProjectListContent: React.FC<{ 
     enrichedProjects: any[];
-    partnerMap: Map<string, string>;
+    partnerNameMap: Map<string, string>;
     onProjectClick: (project: T.Project) => void;
     onEditClick: (project: T.Project) => void; 
     onDeleteClick: (project: T.Project) => void;
     isReadOnly: boolean;
-}> = ({ enrichedProjects, partnerMap, onProjectClick, onEditClick, onDeleteClick, isReadOnly }) => {
+}> = ({ enrichedProjects, partnerNameMap, onProjectClick, onEditClick, onDeleteClick, isReadOnly }) => {
     
     const totals = useMemo(() => {
         return enrichedProjects.reduce((acc, p) => {
@@ -518,7 +518,7 @@ const ProjectListContent: React.FC<{
                                 </TableCell>
                                 <TableCell className="text-xs">
                                     {p.isPartnership && p.partnerShares && p.partnerShares.length > 0
-                                        ? p.partnerShares.map((s: T.PartnerShare) => partnerMap.get(s.partnerId)).filter(Boolean).join(', ')
+                                        ? p.partnerShares.map((s: T.PartnerShare) => partnerNameMap.get(s.partnerId) || 'N/A').filter(Boolean).join(', ')
                                         : 'Tôi'}
                                 </TableCell>
                                 <TableCell>{p.adsPlatforms.map((ap: T.AdsPlatform) => adsPlatformLabels[ap]).join(', ')}</TableCell>
@@ -791,7 +791,7 @@ const UrlListModal: React.FC<{
 export default function Projects() {
     const { 
         isReadOnly, addProject, updateProject, deleteProject, currentPeriod, 
-        projects, partners, commissions, enrichedDailyAdCosts, miscellaneousExpenses 
+        projects, partners, commissions, enrichedDailyAdCosts, miscellaneousExpenses, partnerNameMap
     } = useData();
     const [activeTab, setActiveTab] = useState<'list' | 'trends'>('list');
 
@@ -799,7 +799,6 @@ export default function Projects() {
     const [editingProject, setEditingProject] = useState<T.Project | undefined>(undefined);
     const [projectToDelete, setProjectToDelete] = useState<T.Project | null>(null);
     const [urlModalProject, setUrlModalProject] = useState<T.Project | null>(null);
-    const partnerMap = useMemo(() => new Map(partners.map(p => [p.id, p.name])), [partners]);
 
     // Filter states
     const [selectedProjectIds, setSelectedProjectIds] = useState<string[]>([]);
@@ -922,7 +921,7 @@ export default function Projects() {
                     />
                     <ProjectListContent 
                         enrichedProjects={filteredAndEnrichedProjects} 
-                        partnerMap={partnerMap}
+                        partnerNameMap={partnerNameMap}
                         onProjectClick={handleProjectClick}
                         onEditClick={handleEditClick}
                         onDeleteClick={handleDeleteClick}

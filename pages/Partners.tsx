@@ -20,7 +20,8 @@ const PartnerForm: React.FC<{
 }> = ({ partner, onSave, onCancel }) => {
     const [name, setName] = useState(partner?.name || '');
     const [loginEmail, setLoginEmail] = useState(partner?.loginEmail || '');
-    
+    const isEditingSelf = partner?.id === 'default-me';
+
     const handleSubmit = (e: React.FormEvent) => {
         e.preventDefault();
         onSave({ id: partner?.id || '', name, loginEmail });
@@ -29,8 +30,9 @@ const PartnerForm: React.FC<{
     return (
         <form onSubmit={handleSubmit} className="space-y-4">
             <div>
-                <Label htmlFor="partnerName">Tên đối tác</Label>
+                <Label htmlFor="partnerName">{isEditingSelf ? "Tên của bạn" : "Tên đối tác"}</Label>
                 <Input id="partnerName" value={name} onChange={e => setName(e.target.value)} required autoFocus />
+                 {isEditingSelf && <p className="text-xs text-gray-400 mt-1">Tên này sẽ được hiển thị cho các đối tác của bạn.</p>}
             </div>
             <div>
                 <Label htmlFor="loginEmail">Email đăng nhập (Tùy chọn)</Label>
@@ -40,8 +42,14 @@ const PartnerForm: React.FC<{
                     value={loginEmail} 
                     onChange={e => setLoginEmail(e.target.value)} 
                     placeholder="partner@example.com"
+                    disabled={isEditingSelf}
                 />
-                <p className="text-xs text-gray-400 mt-1">Nếu được cung cấp, đối tác có thể dùng email này để đăng nhập và xem dữ liệu được chia sẻ.</p>
+                <p className="text-xs text-gray-400 mt-1">
+                    {isEditingSelf 
+                        ? "Bạn không thể thay đổi email đăng nhập của chính mình."
+                        : "Nếu được cung cấp, đối tác có thể dùng email này để đăng nhập và xem dữ liệu được chia sẻ."
+                    }
+                </p>
             </div>
             <div className="mt-6 flex justify-end space-x-3">
                 <Button type="button" variant="secondary" onClick={onCancel}>Hủy</Button>
@@ -177,10 +185,10 @@ export default function Partners() {
                     <Card key={partner.id} className="flex flex-col">
                         <CardHeader className="flex justify-between items-center">
                             <span>{partner.name}</span>
-                             {!isReadOnly && partner.id !== 'default-me' && (
+                             {!isReadOnly && (
                                 <div className="flex items-center space-x-2">
                                     <button onClick={() => { setEditingPartner(partner); setIsPartnerModalOpen(true); }} className="text-gray-400 hover:text-primary-400"><Edit /></button>
-                                    <button onClick={() => setPartnerToDelete(partner)} className="text-gray-400 hover:text-red-400"><Trash2 /></button>
+                                    {partner.id !== 'default-me' && <button onClick={() => setPartnerToDelete(partner)} className="text-gray-400 hover:text-red-400"><Trash2 /></button>}
                                 </div>
                             )}
                         </CardHeader>
@@ -267,7 +275,7 @@ export default function Partners() {
             
             {!isReadOnly && (
                 <>
-                    <Modal isOpen={isPartnerModalOpen} onClose={() => setIsPartnerModalOpen(false)} title={editingPartner ? 'Sửa đối tác' : 'Thêm đối tác'}>
+                    <Modal isOpen={isPartnerModalOpen} onClose={() => setIsPartnerModalOpen(false)} title={editingPartner ? 'Sửa thông tin' : 'Thêm đối tác'}>
                         <PartnerForm partner={editingPartner} onSave={handleSavePartner} onCancel={() => setIsPartnerModalOpen(false)} />
                     </Modal>
                     <ConfirmationModal isOpen={!!partnerToDelete} onClose={() => setPartnerToDelete(null)} onConfirm={handleDeletePartner} title="Xác nhận xóa" message={`Bạn có chắc muốn xóa đối tác "${partnerToDelete?.name}" không?`} />

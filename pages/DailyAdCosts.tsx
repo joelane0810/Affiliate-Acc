@@ -45,7 +45,7 @@ const AdCostForm: React.FC<{
     cost?: T.DailyAdCost;
     projectsForPeriod: T.Project[];
     adAccounts: T.AdAccount[];
-    onSave: (cost: Omit<T.DailyAdCost, 'id'> | T.DailyAdCost) => void;
+    onSave: (cost: Omit<T.DailyAdCost, 'id' | 'workspaceId'> | T.DailyAdCost) => void;
     onCancel: () => void;
 }> = ({ cost, projectsForPeriod, adAccounts, onSave, onCancel }) => {
     const { currentPeriod } = useData();
@@ -86,7 +86,8 @@ const AdCostForm: React.FC<{
             return;
         }
         
-        onSave({ ...cost, id: cost?.id || '', projectId, adAccountNumber, date, amount, vatRate });
+        const newCostData = { projectId, adAccountNumber, date, amount, vatRate };
+        onSave({ ...cost, ...newCostData, id: cost?.id || '' });
     };
     
     const selectClassName = "w-full px-3 py-2 bg-gray-900 border border-gray-600 rounded-md focus:outline-none focus:ring-2 focus:ring-primary-500";
@@ -151,7 +152,7 @@ const AdCostForm: React.FC<{
 };
 
 const AdCostsContent = () => {
-    const { projects, partners, adAccounts, enrichedDailyAdCosts, addDailyAdCost, updateDailyAdCost, deleteDailyAdCost, currentPeriod, isReadOnly } = useData();
+    const { projects, adAccounts, enrichedDailyAdCosts, addDailyAdCost, updateDailyAdCost, deleteDailyAdCost, currentPeriod, isReadOnly, partnerNameMap } = useData();
     const [isModalOpen, setIsModalOpen] = useState(false);
     const [editingCost, setEditingCost] = useState<T.DailyAdCost | undefined>(undefined);
     const [isConfirmModalOpen, setIsConfirmModalOpen] = useState(false);
@@ -162,7 +163,6 @@ const AdCostsContent = () => {
     [projects, currentPeriod]);
 
     const projectMap = useMemo(() => new Map(projects.map(p => [p.id, p])), [projects]);
-    const partnerMap = useMemo(() => new Map(partners.map(p => [p.id, p.name])), [partners]);
 
     const enrichedCostsForPeriod = useMemo(() => {
         return enrichedDailyAdCosts
@@ -174,12 +174,11 @@ const AdCostsContent = () => {
             .sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime());
     }, [enrichedDailyAdCosts, projectMap, currentPeriod]);
 
-    const handleSave = (cost: Omit<T.DailyAdCost, 'id'> | T.DailyAdCost) => {
+    const handleSave = (cost: Omit<T.DailyAdCost, 'id' | 'workspaceId'> | T.DailyAdCost) => {
         if ('id' in cost && cost.id) {
             updateDailyAdCost(cost as T.DailyAdCost);
         } else {
-            const { id, ...newCost } = cost as T.DailyAdCost;
-            addDailyAdCost(newCost);
+            addDailyAdCost(cost as Omit<T.DailyAdCost, 'id' | 'workspaceId'>);
         }
         setIsModalOpen(false);
         setEditingCost(undefined);
@@ -200,7 +199,7 @@ const AdCostsContent = () => {
 
     return (
         <>
-            <Header title="Chi phí Ads hàng ngày">
+            <Header title="">
                 {!isReadOnly && (
                     <Button onClick={() => { setEditingCost(undefined); setIsModalOpen(true); }} disabled={projectsForPeriod.length === 0}>
                         <span className="flex items-center gap-2"><Plus /> Thêm chi phí</span>
@@ -239,7 +238,7 @@ const AdCostsContent = () => {
                                         <TableCell className="font-medium text-white">{cost.projectName}</TableCell>
                                         <TableCell className="text-xs">
                                             {project?.isPartnership && project.partnerShares && project.partnerShares.length > 0
-                                                ? project.partnerShares.map(s => partnerMap.get(s.partnerId)).filter(Boolean).join(', ')
+                                                ? project.partnerShares.map(s => partnerNameMap.get(s.partnerId)).filter(Boolean).join(', ')
                                                 : 'Tôi'}
                                         </TableCell>
                                         <TableCell>{cost.adAccountNumber}</TableCell>
@@ -292,7 +291,7 @@ const AdDepositForm: React.FC<{
     assets: T.Asset[];
     assetTypes: T.AssetType[];
     projectsForPeriod: T.Project[];
-    onSave: (deposit: (Omit<T.AdDeposit, 'id'> | T.AdDeposit) | (Omit<T.AdDeposit, 'id'>)[]) => void;
+    onSave: (deposit: (Omit<T.AdDeposit, 'id' | 'workspaceId'> | T.AdDeposit) | (Omit<T.AdDeposit, 'id' | 'workspaceId'>[])) => void;
     onCancel: () => void;
     adAccounts: T.AdAccount[];
 }> = ({ deposit, assets, assetTypes, projectsForPeriod, onSave, onCancel, adAccounts }) => {
@@ -400,7 +399,8 @@ const AdDepositForm: React.FC<{
                 alert("Vui lòng chọn tài khoản Ads.");
                 return;
             }
-            onSave({ ...deposit, id: deposit?.id || '', date, adsPlatform, adAccountNumber, projectId: projectId || undefined, assetId, usdAmount, rate, vndAmount, status });
+            const dataToSave = { date, adsPlatform, adAccountNumber, projectId: projectId || undefined, assetId, usdAmount, rate, vndAmount, status };
+            onSave({ ...deposit, ...dataToSave, id: deposit?.id || ''});
         }
     };
 
@@ -525,7 +525,7 @@ const AdDepositForm: React.FC<{
 };
 
 const AdFundTransferForm: React.FC<{
-    onSave: (transfer: Omit<T.AdFundTransfer, 'id'>) => void;
+    onSave: (transfer: Omit<T.AdFundTransfer, 'id' | 'workspaceId'>) => void;
     onCancel: () => void;
     adAccounts: T.AdAccount[];
 }> = ({ onSave, onCancel, adAccounts }) => {
@@ -627,193 +627,196 @@ const AdFundTransferForm: React.FC<{
             </div>
             <div className="mt-6 flex justify-end space-x-3">
                 <Button type="button" variant="secondary" onClick={onCancel}>Hủy</Button>
-                <Button type="submit">Lưu chuyển tiền</Button>
+                <Button type="submit">Lưu</Button>
             </div>
         </form>
     );
 };
 
 const AdDepositsContent = () => {
-    const { assets, assetTypes, projects, partners, adAccounts, adDeposits, addAdDeposit, updateAdDeposit, deleteAdDeposit, addAdFundTransfer, currentPeriod, isReadOnly } = useData();
+    const { adDeposits, addAdDeposit, updateAdDeposit, deleteAdDeposit, assets, assetTypes, projects, currentPeriod, adAccounts, isReadOnly } = useData();
     const [isModalOpen, setIsModalOpen] = useState(false);
-    const [isTransferModalOpen, setIsTransferModalOpen] = useState(false);
     const [editingDeposit, setEditingDeposit] = useState<T.AdDeposit | undefined>(undefined);
-    const [isConfirmModalOpen, setIsConfirmModalOpen] = useState(false);
-    const [depositToDeleteId, setDepositToDeleteId] = useState<string | null>(null);
-    
+    const [depositToDelete, setDepositToDelete] = useState<T.AdDeposit | null>(null);
+
     const projectsForPeriod = useMemo(() => projects.filter(p => p.period === currentPeriod), [projects, currentPeriod]);
-
-    const projectMap = useMemo(() => new Map(projects.map(p => [p.id, p])), [projects]);
-    const partnerMap = useMemo(() => new Map(partners.map(p => [p.id, p.name])), [partners]);
-    const assetMap = useMemo(() => new Map(assets.map(a => [a.id, a.name])), [assets]);
-
+    
     const enrichedDeposits = useMemo(() => {
+        const projectMap = new Map(projects.map(p => [p.id, p.name]));
+        const assetMap = new Map(assets.map(a => [a.id, a.name]));
         return adDeposits
             .filter(d => isDateInPeriod(d.date, currentPeriod))
             .map(d => ({
                 ...d,
-                projectName: d.projectId ? projectMap.get(d.projectId)?.name || 'N/A' : '—',
-                assetName: assetMap.get(d.assetId) || 'N/A',
+                projectName: d.projectId ? projectMap.get(d.projectId) : '—',
+                assetName: assetMap.get(d.assetId) || 'N/A'
             }))
             .sort((a,b) => new Date(b.date).getTime() - new Date(a.date).getTime());
-    }, [adDeposits, projectMap, assetMap, currentPeriod]);
+    }, [adDeposits, projects, assets, currentPeriod]);
 
-    const handleSave = (depositOrDeposits: (Omit<T.AdDeposit, 'id'> | T.AdDeposit) | (Omit<T.AdDeposit, 'id'>)[]) => {
-        if (Array.isArray(depositOrDeposits)) {
-            addAdDeposit(depositOrDeposits);
+    const handleSave = (data: (Omit<T.AdDeposit, 'id' | 'workspaceId'> | T.AdDeposit) | (Omit<T.AdDeposit, 'id' | 'workspaceId'>[])) => {
+        if (Array.isArray(data)) {
+            addAdDeposit(data);
+        } else if ('id' in data && data.id) {
+            updateAdDeposit(data as T.AdDeposit);
         } else {
-            const deposit = depositOrDeposits;
-            if ('id' in deposit && deposit.id) {
-                updateAdDeposit(deposit as T.AdDeposit);
-            } else {
-                addAdDeposit(deposit as Omit<T.AdDeposit, 'id'>);
-            }
+            addAdDeposit(data as Omit<T.AdDeposit, 'id' | 'workspaceId'>);
         }
         setIsModalOpen(false);
-        setEditingDeposit(undefined);
     };
 
-    const handleSaveTransfer = (transfer: Omit<T.AdFundTransfer, 'id'>) => {
-        addAdFundTransfer(transfer);
-        setIsTransferModalOpen(false);
-    };
-
-    const handleDeleteClick = (id: string) => {
-        setDepositToDeleteId(id);
-        setIsConfirmModalOpen(true);
-    };
-
-    const handleConfirmDelete = () => {
-        if (depositToDeleteId) {
-            deleteAdDeposit(depositToDeleteId);
-            setIsConfirmModalOpen(false);
-            setDepositToDeleteId(null);
+    const handleDelete = () => {
+        if(depositToDelete) {
+            deleteAdDeposit(depositToDelete.id);
+            setDepositToDelete(null);
         }
     };
-    
+
     return (
         <>
-            <Header title="Nạp tiền vào tài khoản Ads">
-                {!isReadOnly && (
-                    <div className="flex items-center gap-4">
-                         <Button variant="secondary" onClick={() => setIsTransferModalOpen(true)}>
-                            <span className="flex items-center gap-2"><ArrowRightLeft /> Chuyển tiền Ads</span>
-                        </Button>
-                        <Button onClick={() => { setEditingDeposit(undefined); setIsModalOpen(true); }} disabled={assets.length === 0 || adAccounts.length === 0}>
-                            <span className="flex items-center gap-2"><Plus /> Thêm giao dịch nạp</span>
-                        </Button>
-                    </div>
-                )}
-            </Header>
-            <Card>
-                <CardContent>
-                    <Table>
-                        <TableHead>
-                            <TableRow>
-                                <TableHeader>Ngày</TableHeader>
-                                <TableHeader>Số tài khoản</TableHeader>
-                                <TableHeader>Nền tảng</TableHeader>
-                                <TableHeader>Sở hữu</TableHeader>
-                                <TableHeader>Nguồn tiền chi trả</TableHeader>
-                                <TableHeader>Dự án</TableHeader>
-                                <TableHeader>Số tiền (USD)</TableHeader>
-                                <TableHeader>Tỷ giá</TableHeader>
-                                <TableHeader>Thành tiền (VND)</TableHeader>
-                                <TableHeader>Trạng thái</TableHeader>
-                                {!isReadOnly && <TableHeader>Hành động</TableHeader>}
+        <Header title="">
+            {!isReadOnly && <Button onClick={() => { setEditingDeposit(undefined); setIsModalOpen(true); }}><span className="flex items-center gap-2"><Plus /> Thêm giao dịch nạp</span></Button>}
+        </Header>
+        <Card>
+            <CardContent>
+                <Table>
+                    <TableHead>
+                        <TableRow>
+                            <TableHeader>Ngày</TableHeader>
+                            <TableHeader>Tài khoản Ads</TableHeader>
+                            <TableHeader>Dự án</TableHeader>
+                            <TableHeader>Nguồn tiền</TableHeader>
+                            <TableHeader>USD</TableHeader>
+                            <TableHeader>Rate</TableHeader>
+                            <TableHeader>VND</TableHeader>
+                            {!isReadOnly && <TableHeader>Hành động</TableHeader>}
+                        </TableRow>
+                    </TableHead>
+                    <TableBody>
+                        {enrichedDeposits.map(d => (
+                            <TableRow key={d.id}>
+                                <TableCell>{formatDate(d.date)}</TableCell>
+                                <TableCell className="font-medium text-white">{d.adAccountNumber}</TableCell>
+                                <TableCell>{d.projectName}</TableCell>
+                                <TableCell>{d.assetName}</TableCell>
+                                <TableCell>{formatCurrency(d.usdAmount, 'USD')}</TableCell>
+                                <TableCell>{formatCurrency(d.rate)}</TableCell>
+                                <TableCell className="font-semibold text-red-400">{formatCurrency(d.vndAmount)}</TableCell>
+                                {!isReadOnly && (
+                                    <TableCell>
+                                        <div className="flex items-center space-x-3 justify-center">
+                                            <button onClick={() => {setEditingDeposit(d); setIsModalOpen(true);}} className="text-gray-400 hover:text-primary-400"><Edit /></button>
+                                            <button onClick={() => setDepositToDelete(d)} className="text-gray-400 hover:text-red-400"><Trash2 /></button>
+                                        </div>
+                                    </TableCell>
+                                )}
                             </TableRow>
-                        </TableHead>
-                        <TableBody>
-                            {enrichedDeposits.map(d => {
-                                const project = d.projectId ? projectMap.get(d.projectId) : null;
-                                return (
-                                <TableRow key={d.id}>
-                                    <TableCell>{formatDate(d.date)}</TableCell>
-                                    <TableCell className="font-medium text-white">{d.adAccountNumber}</TableCell>
-                                    <TableCell>{adsPlatformLabels[d.adsPlatform]}</TableCell>
-                                    <TableCell className="text-xs">
-                                        {project?.isPartnership && project.partnerShares && project.partnerShares.length > 0
-                                            ? project.partnerShares.map(s => partnerMap.get(s.partnerId)).filter(Boolean).join(', ')
-                                            : 'Tôi'}
-                                    </TableCell>
-                                    <TableCell className="font-medium text-white">{d.assetName}</TableCell>
-                                    <TableCell>{d.projectName}</TableCell>
-                                    <TableCell>{formatCurrency(d.usdAmount, 'USD')}</TableCell>
-                                    <TableCell>{d.rate.toLocaleString('vi-VN')}</TableCell>
-                                    <TableCell className="text-primary-400 font-semibold">{formatCurrency(d.vndAmount)}</TableCell>
-                                     <TableCell>
-                                        <span className={`px-2 inline-flex text-xs leading-5 font-semibold rounded-full ${
-                                            d.status === 'running' ? 'bg-green-200 text-green-800' : 
-                                            d.status === 'stopped' ? 'bg-gray-200 text-gray-800' : 'bg-red-200 text-red-800'
-                                        }`}>
-                                            {adAccountStatusLabels[d.status]}
-                                        </span>
-                                    </TableCell>
-                                    {!isReadOnly && (
-                                        <TableCell>
-                                            <div className="flex items-center space-x-3 justify-center">
-                                                <button onClick={() => { setEditingDeposit(d); setIsModalOpen(true); }} className="text-gray-400 hover:text-primary-400"><Edit /></button>
-                                                <button onClick={() => handleDeleteClick(d.id)} className="text-gray-400 hover:text-red-400"><Trash2 /></button>
-                                            </div>
-                                        </TableCell>
-                                    )}
-                                </TableRow>
-                            )})}
-                        </TableBody>
-                    </Table>
-                </CardContent>
-            </Card>
-
-            {!isReadOnly && (
-                 <>
-                    <Modal isOpen={isModalOpen} onClose={() => setIsModalOpen(false)} title={editingDeposit ? 'Sửa giao dịch nạp' : 'Thêm giao dịch nạp'}>
-                        <AdDepositForm
-                            deposit={editingDeposit}
-                            assets={assets}
-                            assetTypes={assetTypes}
-                            projectsForPeriod={projectsForPeriod}
-                            onSave={handleSave}
-                            onCancel={() => { setIsModalOpen(false); setEditingDeposit(undefined); }}
-                            adAccounts={adAccounts}
-                        />
-                    </Modal>
-                    <Modal isOpen={isTransferModalOpen} onClose={() => setIsTransferModalOpen(false)} title="Chuyển tiền giữa các tài khoản Ads">
-                        <AdFundTransferForm 
-                            adAccounts={adAccounts}
-                            onSave={handleSaveTransfer} 
-                            onCancel={() => setIsTransferModalOpen(false)} 
-                        />
-                    </Modal>
-                    <ConfirmationModal
-                        isOpen={isConfirmModalOpen}
-                        onClose={() => setIsConfirmModalOpen(false)}
-                        onConfirm={handleConfirmDelete}
-                        title="Xác nhận xóa giao dịch nạp"
-                        message="Bạn có chắc chắn muốn xóa giao dịch này? Hành động này có thể ảnh hưởng đến cách tính chi phí VND cho các chi phí quảng cáo sau đó."
-                    />
-                </>
-            )}
+                        ))}
+                    </TableBody>
+                </Table>
+            </CardContent>
+        </Card>
+        {!isReadOnly && (
+            <>
+            <Modal isOpen={isModalOpen} onClose={() => setIsModalOpen(false)} title={editingDeposit ? "Sửa giao dịch nạp" : "Thêm giao dịch nạp"}>
+                <AdDepositForm deposit={editingDeposit} onSave={handleSave} onCancel={() => setIsModalOpen(false)} assets={assets} assetTypes={assetTypes} projectsForPeriod={projectsForPeriod} adAccounts={adAccounts} />
+            </Modal>
+            <ConfirmationModal isOpen={!!depositToDelete} onClose={() => setDepositToDelete(null)} onConfirm={handleDelete} title="Xác nhận xóa" message="Bạn có chắc muốn xóa giao dịch nạp tiền này?" />
+            </>
+        )}
         </>
     );
 };
 
+const AdFundTransfersContent = () => {
+    const { adFundTransfers, addAdFundTransfer, deleteAdFundTransfer, currentPeriod, isReadOnly, adAccounts } = useData();
+    const [isModalOpen, setIsModalOpen] = useState(false);
+    const [transferToDelete, setTransferToDelete] = useState<T.AdFundTransfer | null>(null);
+
+    const transfersForPeriod = useMemo(() => adFundTransfers.filter(t => isDateInPeriod(t.date, currentPeriod)).sort((a,b) => new Date(b.date).getTime() - new Date(a.date).getTime()), [adFundTransfers, currentPeriod]);
+
+    const handleSave = (data: Omit<T.AdFundTransfer, 'id' | 'workspaceId'>) => {
+        addAdFundTransfer(data);
+        setIsModalOpen(false);
+    };
+    
+    const handleDelete = () => {
+        if(transferToDelete) {
+            deleteAdFundTransfer(transferToDelete.id);
+            setTransferToDelete(null);
+        }
+    };
+
+    return (
+        <>
+        <Header title="">
+            {!isReadOnly && <Button onClick={() => setIsModalOpen(true)}><span className="flex items-center gap-2"><ArrowRightLeft /> Chuyển tiền</span></Button>}
+        </Header>
+        <Card>
+            <CardContent>
+                <Table>
+                    <TableHead>
+                        <TableRow>
+                            <TableHeader>Ngày</TableHeader>
+                            <TableHeader>Từ tài khoản</TableHeader>
+                            <TableHeader>Đến tài khoản</TableHeader>
+                            <TableHeader>Số tiền (USD)</TableHeader>
+                            <TableHeader>Mô tả</TableHeader>
+                            {!isReadOnly && <TableHeader>Hành động</TableHeader>}
+                        </TableRow>
+                    </TableHead>
+                    <TableBody>
+                        {transfersForPeriod.map(t => (
+                            <TableRow key={t.id}>
+                                <TableCell>{formatDate(t.date)}</TableCell>
+                                <TableCell className="font-medium text-white">{t.fromAdAccountNumber}</TableCell>
+                                <TableCell className="font-medium text-white">{t.toAdAccountNumber}</TableCell>
+                                <TableCell className="font-semibold text-yellow-400">{formatCurrency(t.amount, 'USD')}</TableCell>
+                                <TableCell>{t.description || '—'}</TableCell>
+                                {!isReadOnly && (
+                                    <TableCell>
+                                         <button onClick={() => setTransferToDelete(t)} className="text-gray-400 hover:text-red-400"><Trash2 /></button>
+                                    </TableCell>
+                                )}
+                            </TableRow>
+                        ))}
+                    </TableBody>
+                </Table>
+            </CardContent>
+        </Card>
+        {!isReadOnly && (
+            <>
+            <Modal isOpen={isModalOpen} onClose={() => setIsModalOpen(false)} title="Chuyển tiền giữa các TK Ads">
+                <AdFundTransferForm onSave={handleSave} onCancel={() => setIsModalOpen(false)} adAccounts={adAccounts}/>
+            </Modal>
+            <ConfirmationModal isOpen={!!transferToDelete} onClose={() => setTransferToDelete(null)} onConfirm={handleDelete} title="Xác nhận xóa" message="Bạn có chắc muốn xóa giao dịch chuyển tiền này?" />
+            </>
+        )}
+        </>
+    );
+}
+
 export default function DailyAdCosts() {
-    const [activeTab, setActiveTab] = useState<'costs' | 'deposits'>('costs');
+    const [activeTab, setActiveTab] = useState<'costs' | 'deposits' | 'transfers'>('costs');
     
     return (
         <div>
+            <Header title="Chi phí & Ngân sách Ads" />
             <div className="flex flex-wrap border-b border-gray-700 mb-6" role="tablist">
-                 <TabButton active={activeTab === 'costs'} onClick={() => setActiveTab('costs')}>
-                    Chi phí Ads
+                <TabButton active={activeTab === 'costs'} onClick={() => setActiveTab('costs')}>
+                    Chi phí Ads hàng ngày
                 </TabButton>
                 <TabButton active={activeTab === 'deposits'} onClick={() => setActiveTab('deposits')}>
                     Nạp tiền Ads
                 </TabButton>
+                <TabButton active={activeTab === 'transfers'} onClick={() => setActiveTab('transfers')}>
+                    Chuyển tiền Ads
+                </TabButton>
             </div>
-             <div>
-                {activeTab === 'costs' && <AdCostsContent />}
-                {activeTab === 'deposits' && <AdDepositsContent />}
-            </div>
+            
+            {activeTab === 'costs' && <AdCostsContent />}
+            {activeTab === 'deposits' && <AdDepositsContent />}
+            {activeTab === 'transfers' && <AdFundTransfersContent />}
         </div>
-    )
+    );
 }

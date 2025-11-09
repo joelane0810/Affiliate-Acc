@@ -4,7 +4,7 @@ import type { MiscellaneousExpense, Asset, Project, Partner, PartnerShare } from
 import * as T from '../types';
 import { Header } from '../components/Header';
 import { Button } from '../components/ui/Button';
-import { Card, CardContent } from '../components/ui/Card';
+import { Card, CardContent, CardHeader } from '../components/ui/Card';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '../components/ui/Table';
 import { Modal } from '../components/ui/Modal';
 import { Input, Label } from '../components/ui/Input';
@@ -273,7 +273,7 @@ const ExpenseForm: React.FC<{
 export default function MiscellaneousExpenses() {
     const { 
         miscellaneousExpenses, addMiscellaneousExpense, updateMiscellaneousExpense, deleteMiscellaneousExpense, 
-        assets, projects, partners, addPartner, currentPeriod, isReadOnly 
+        assets, projects, partners, addPartner, currentPeriod, isReadOnly, partnerNameMap
     } = useData();
     const [isModalOpen, setIsModalOpen] = useState(false);
     const [editingExpense, setEditingExpense] = useState<MiscellaneousExpense | undefined>(undefined);
@@ -281,7 +281,6 @@ export default function MiscellaneousExpenses() {
 
     const projectsForPeriod = useMemo(() => projects.filter(p => p.period === currentPeriod), [projects, currentPeriod]);
     const projectMap = useMemo(() => new Map(projects.map(p => [p.id, p])), [projects]);
-    const partnerMap = useMemo(() => new Map(partners.map(p => [p.id, p.name])), [partners]);
     const assetMap = useMemo(() => new Map(assets.map(a => [a.id, { name: a.name, currency: a.currency }])), [assets]);
     
     const enrichedExpenses = useMemo(() => {
@@ -342,9 +341,9 @@ export default function MiscellaneousExpenses() {
                                 let ownershipDisplay = 'Tôi';
                                 const project = e.projectId ? projectMap.get(e.projectId) : null;
                                 if (project?.isPartnership && project.partnerShares && project.partnerShares.length > 0) {
-                                    ownershipDisplay = project.partnerShares.map(s => partnerMap.get(s.partnerId)).filter(Boolean).join(', ');
+                                    ownershipDisplay = project.partnerShares.map(s => partnerNameMap.get(s.partnerId)).filter(Boolean).join(', ');
                                 } else if (!project && e.isPartnership && e.partnerShares && e.partnerShares.length > 0) {
-                                    ownershipDisplay = e.partnerShares.map(s => partnerMap.get(s.partnerId)).filter(Boolean).join(', ');
+                                    ownershipDisplay = e.partnerShares.map(s => partnerNameMap.get(s.partnerId)).filter(Boolean).join(', ');
                                 }
                                 return (
                                 <TableRow key={e.id}>

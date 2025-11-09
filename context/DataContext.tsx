@@ -6,7 +6,7 @@ import { isDateInPeriod, formatCurrency } from '../lib/utils';
 import { initializeFirebase, auth, onAuthStateChanged, User } from '../lib/firebase';
 import { 
     collection, getDocs, addDoc, updateDoc, deleteDoc, doc, 
-    query, where, writeBatch, Firestore, setDoc, getDoc
+    query, where, writeBatch, Firestore, setDoc, getDoc, or
 } from 'firebase/firestore';
 
 
@@ -209,13 +209,13 @@ interface DataContextType {
   user: User | null;
   authIsLoading: boolean;
   permissionError: string | null;
-  sharerName: string | null;
   // FIX: Add missing properties for toast and notifications
   toast: Notification | null;
   clearToast: () => void;
   notifications: Notification[];
   unreadCount: number;
   markNotificationsAsRead: () => void;
+  partnerNameMap: Map<string, string>;
 }
 
 const DataContext = createContext<DataContextType | undefined>(undefined);
@@ -445,7 +445,6 @@ export const DataProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
   const [user, setUser] = useState<User | null>(null);
   const [authIsLoading, setAuthIsLoading] = useState(true);
   const [permissionError, setPermissionError] = useState<string | null>(null);
-  const [sharerName, setSharerName] = useState<string | null>(null);
   const [toast, setToast] = useState<T.Notification | null>(null);
   const [notifications, setNotifications] = useState<T.Notification[]>([]);
   
@@ -496,13 +495,10 @@ export const DataProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
   
   useEffect(() => {
     if (!firestoreDb || authIsLoading) {
-        // Don't do anything if DB is not ready or auth state is not resolved
         return;
     }
     
     if (!user) {
-        // Auth is resolved but no user is logged in.
-        // The app will show an empty state which directs to settings.
         setIsLoading(false);
         return;
     }
@@ -510,145 +506,147 @@ export const DataProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
     const fetchAllData = async () => {
         setIsLoading(true);
         setPermissionError(null);
-        setSharerName(null);
 
-        let effectiveUid = user.uid;
-        let ownerNameForDisplay: string | null = null;
-
-        // Check if the logged-in user is a partner in someone else's workspace
         try {
-            if (user.email) {
-                const partnerQuery = query(collection(firestoreDb, 'partners'), where("loginEmail", "==", user.email));
-                const partnerSnapshot = await getDocs(partnerQuery);
-                if (!partnerSnapshot.empty) {
-                    const partnerData = partnerSnapshot.docs[0].data() as T.Partner;
-                    effectiveUid = partnerData.ownerUid;
-                    ownerNameForDisplay = partnerData.ownerName;
-                    setSharerName(ownerNameForDisplay);
-                }
+            // Step 1: Fetch all partners to determine relationships.
+            const allPartnersSnapshot = await getDocs(collection(firestoreDb, 'partners'));
+            const allPartners = allPartnersSnapshot.docs.map(doc => ({ ...doc.data() as Omit<T.Partner, 'id'>, id: doc.id }));
+            
+            // Self-healing for 'default-me' partner record.
+            const mePartnerRef = doc(firestoreDb, 'partners', 'default-me');
+            const mePartnerSnap = await getDoc(mePartnerRef);
+            const myCurrentName = mePartnerSnap.exists() ? mePartnerSnap.data().name : 'Tôi';
+            
+            if (!mePartnerSnap.exists() || mePartnerSnap.data().ownerUid !== user.uid) {
+                await setDoc(mePartnerRef, { 
+                    name: myCurrentName, 
+                    ownerUid: user.uid,
+                    ownerName: myCurrentName // Owner of 'me' is 'me'
+                }, { merge: true });
             }
-        } catch (e) {
-            console.error("Could not perform partner check, assuming primary user.", e);
-        }
-
-        const workspaceIds = [effectiveUid, 'shared'];
-
-        const fetchWorkspaceCollection = async <T,>(collectionName: string, setter: React.Dispatch<React.SetStateAction<T[]>>) => {
-            const q = query(collection(firestoreDb, collectionName), where("workspaceId", "in", workspaceIds));
-            const dataSnapshot = await getDocs(q);
-            const dataList = dataSnapshot.docs.map(doc => ({ ...doc.data(), id: doc.id })) as T[];
-            setter(dataList);
-        };
-
-        const fetchGlobalCollection = async <T,>(collectionName: string, setter: React.Dispatch<React.SetStateAction<T[]>>) => {
-            let q;
-            if (collectionName === 'partners') {
-                const isOwner = user.uid === effectiveUid;
-
-                // If the user is the owner, ensure their default "me" partner record exists and is correct.
-                // This acts as a self-healing mechanism for new accounts or older data structures.
-                if (isOwner) {
-                    const mePartnerRef = doc(firestoreDb, 'partners', 'default-me');
-                    const mePartnerSnap = await getDoc(mePartnerRef);
-                    const currentMeName = mePartnerSnap.exists() ? mePartnerSnap.data().name : 'Tôi';
-                    
-                    if (!mePartnerSnap.exists() || mePartnerSnap.data().ownerUid !== user.uid) {
-                        await setDoc(mePartnerRef, {
-                            name: currentMeName,
-                            ownerUid: user.uid,
-                            ownerName: currentMeName, // For partners they create, the owner is 'me'
-                        }, { merge: true });
-                    }
+            
+            // Step 2: Establish trusted workspaces based on mutual partnership.
+            const myPartnerEntries = allPartners.filter(p => p.ownerUid === user.uid);
+            const myPartnerEmails = new Set(myPartnerEntries.map(p => p.loginEmail).filter(Boolean));
+            
+            const partnerEntriesForMe = allPartners.filter(p => p.loginEmail === user.email);
+            
+            const trustedWorkspaceIds = new Set<string>();
+            partnerEntriesForMe.forEach(partnerEntry => {
+                const partnerOwner = allPartners.find(p => p.ownerUid === partnerEntry.ownerUid && p.id === 'default-me');
+                if (partnerOwner && partnerOwner.loginEmail && myPartnerEmails.has(partnerOwner.loginEmail)) {
+                    trustedWorkspaceIds.add(partnerEntry.ownerUid);
                 }
-                
-                // This query will now correctly fetch all partners created by the workspace owner,
-                // including the 'default-me' partner which is now guaranteed to have the correct ownerUid.
-                q = query(collection(firestoreDb, 'partners'), where("ownerUid", "==", effectiveUid));
+            });
 
-            } else {
-                // This is for collections that are not workspace-specific, like asset types.
-                q = collection(firestoreDb, collectionName);
-            }
+            const workspaceIdsToFetch = [user.uid, ...Array.from(trustedWorkspaceIds)];
+// FIX: Changed arrow functions to regular function declarations to avoid potential parser issues with generics.
+            // Step 3: Fetch data from all relevant workspaces.
+            async function fetchDataFromWorkspaces<T extends {workspaceId: string}>(collectionName: string): Promise<T[]> {
+                if(workspaceIdsToFetch.length === 0) return [];
+                const q = query(collection(firestoreDb, collectionName), where("workspaceId", "in", workspaceIdsToFetch));
+                const snapshot = await getDocs(q);
+                return snapshot.docs.map(doc => ({ ...doc.data() as T, id: doc.id }));
+            };
 
-            const dataSnapshot = await getDocs(q);
-            const dataList = dataSnapshot.docs.map(doc => ({ ...doc.data(), id: doc.id })) as T[];
-            setter(dataList);
-        };
-        
-        const fetchSettings = async () => {
-            const taxDocRef = doc(firestoreDb, 'workspaces', effectiveUid, 'settings', 'tax');
-            const taxDocSnap = await getDoc(taxDocRef);
-            if (taxDocSnap.exists()) {
-                setTaxSettings(taxDocSnap.data() as T.TaxSettings);
-            } else {
-                console.log("No tax settings found for this workspace.");
-                setTaxSettings(defaultTaxSettings);
-                 if (effectiveUid === user.uid) { // Only create settings if owner
-                    await setDoc(taxDocRef, defaultTaxSettings);
-                }
-            }
+            async function fetchGlobalCollection<T>(collectionName: string): Promise<T[]> {
+                const snapshot = await getDocs(collection(firestoreDb, collectionName));
+                return snapshot.docs.map(doc => ({ ...doc.data() as T, id: doc.id }));
+            };
+            
+            // Step 4: Fetch settings for the current user.
+            async function fetchSettings() {
+                const taxDocRef = doc(firestoreDb, 'settings', 'tax');
+                const taxDocSnap = await getDoc(taxDocRef);
+                if (taxDocSnap.exists()) setTaxSettings(taxDocSnap.data() as T.TaxSettings);
+                else await setDoc(taxDocRef, defaultTaxSettings);
 
-            const periodsDocRef = doc(firestoreDb, 'workspaces', effectiveUid, 'settings', 'periods');
-            const periodsDocSnap = await getDoc(periodsDocRef);
-            if (periodsDocSnap.exists()) {
-                const data = periodsDocSnap.data();
-                setActivePeriod(data.activePeriod as string || null);
-                setClosedPeriods(data.closedPeriods as T.ClosedPeriod[] || []);
-            } else {
-                 console.log("No period settings found for this workspace.");
-                setActivePeriod(null);
-                setClosedPeriods([]);
-                if (effectiveUid === user.uid) { // Only create settings if owner
+                const periodsDocRef = doc(firestoreDb, 'settings', 'periods');
+                const periodsDocSnap = await getDoc(periodsDocRef);
+                if (periodsDocSnap.exists()) {
+                    const data = periodsDocSnap.data();
+                    setActivePeriod(data.activePeriod || null);
+                    setClosedPeriods(data.closedPeriods || []);
+                } else {
                     await setDoc(periodsDocRef, { activePeriod: null, closedPeriods: [] });
                 }
-            }
-        };
-
-        try {
-            await Promise.all([
-                fetchSettings(),
-                // Workspace collections
-                fetchWorkspaceCollection<T.Project>('projects', setProjects),
-                fetchWorkspaceCollection<T.AdAccount>('adAccounts', setAdAccounts),
-                fetchWorkspaceCollection<T.DailyAdCost>('dailyAdCosts', setDailyAdCosts),
-                fetchWorkspaceCollection<T.Commission>('commissions', setCommissions),
-                fetchWorkspaceCollection<T.ExchangeLog>('exchangeLogs', setExchangeLogs),
-                fetchWorkspaceCollection<T.MiscellaneousExpense>('miscellaneousExpenses', setMiscellaneousExpenses),
-                fetchWorkspaceCollection<T.AdDeposit>('adDeposits', setAdDeposits),
-                fetchWorkspaceCollection<T.AdFundTransfer>('adFundTransfers', setAdFundTransfers),
-                fetchWorkspaceCollection<T.Liability>('liabilities', setLiabilities),
-                fetchWorkspaceCollection<T.Receivable>('receivables', setReceivables),
-                fetchWorkspaceCollection<T.ReceivablePayment>('receivablePayments', setReceivablePayments),
-                fetchWorkspaceCollection<T.Withdrawal>('withdrawals', setWithdrawals),
-                fetchWorkspaceCollection<T.DebtPayment>('debtPayments', setDebtPayments),
-                fetchWorkspaceCollection<T.TaxPayment>('taxPayments', setTaxPayments),
-                fetchWorkspaceCollection<T.CapitalInflow>('capitalInflows', setCapitalInflows),
-                fetchWorkspaceCollection<T.Category>('categories', setCategories),
-                fetchWorkspaceCollection<T.Niche>('niches', setNiches),
-                fetchWorkspaceCollection<T.Saving>('savings', setSavings),
-                fetchWorkspaceCollection<T.Investment>('investments', setInvestments),
-                fetchWorkspaceCollection<T.PartnerLedgerEntry>('partnerLedger', setPartnerLedgerEntries),
-                fetchWorkspaceCollection<T.PeriodLiability>('periodLiabilities', setPeriodLiabilities),
-                fetchWorkspaceCollection<T.PeriodDebtPayment>('periodDebtPayments', setPeriodDebtPayments),
-                fetchWorkspaceCollection<T.PeriodReceivable>('periodReceivables', setPeriodReceivables),
-                fetchWorkspaceCollection<T.PeriodReceivablePayment>('periodReceivablePayments', setPeriodReceivablePayments),
-                // Global/Owner-scoped collections
-                fetchGlobalCollection<T.Partner>('partners', setPartners),
-                fetchGlobalCollection<T.Asset>('assets', setAssets),
-                fetchGlobalCollection<T.AssetType>('assetTypes', setAssetTypes),
+            };
+            
+            await fetchSettings();
+            
+            const [
+                fetchedProjects, fetchedAdAccounts, fetchedDailyAdCosts, fetchedCommissions,
+                fetchedExchangeLogs, fetchedMiscExpenses, fetchedAdDeposits, fetchedAdFundTransfers,
+                fetchedLiabilities, fetchedReceivables, fetchedReceivablePayments, fetchedWithdrawals,
+                fetchedDebtPayments, fetchedTaxPayments, fetchedCapitalInflows, fetchedCategories,
+                fetchedNiches, fetchedSavings, fetchedInvestments, fetchedPartnerLedger,
+                fetchedPeriodLiabilities, fetchedPeriodDebtPayments, fetchedPeriodReceivables, fetchedPeriodReceivablePayments,
+                fetchedAssets, fetchedAssetTypes
+            ] = await Promise.all([
+                fetchDataFromWorkspaces<T.Project>('projects'),
+                fetchDataFromWorkspaces<T.AdAccount>('adAccounts'),
+                fetchDataFromWorkspaces<T.DailyAdCost>('dailyAdCosts'),
+                fetchDataFromWorkspaces<T.Commission>('commissions'),
+                fetchDataFromWorkspaces<T.ExchangeLog>('exchangeLogs'),
+                fetchDataFromWorkspaces<T.MiscellaneousExpense>('miscellaneousExpenses'),
+                fetchDataFromWorkspaces<T.AdDeposit>('adDeposits'),
+                fetchDataFromWorkspaces<T.AdFundTransfer>('adFundTransfers'),
+                fetchDataFromWorkspaces<T.Liability>('liabilities'),
+                fetchDataFromWorkspaces<T.Receivable>('receivables'),
+                fetchDataFromWorkspaces<T.ReceivablePayment>('receivablePayments'),
+                fetchDataFromWorkspaces<T.Withdrawal>('withdrawals'),
+                fetchDataFromWorkspaces<T.DebtPayment>('debtPayments'),
+                fetchDataFromWorkspaces<T.TaxPayment>('taxPayments'),
+                fetchDataFromWorkspaces<T.CapitalInflow>('capitalInflows'),
+                fetchDataFromWorkspaces<T.Category>('categories'),
+                fetchDataFromWorkspaces<T.Niche>('niches'),
+                fetchDataFromWorkspaces<T.Saving>('savings'),
+                fetchDataFromWorkspaces<T.Investment>('investments'),
+                fetchDataFromWorkspaces<T.PartnerLedgerEntry>('partnerLedger'),
+                fetchDataFromWorkspaces<T.PeriodLiability>('periodLiabilities'),
+                fetchDataFromWorkspaces<T.PeriodDebtPayment>('periodDebtPayments'),
+                fetchDataFromWorkspaces<T.PeriodReceivable>('periodReceivables'),
+                fetchDataFromWorkspaces<T.PeriodReceivablePayment>('periodReceivablePayments'),
+                fetchGlobalCollection<T.Asset>('assets'),
+                fetchGlobalCollection<T.AssetType>('assetTypes'),
             ]);
-            console.log("All data fetched successfully for effective user UID:", effectiveUid);
+
+            // Set all state
+            setPartners(allPartners);
+            setProjects(fetchedProjects);
+            setAdAccounts(fetchedAdAccounts);
+            setDailyAdCosts(fetchedDailyAdCosts);
+            setCommissions(fetchedCommissions);
+            setExchangeLogs(fetchedExchangeLogs);
+            setMiscellaneousExpenses(fetchedMiscExpenses);
+            setAdDeposits(fetchedAdDeposits);
+            setAdFundTransfers(fetchedAdFundTransfers);
+            setLiabilities(fetchedLiabilities);
+            setReceivables(fetchedReceivables);
+            setReceivablePayments(fetchedReceivablePayments);
+            setWithdrawals(fetchedWithdrawals);
+            setDebtPayments(fetchedDebtPayments);
+            setTaxPayments(fetchedTaxPayments);
+            setCapitalInflows(fetchedCapitalInflows);
+            setCategories(fetchedCategories);
+            setNiches(fetchedNiches);
+            setSavings(fetchedSavings);
+            setInvestments(fetchedInvestments);
+            setPartnerLedgerEntries(fetchedPartnerLedger);
+            setPeriodLiabilities(fetchedPeriodLiabilities);
+            setPeriodDebtPayments(fetchedPeriodDebtPayments);
+            setPeriodReceivables(fetchedPeriodReceivables);
+            setPeriodReceivablePayments(fetchedPeriodReceivablePayments);
+            setAssets(fetchedAssets);
+            setAssetTypes(fetchedAssetTypes);
+
+            console.log("All data fetched successfully for user:", user.uid, "from workspaces:", workspaceIdsToFetch);
         } catch (error: any) {
             console.error("Error during data fetch:", error);
-            const errorMessage = error.message ? error.message.toLowerCase() : '';
-            if (error.code === 'permission-denied' || errorMessage.includes('permission') || errorMessage.includes('insufficient permissions')) {
-                setPermissionError(
-                    "Lỗi quyền truy cập dữ liệu (permission-denied). " +
-                    "Đây là lỗi phổ biến liên quan đến cài đặt Security Rules trên Firebase. " +
-                    "Vui lòng làm theo hướng dẫn để khắc phục."
-                );
+            if (error.code === 'permission-denied') {
+                setPermissionError("Lỗi quyền truy cập dữ liệu. Vui lòng làm theo hướng dẫn trong trang 'Hướng dẫn' để khắc phục.");
             } else {
-                alert("Đã xảy ra lỗi khi tải dữ liệu từ Firebase. Vui lòng kiểm tra lại kết nối và cấu hình.");
+                alert("Đã xảy ra lỗi khi tải dữ liệu từ Firebase.");
             }
         } finally {
             setIsLoading(false);
@@ -657,6 +655,41 @@ export const DataProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
 
     fetchAllData();
   }, [firestoreDb, user, authIsLoading]);
+
+  const partnerNameMap = useMemo(() => {
+    const map = new Map<string, string>();
+    if (!user || partners.length === 0) return map;
+
+    const myPartnerEntries = partners.filter(p => p.ownerUid === user.uid);
+    const myPartnerEmailMap = new Map(myPartnerEntries.map(p => [p.loginEmail, p.name]));
+
+    partners.forEach(p => {
+        // A partner entry representing me, created by someone else
+        if (p.loginEmail === user.email) {
+            map.set(p.id, "Tôi");
+        } 
+        // My own 'default-me' record
+        else if (p.id === 'default-me' && p.ownerUid === user.uid) {
+            map.set(p.id, "Tôi");
+        }
+        // A 'default-me' record from another workspace (i.e., the owner of a shared item)
+        else if (p.id === 'default-me') {
+            const ownerAsPartner = partners.find(op => op.ownerUid === p.ownerUid && op.id === 'default-me');
+            if (ownerAsPartner && ownerAsPartner.loginEmail) {
+                const localName = myPartnerEmailMap.get(ownerAsPartner.loginEmail);
+                map.set(p.id, localName || p.ownerName || 'Đối tác không xác định');
+            } else {
+                 map.set(p.id, p.ownerName || 'Đối tác không xác định');
+            }
+        }
+        // A regular partner entry
+        else {
+            map.set(p.id, p.name);
+        }
+    });
+
+    return map;
+  }, [partners, user]);
 
   const seedData = async () => {
     if (!firestoreDb) return;
@@ -679,8 +712,7 @@ export const DataProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
     if (projects.some((p: T.Project) => p.name.trim().toLowerCase() === project.name.trim().toLowerCase() && p.period === activePeriod)) {
       alert('Tên dự án đã tồn tại trong kỳ này. Vui lòng chọn tên khác.'); return;
     }
-    const workspaceId = project.isPartnership ? 'shared' : user.uid;
-    const newProjectData = { ...project, period: activePeriod, workspaceId };
+    const newProjectData = { ...project, period: activePeriod, workspaceId: user.uid };
     try {
         const docRef = await addDoc(collection(firestoreDb, 'projects'), newProjectData);
         setProjects(prev => [...prev, { ...newProjectData, id: docRef.id }]);
@@ -1088,14 +1120,9 @@ export const DataProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
   
   const addMiscellaneousExpense = async (expense: Omit<T.MiscellaneousExpense, 'id' | 'workspaceId'>) => {
     if (!firestoreDb || !user) return;
-    let workspaceId = user.uid;
     const project = expense.projectId ? projects.find(p => p.id === expense.projectId) : null;
     
-    if (project?.isPartnership) {
-        workspaceId = 'shared';
-    } else if (expense.isPartnership) {
-        workspaceId = 'shared';
-    }
+    const workspaceId = project ? project.workspaceId : user.uid;
 
     const newExpenseData = { ...expense, workspaceId };
     try {
@@ -1146,12 +1173,13 @@ export const DataProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
     } catch (e) { console.error("Error deleting miscellaneous expense: ", e); }
   };
   
-  const addPartner = async (partnerData: Partial<Omit<T.Partner, 'id' | 'ownerUid' | 'ownerName'>>) => {
+ const addPartner = async (partnerData: Partial<Omit<T.Partner, 'id' | 'ownerUid' | 'ownerName'>>) => {
     if (!firestoreDb || !user) return;
-
-    const mePartner = partners.find(p => p.id === 'default-me' && p.ownerUid === user.uid) || { name: 'Tôi' };
-    const ownerName = mePartner.name;
     
+    // Get the current user's actual name from their 'default-me' record.
+    const mePartner = partners.find(p => p.id === 'default-me' && p.ownerUid === user.uid);
+    const ownerName = mePartner ? mePartner.name : 'Tôi'; // Fallback to 'Tôi'
+
     const newPartnerData: Omit<T.Partner, 'id'> = {
         name: partnerData.name || '',
         loginEmail: partnerData.loginEmail || '',
@@ -1165,24 +1193,49 @@ export const DataProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
     } catch (e) {
         console.error("Error adding partner: ", e);
     }
-  };
-  const updatePartner = async (updatedPartner: T.Partner) => {
-        if (!firestoreDb || !user) return;
-        const mePartner = partners.find(p => p.id === 'default-me' && p.ownerUid === user.uid) || { name: 'Tôi' };
-        const ownerName = mePartner.name;
+};
 
-        const { id, ...partnerData } = updatedPartner;
-        const dataToSave = {
-            ...partnerData,
-            ownerUid: user.uid,
-            ownerName: ownerName
-        };
+const updatePartner = async (updatedPartner: T.Partner) => {
+    if (!firestoreDb || !user) return;
 
-        try {
-            await updateDoc(doc(firestoreDb, 'partners', id), dataToSave);
-            setPartners(prev => prev.map(p => p.id === id ? { id, ...dataToSave } as T.Partner : p));
-        } catch (e) { console.error("Error updating partner: ", e); }
-    };
+    const { id, ...partnerData } = updatedPartner;
+    const dataToSave = { ...partnerData };
+
+    try {
+        const partnerRef = doc(firestoreDb, 'partners', id);
+        await updateDoc(partnerRef, dataToSave);
+
+        // If the user is updating their own name ('default-me'),
+        // propagate this new name to the `ownerName` field of all other partners they own.
+        if (id === 'default-me') {
+            const batch = writeBatch(firestoreDb);
+            const userPartners = partners.filter(p => p.ownerUid === user.uid && p.id !== 'default-me');
+            userPartners.forEach(p => {
+                const partnerDocRef = doc(firestoreDb, 'partners', p.id);
+                batch.update(partnerDocRef, { ownerName: dataToSave.name });
+            });
+            await batch.commit();
+        }
+
+        // Optimistically update local state for a responsive UI
+        setPartners(prev => {
+            const updatedPartners = prev.map(p => {
+                if (p.id === id) {
+                    return { ...p, ...dataToSave };
+                }
+                if (p.ownerUid === user.uid && id === 'default-me') {
+                    return { ...p, ownerName: dataToSave.name };
+                }
+                return p;
+            });
+            return updatedPartners;
+        });
+
+    } catch (e) {
+        console.error("Error updating partner: ", e);
+    }
+};
+
   const deletePartner = async (id: string) => {
         if (!firestoreDb) return;
         if (id === 'default-me') { alert("Không thể xóa đối tác mặc định 'Tôi'."); return; }
@@ -1515,7 +1568,13 @@ export const DataProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
 
 
   const currentPeriod = viewingPeriod || activePeriod;
-  const isReadOnly = !!viewingPeriod || sharerName !== null;
+  const isReadOnly = useMemo(() => {
+      if (viewingPeriod) return true;
+      // In the new model, we check write access on a per-item basis.
+      // This global flag can be simplified or used for UI hints.
+      // For now, if the user is viewing their own workspace, they have write access.
+      return false; 
+  }, [viewingPeriod, user]);
 
   const enrichedAssets = useMemo(() => {
     const assetMap = new Map<string, T.Asset>(assets.map(a => [a.id, a]));
@@ -2728,7 +2787,7 @@ export const DataProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
   const updateTaxSettings = async (settings: T.TaxSettings) => {
     if (!firestoreDb || !user) return;
     try {
-        await setDoc(doc(firestoreDb, 'workspaces', user.uid, 'settings', 'tax'), settings);
+        await setDoc(doc(firestoreDb, 'settings', 'tax'), settings);
         setTaxSettings(settings);
     } catch (e) {
         console.error("Error updating tax settings: ", e);
@@ -2738,7 +2797,7 @@ export const DataProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
   const openPeriod = async (period: string) => {
     if (!firestoreDb || !user) return;
     try {
-        await setDoc(doc(firestoreDb, 'workspaces', user.uid, 'settings', 'periods'), { activePeriod: period, closedPeriods });
+        await setDoc(doc(firestoreDb, 'settings', 'periods'), { activePeriod: period, closedPeriods });
         setActivePeriod(period);
     } catch (e) {
         console.error("Error opening period: ", e);
@@ -2749,7 +2808,7 @@ export const DataProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
       if (!firestoreDb || period !== activePeriod || !user) return;
       try {
           const newClosedPeriods = [...closedPeriods, { period, closedAt: new Date().toISOString() }];
-          await setDoc(doc(firestoreDb, 'workspaces', user.uid, 'settings', 'periods'), { activePeriod: null, closedPeriods: newClosedPeriods });
+          await setDoc(doc(firestoreDb, 'settings', 'periods'), { activePeriod: null, closedPeriods: newClosedPeriods });
           setActivePeriod(null);
           setClosedPeriods(newClosedPeriods);
       } catch (e) {
@@ -2814,12 +2873,12 @@ export const DataProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
     user,
     authIsLoading,
     permissionError,
-    sharerName,
     toast,
     clearToast,
     notifications,
     unreadCount,
     markNotificationsAsRead,
+    partnerNameMap,
   };
 
   return <DataContext.Provider value={value}>{children}</DataContext.Provider>;

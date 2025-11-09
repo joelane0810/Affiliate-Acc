@@ -165,23 +165,10 @@ const ViewingModeIndicator = () => {
     );
 };
 
-const SharerIndicator = () => {
-    const { sharerName } = useData();
-    if (!sharerName) return null;
-
-    return (
-        <div className="fixed top-4 left-1/2 -translate-x-1/2 bg-purple-900/80 backdrop-blur-sm border border-purple-700 text-white text-sm rounded-lg shadow-lg z-50 p-2 px-4">
-            <p>
-                Được chia sẻ bởi: <span className="font-bold">{sharerName}</span>
-            </p>
-        </div>
-    );
-};
-
 const MainAppLayout = () => {
   const [isSidebarExpanded, setIsSidebarExpanded] = useState(true);
   const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false);
-  const { isLoading, activePeriod, viewingPeriod, currentPage, setCurrentPage, closedPeriods } = useData();
+  const { isLoading, activePeriod, viewingPeriod, currentPage, setCurrentPage, closedPeriods, isReadOnly } = useData();
   
   if (isLoading) {
     return <LoadingSpinner />;
@@ -208,7 +195,7 @@ const MainAppLayout = () => {
   }
 
   return (
-    <div className="relative min-h-screen md:flex bg-gray-900 text-gray-200">
+    <div className={`relative min-h-screen md:flex bg-gray-900 text-gray-200 ${isReadOnly ? 'is-readonly' : ''}`}>
       {isMobileMenuOpen && (
         <div 
           className="fixed inset-0 bg-black/60 z-30 md:hidden"
@@ -218,7 +205,6 @@ const MainAppLayout = () => {
       )}
       
       <ViewingModeIndicator />
-      <SharerIndicator />
       <Sidebar 
         isExpanded={isSidebarExpanded}
         setIsExpanded={setIsSidebarExpanded}
