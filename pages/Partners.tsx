@@ -163,7 +163,7 @@ export default function Partners() {
     const [ledgerEntryToDelete, setLedgerEntryToDelete] = useState<PartnerLedgerEntry | null>(null);
     
     const incomingPendingRequests = useMemo(() => {
-        if (!user) return [];
+        if (!user || !Array.isArray(partnerRequests)) return [];
         return partnerRequests.filter(req => req.recipientEmail === user.email && req.status === 'pending');
     }, [partnerRequests, user]);
 
