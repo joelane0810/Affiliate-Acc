@@ -1,4 +1,22 @@
-export type Page = 'Dashboard' | 'Projects' | 'DailyAdCosts' | 'Commissions' | 'ExchangeLog' | 'MiscellaneousExpenses' | 'CapitalSources' | 'Partners' | 'AdAccounts' | 'SavingsAndInvestments' | 'Assets' | 'Tax' | 'Reports' | 'LongReport' | 'Settings' | 'DebtsReceivables' | 'Guide';
+// Fix: Define the Page type to resolve the circular dependency.
+export type Page =
+  | 'Dashboard'
+  | 'Projects'
+  | 'DailyAdCosts'
+  | 'Commissions'
+  | 'ExchangeLog'
+  | 'MiscellaneousExpenses'
+  | 'CapitalSources'
+  | 'Partners'
+  | 'AdAccounts'
+  | 'SavingsAndInvestments'
+  | 'Assets'
+  | 'Tax'
+  | 'Reports'
+  | 'LongReport'
+  | 'Settings'
+  | 'DebtsReceivables'
+  | 'Guide';
 
 export type AdsPlatform = 'google' | 'youtube' | 'tiktok' | 'facebook' | 'other';
 export type ProjectType = 'test' | 'deployment';
@@ -145,6 +163,18 @@ export interface Partner {
     loginEmail?: string;
     ownerUid: string;
     ownerName: string;
+    isSelf?: boolean;
+    status?: 'unlinked' | 'pending' | 'linked';
+}
+
+export interface PartnerRequest {
+    id: string;
+    senderUid: string;
+    senderName: string;
+    senderEmail: string;
+    recipientEmail: string;
+    status: 'pending' | 'accepted' | 'declined';
+    createdAt: string; // ISO date string
 }
 
 export interface Withdrawal {

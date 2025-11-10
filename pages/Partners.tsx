@@ -1,6 +1,6 @@
 import React, { useState, useMemo } from 'react';
 import { useData } from '../context/DataContext';
-import type { Partner, PartnerLedgerEntry } from '../types';
+import type { Partner, PartnerLedgerEntry, PartnerRequest } from '../types';
 import { Header } from '../components/Header';
 import { Button } from '../components/ui/Button';
 import { Card, CardContent, CardHeader } from '../components/ui/Card';
@@ -8,7 +8,7 @@ import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '.
 import { Modal } from '../components/ui/Modal';
 import { Input, Label } from '../components/ui/Input';
 import { NumberInput } from '../components/ui/NumberInput';
-import { Plus, Edit, Trash2 } from '../components/icons/IconComponents';
+import { Plus, Edit, Trash2, CheckCircle, Info } from '../components/icons/IconComponents';
 import { formatCurrency, formatDate } from '../lib/utils';
 import { ConfirmationModal } from '../components/ui/ConfirmationModal';
 
@@ -112,6 +112,36 @@ const LedgerEntryForm: React.FC<{
     );
 };
 
+const PartnerRequests: React.FC<{
+    incomingRequests: PartnerRequest[];
+    onAccept: (request: PartnerRequest) => void;
+    onDecline: (request: PartnerRequest) => void;
+}> = ({ incomingRequests, onAccept, onDecline }) => {
+    if (incomingRequests.length === 0) return null;
+
+    return (
+        <Card className="mb-8 border-primary-500/50">
+            <CardHeader>Yêu cầu kết nối đang chờ</CardHeader>
+            <CardContent>
+                <div className="space-y-3">
+                    {incomingRequests.map(req => (
+                        <div key={req.id} className="flex flex-col sm:flex-row items-start sm:items-center justify-between p-3 bg-gray-900/50 rounded-md">
+                            <div>
+                                <p className="font-semibold text-white">{req.senderName}</p>
+                                <p className="text-sm text-gray-400">{req.senderEmail}</p>
+                            </div>
+                            <div className="flex items-center space-x-2 mt-2 sm:mt-0">
+                                <Button size="sm" onClick={() => onAccept(req)}>Chấp nhận</Button>
+                                <Button size="sm" variant="danger" onClick={() => onDecline(req)}>Từ chối</Button>
+                            </div>
+                        </div>
+                    ))}
+                </div>
+            </CardContent>
+        </Card>
+    );
+};
+
 
 export default function Partners() {
     const {
@@ -120,6 +150,7 @@ export default function Partners() {
         addPartnerLedgerEntry, deletePartnerLedgerEntry,
         partnerAssetBalances,
         user,
+        partnerRequests, sendPartnerRequest, acceptPartnerRequest, declinePartnerRequest
     } = useData();
     
     const [isPartnerModalOpen, setIsPartnerModalOpen] = useState(false);
@@ -129,11 +160,17 @@ export default function Partners() {
     const [isLedgerModalOpen, setIsLedgerModalOpen] = useState(false);
     const [ledgerPartnerId, setLedgerPartnerId] = useState<string>('');
     const [ledgerEntryToDelete, setLedgerEntryToDelete] = useState<PartnerLedgerEntry | null>(null);
+    
+    const incomingPendingRequests = useMemo(() => {
+        if (!user) return [];
+        return partnerRequests.filter(req => req.recipientEmail === user.email && req.status === 'pending');
+    }, [partnerRequests, user]);
 
     const myPartners = useMemo(() => {
         if (!user) return [];
-        // Filter to show only the user's own 'self' record and the partners they have added.
-        return enrichedPartners.filter(p => p.ownerUid === user.uid);
+        return enrichedPartners
+            .filter(p => p.ownerUid === user.uid)
+            .sort((a, b) => (a.isSelf ? -1 : b.isSelf ? 1 : a.name.localeCompare(b.name)));
     }, [enrichedPartners, user]);
     
     // Partner handlers
@@ -168,12 +205,34 @@ export default function Partners() {
         [...allPartnerLedgerEntries].sort((a,b) => {
              const dateComparison = new Date(b.date).getTime() - new Date(a.date).getTime();
              if (dateComparison !== 0) return dateComparison;
-             // If dates are the same, sort by ID to maintain a stable order
              return b.id.localeCompare(a.id);
         }),
     [allPartnerLedgerEntries]);
     
     const partnerMap = useMemo(() => new Map(enrichedPartners.map(p => [p.id, p.name])), [enrichedPartners]);
+
+    const renderPartnerStatusButton = (partner: Partner) => {
+        if (partner.isSelf || partner.status === 'linked') {
+            return (
+                <div className="flex items-center justify-center gap-2 text-green-400 font-semibold text-sm py-1 px-3 bg-green-900/50 rounded-md">
+                    <CheckCircle width={16} height={16} />
+                    <span>Đã kết nối</span>
+                </div>
+            );
+        }
+        if (partner.status === 'pending') {
+            return <Button size="sm" variant="secondary" className="w-full" disabled>Đã gửi yêu cầu</Button>;
+        }
+        if (partner.loginEmail) {
+            return <Button size="sm" variant="secondary" className="w-full" onClick={() => sendPartnerRequest(partner)}>Gửi yêu cầu kết nối</Button>;
+        }
+        return (
+            <div className="flex items-center justify-center gap-2 text-yellow-400 font-semibold text-xs py-1 px-3 bg-yellow-900/50 rounded-md">
+                <Info width={14} height={14} />
+                <span>Chưa liên kết</span>
+            </div>
+        );
+    };
 
     return (
         <div>
@@ -184,6 +243,12 @@ export default function Partners() {
                     </Button>
                 )}
             </Header>
+
+            <PartnerRequests 
+                incomingRequests={incomingPendingRequests}
+                onAccept={acceptPartnerRequest}
+                onDecline={declinePartnerRequest}
+            />
 
             <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6 mb-8">
                 {myPartners.map(partner => {
@@ -228,12 +293,8 @@ export default function Partners() {
                                 </div>
                             )}
                         </CardContent>
-                         <div className="p-4 pt-0">
-                            {!isReadOnly && (
-                                <Button size="sm" variant="secondary" className="w-full" onClick={() => { setLedgerPartnerId(partner.id); setIsLedgerModalOpen(true); }}>
-                                    <span className="flex items-center gap-2"><Plus /> Ghi sổ thủ công</span>
-                                </Button>
-                            )}
+                         <div className="p-4 pt-2 border-t border-gray-700">
+                            {renderPartnerStatusButton(partner)}
                         </div>
                     </Card>
                 )})}
