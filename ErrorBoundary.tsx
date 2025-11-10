@@ -10,10 +10,11 @@ interface State {
   errorInfo?: ErrorInfo;
 }
 
-// FIX: The ErrorBoundary class was not extending React.Component, which caused errors
-// because `this.props`, `this.state`, and `this.setState` were not available.
-// Extending Component makes it a valid React class component.
 class ErrorBoundary extends Component<Props, State> {
+  public state: State;
+
+  // Fix: Initialize state within a constructor to ensure the component context (`this`) is correctly established.
+  // This resolves type errors where `this.props` and `this.setState` might not be found on the class instance.
   constructor(props: Props) {
     super(props);
     this.state = {
@@ -23,9 +24,9 @@ class ErrorBoundary extends Component<Props, State> {
     };
   }
 
-  static getDerivedStateFromError(error: Error): State {
+  static getDerivedStateFromError(error: Error): Partial<State> {
     // Cập nhật state để lần render tiếp theo sẽ hiển thị UI dự phòng.
-    return { hasError: true, error: error, errorInfo: undefined };
+    return { hasError: true, error: error };
   }
 
   componentDidCatch(error: Error, errorInfo: ErrorInfo) {
