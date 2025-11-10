@@ -1,4 +1,4 @@
-import React, { ErrorInfo, ReactNode } from 'react';
+import React, { Component, ErrorInfo, ReactNode } from 'react';
 
 interface Props {
   children: ReactNode;
@@ -10,10 +10,10 @@ interface State {
   errorInfo?: ErrorInfo;
 }
 
-class ErrorBoundary extends React.Component<Props, State> {
-  // Fix: Initialize state as a class property instead of in the constructor.
-  // This resolves the errors related to 'this.state' and 'this.props' not being found.
-  state: State = {
+class ErrorBoundary extends Component<Props, State> {
+  // Fix: Initialize state as a class property instead of using a constructor.
+  // This resolves multiple errors where 'this.state' and 'this.props' were not recognized.
+  public state: State = {
     hasError: false,
     error: undefined,
     errorInfo: undefined,

@@ -167,7 +167,9 @@ export default function Partners() {
     }, [partnerRequests, user]);
 
     const myPartners = useMemo(() => {
-        if (!user || !enrichedPartners) return [];
+        if (!user || !enrichedPartners) {
+            return [];
+        }
         return enrichedPartners
             .filter(p => p.ownerUid === user.uid)
             .sort((a, b) => (a.isSelf ? -1 : b.isSelf ? 1 : a.name.localeCompare(b.name)));
