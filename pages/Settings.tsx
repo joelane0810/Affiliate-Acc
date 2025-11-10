@@ -89,8 +89,7 @@ const ConnectionCard: React.FC = () => {
 
             // 3. Success: Save config to localStorage. The session is now persisted for the [DEFAULT] app.
             setFirebaseConfig(parsedConfig as FirebaseConfig);
-            alert('Kết nối và đăng nhập thành công! Ứng dụng sẽ được tải lại.');
-            window.location.reload();
+            // The component will re-render automatically, no need to alert or reload.
 
         } catch (err) {
             let errorMessage = 'Đã xảy ra lỗi không xác định. Vui lòng kiểm tra lại cấu hình Firebase và thông tin đăng nhập.';
@@ -133,7 +132,7 @@ const ConnectionCard: React.FC = () => {
         }
         setFirebaseConfig(null);
         setIsLogoutConfirmOpen(false);
-        window.location.reload();
+        // The component will re-render automatically to the login screen.
     };
 
     if (authIsLoading) {
