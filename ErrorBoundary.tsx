@@ -11,14 +11,15 @@ interface State {
 }
 
 class ErrorBoundary extends Component<Props, State> {
-  // Fix: Initialize state as a class property instead of using a constructor.
-  // This resolves multiple errors where 'this.state' and 'this.props' were not recognized.
+  // Fix: Initialize state as a class property instead of in the constructor.
+  // This resolves errors where `this.state`, `this.props`, and `this.setState` were not found.
   public state: State = {
     hasError: false,
     error: undefined,
     errorInfo: undefined,
   };
 
+  // Fix: The return type should be Partial<State> to correctly match React's lifecycle method signature.
   static getDerivedStateFromError(error: Error): Partial<State> {
     // Cập nhật state để lần render tiếp theo sẽ hiển thị UI dự phòng.
     return { hasError: true, error };

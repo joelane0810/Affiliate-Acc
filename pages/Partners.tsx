@@ -167,7 +167,7 @@ export default function Partners() {
     }, [partnerRequests, user]);
 
     const myPartners = useMemo(() => {
-        if (!user || !enrichedPartners) {
+        if (!user || !enrichedPartners || !Array.isArray(enrichedPartners)) {
             return [];
         }
         return enrichedPartners
