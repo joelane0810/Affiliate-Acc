@@ -210,7 +210,7 @@ interface DataContextType {
   allPartnerLedgerEntries: T.PartnerLedgerEntry[];
   addPartnerLedgerEntry: (entry: Omit<T.PartnerLedgerEntry, 'id' | 'workspaceId'>) => Promise<void>;
   updatePartnerLedgerEntry: (entry: T.PartnerLedgerEntry) => Promise<void>;
-  deletePartnerLedgerEntry: (id: string) => Promise<void>;
+  deletePartnerLedgerEntry: (entry: T.PartnerLedgerEntry) => Promise<void>;
   partnerAssetBalances: Map<string, { assetId: string, assetName: string, balance: number, currency: 'VND' | 'USD' }[]>;
   user: User | null;
   authIsLoading: boolean;
@@ -1608,11 +1608,11 @@ const updatePartner = async (updatedPartner: T.Partner) => {
       setPartnerLedgerEntries(prev => prev.map(e => e.id === id ? entry : e));
     } catch(e) { console.error("Error updating partner ledger entry:", e); }
   };
-  const deletePartnerLedgerEntry = async (id: string) => {
+  const deletePartnerLedgerEntry = async (entry: T.PartnerLedgerEntry) => {
     if(!firestoreDb) return;
     try {
-      await deleteDoc(doc(firestoreDb, 'partnerLedger', id));
-      setPartnerLedgerEntries(prev => prev.filter(e => e.id !== id));
+      await deleteDoc(doc(firestoreDb, 'partnerLedger', entry.id));
+      setPartnerLedgerEntries(prev => prev.filter(e => e.id !== entry.id));
     } catch(e) { console.error("Error deleting partner ledger entry:", e); }
   };
 
@@ -1893,7 +1893,10 @@ const updatePartner = async (updatedPartner: T.Partner) => {
 
 
   const enrichedPartners = useMemo<EnrichedPartner[]>(() => {
-    const ledger = allPartnerLedgerEntries || [];
+    if (!Array.isArray(partners) || !Array.isArray(allPartnerLedgerEntries)) {
+        return [];
+    }
+    const ledger = allPartnerLedgerEntries;
     return partners.map(p => {
         const inflows = ledger.filter(e => e.partnerId === p.id && e.type === 'inflow').reduce((sum, e) => sum + e.amount, 0);
         const outflows = ledger.filter(e => e.partnerId === p.id && e.type === 'outflow').reduce((sum, e) => sum + e.amount, 0);

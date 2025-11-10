@@ -145,6 +145,7 @@ const PartnerRequests: React.FC<{
 
 export default function Partners() {
     const {
+        isLoading,
         enrichedPartners, allPartnerLedgerEntries, isReadOnly,
         addPartner, updatePartner, deletePartner,
         addPartnerLedgerEntry, deletePartnerLedgerEntry,
@@ -167,13 +168,13 @@ export default function Partners() {
     }, [partnerRequests, user]);
 
     const myPartners = useMemo(() => {
-        if (!user || !enrichedPartners || !Array.isArray(enrichedPartners)) {
+        if (isLoading || !user || !Array.isArray(enrichedPartners)) {
             return [];
         }
         return enrichedPartners
             .filter(p => p.ownerUid === user.uid)
             .sort((a, b) => (a.isSelf ? -1 : b.isSelf ? 1 : a.name.localeCompare(b.name)));
-    }, [enrichedPartners, user]);
+    }, [isLoading, enrichedPartners, user]);
     
     // Partner handlers
     const handleSavePartner = (partnerData: Partial<Omit<Partner, 'id' | 'ownerUid' | 'ownerName'>> | Partner) => {
@@ -198,20 +199,28 @@ export default function Partners() {
     };
     const handleDeleteLedgerEntry = () => {
         if (ledgerEntryToDelete) {
-            deletePartnerLedgerEntry(ledgerEntryToDelete.id);
+            deletePartnerLedgerEntry(ledgerEntryToDelete);
             setLedgerEntryToDelete(null);
         }
     };
 
-    const partnerLedger = useMemo(() => 
-        [...allPartnerLedgerEntries].sort((a,b) => {
+    const partnerLedger = useMemo(() => {
+        if (!Array.isArray(allPartnerLedgerEntries)) {
+            return [];
+        }
+        return [...allPartnerLedgerEntries].sort((a,b) => {
              const dateComparison = new Date(b.date).getTime() - new Date(a.date).getTime();
              if (dateComparison !== 0) return dateComparison;
              return b.id.localeCompare(a.id);
-        }),
-    [allPartnerLedgerEntries]);
+        });
+    }, [allPartnerLedgerEntries]);
     
-    const partnerMap = useMemo(() => new Map(enrichedPartners.map(p => [p.id, p.name])), [enrichedPartners]);
+    const partnerMap = useMemo(() => {
+        if (!Array.isArray(enrichedPartners)) {
+            return new Map();
+        }
+        return new Map(enrichedPartners.map(p => [p.id, p.name]));
+    }, [enrichedPartners]);
 
     const renderPartnerStatusButton = (partner: Partner) => {
         if (partner.isSelf || partner.status === 'linked') {
