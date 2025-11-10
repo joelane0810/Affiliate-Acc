@@ -1893,9 +1893,10 @@ const updatePartner = async (updatedPartner: T.Partner) => {
 
 
   const enrichedPartners = useMemo<EnrichedPartner[]>(() => {
+    const ledger = allPartnerLedgerEntries || [];
     return partners.map(p => {
-        const inflows = allPartnerLedgerEntries.filter(e => e.partnerId === p.id && e.type === 'inflow').reduce((sum, e) => sum + e.amount, 0);
-        const outflows = allPartnerLedgerEntries.filter(e => e.partnerId === p.id && e.type === 'outflow').reduce((sum, e) => sum + e.amount, 0);
+        const inflows = ledger.filter(e => e.partnerId === p.id && e.type === 'inflow').reduce((sum, e) => sum + e.amount, 0);
+        const outflows = ledger.filter(e => e.partnerId === p.id && e.type === 'outflow').reduce((sum, e) => sum + e.amount, 0);
         return {
             ...p,
             totalInflow: inflows,
