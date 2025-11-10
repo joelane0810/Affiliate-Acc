@@ -11,27 +11,28 @@ interface State {
 }
 
 class ErrorBoundary extends React.Component<Props, State> {
-  // FIX: Use class property initialization for state. This resolves all
-  // TypeScript errors related to 'state', 'setState', and 'props' not being
-  // found on the component instance. This also fixes the props issue in index.tsx
-  // by ensuring the component is correctly typed.
-  public state: State = {
+  // Fix: Initialize state as a class property instead of in the constructor.
+  // This resolves the errors related to 'this.state' and 'this.props' not being found.
+  state: State = {
     hasError: false,
     error: undefined,
     errorInfo: undefined,
   };
 
-  static getDerivedStateFromError(error: Error): State {
+  static getDerivedStateFromError(error: Error): Partial<State> {
+    // Cập nhật state để lần render tiếp theo sẽ hiển thị UI dự phòng.
     return { hasError: true, error };
   }
 
   componentDidCatch(error: Error, errorInfo: ErrorInfo) {
+    // Bạn cũng có thể ghi lại lỗi vào một dịch vụ báo cáo lỗi
     console.error("Uncaught error:", error, errorInfo);
     this.setState({ errorInfo });
   }
 
   render() {
     if (this.state.hasError) {
+      // Bạn có thể render bất kỳ UI dự phòng tùy chỉnh nào
       return (
         <div className="flex items-center justify-center h-screen bg-gray-900 text-gray-200 p-8">
           <div className="max-w-2xl w-full text-center bg-gray-800 p-8 rounded-lg border border-red-500 shadow-2xl">
