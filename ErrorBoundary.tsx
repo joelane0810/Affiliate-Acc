@@ -13,8 +13,6 @@ interface State {
 class ErrorBoundary extends Component<Props, State> {
   public state: State;
 
-  // Fix: Initialize state within a constructor to ensure the component context (`this`) is correctly established.
-  // This resolves type errors where `this.props` and `this.setState` might not be found on the class instance.
   constructor(props: Props) {
     super(props);
     this.state = {

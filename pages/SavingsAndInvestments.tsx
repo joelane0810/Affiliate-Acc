@@ -31,7 +31,8 @@ const TabButton: React.FC<{ active: boolean; onClick: () => void; children: Reac
 // --- Savings Components ---
 const SavingForm: React.FC<{
     saving?: T.Saving;
-    onSave: (saving: Omit<T.Saving, 'id'> | T.Saving) => void;
+    // FIX: Corrected onSave prop type to allow objects without workspaceId for new entries.
+    onSave: (saving: Omit<T.Saving, 'id' | 'workspaceId'> | T.Saving) => void;
     onCancel: () => void;
     assets: T.Asset[];
 }> = ({ saving, onSave, onCancel, assets }) => {
@@ -46,13 +47,19 @@ const SavingForm: React.FC<{
     const selectedAsset = useMemo(() => assets.find(a => a.id === assetId), [assets, assetId]);
     const currency = selectedAsset?.currency || 'VND';
 
+    // FIX: Adjusted handleSubmit to create the correct object for new vs. edited savings.
     const handleSubmit = (e: React.FormEvent) => {
         e.preventDefault();
         if (!assetId) {
             alert('Vui lòng chọn tài sản nguồn.');
             return;
         }
-        onSave({ id: saving?.id || '', description, assetId, principalAmount, startDate, endDate, interestRate, status, currency });
+        const data = { description, assetId, principalAmount, startDate, endDate, interestRate, status, currency };
+        if (saving) {
+            onSave({ ...saving, ...data });
+        } else {
+            onSave(data);
+        }
     };
 
     const selectClassName = "w-full px-3 py-2 bg-gray-900 border border-gray-600 rounded-md focus:outline-none focus:ring-2 focus:ring-primary-500";
@@ -111,13 +118,15 @@ const SavingsContent = () => {
     
     const assetMap = useMemo(() => new Map(assets.map(a => [a.id, a.name])), [assets]);
 
-    const handleSave = (savingData: Omit<T.Saving, 'id'> | T.Saving) => {
+    // FIX: Updated handler to match new prop signature and correctly call context functions.
+    const handleSave = (savingData: Omit<T.Saving, 'id' | 'workspaceId'> | T.Saving) => {
         if ('id' in savingData && savingData.id) {
             updateSaving(savingData as T.Saving);
         } else {
-            addSaving(savingData as Omit<T.Saving, 'id'>);
+            addSaving(savingData as Omit<T.Saving, 'id' | 'workspaceId'>);
         }
         setIsModalOpen(false);
+        setEditingSaving(undefined);
     };
 
     const handleDelete = () => {

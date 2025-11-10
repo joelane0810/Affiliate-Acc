@@ -284,13 +284,24 @@ const wipeAllFirestoreData = async (db: Firestore) => {
 };
 
 
-const seedInitialData = async (db: Firestore, userId: string) => {
+const seedInitialData = async (db: Firestore, user: User) => {
     const batch = writeBatch(db);
     const today = new Date();
     const todayStr = today.toISOString().split('T')[0];
     const currentPeriod = today.toISOString().slice(0, 7);
 
     console.log("Seeding data for period:", currentPeriod, "and date:", todayStr);
+
+    // 0. Create the 'self' partner record for the current user.
+    const myName = user.displayName || 'Tôi';
+    const selfPartnerRef = doc(db, 'partners', user.uid);
+    batch.set(selfPartnerRef, {
+        name: myName,
+        ownerUid: user.uid,
+        ownerName: myName,
+        loginEmail: user.email,
+        isSelf: true
+    });
 
     // 1. Settings
     batch.set(doc(db, 'settings', 'tax'), defaultTaxSettings);
@@ -312,8 +323,7 @@ const seedInitialData = async (db: Firestore, userId: string) => {
     const vcbAssetRef = doc(collection(db, 'assets'));
     batch.set(vcbAssetRef, { name: 'Vietcombank', typeId: 'bank', balance: 0, currency: 'VND', ownershipType: 'personal' });
     const clickbankAssetRef = doc(collection(db, 'assets'));
-    // FIX: Use the dynamic userId instead of hardcoded 'default-me'.
-    batch.set(clickbankAssetRef, { name: 'ClickBank', typeId: 'platform', balance: 0, currency: 'USD', ownershipType: 'shared', sharedWith: [{ partnerId: userId, permission: 'full' }] });
+    batch.set(clickbankAssetRef, { name: 'ClickBank', typeId: 'platform', balance: 0, currency: 'USD', ownershipType: 'shared', sharedWith: [{ partnerId: user.uid, permission: 'full' }] });
 
     // 5. Projects
     const project1Ref = doc(collection(db, 'projects'));
@@ -332,7 +342,7 @@ const seedInitialData = async (db: Firestore, userId: string) => {
     // 6. Capital Inflow
     batch.set(doc(collection(db, 'capitalInflows')), {
         date: todayStr, assetId: vcbAssetRef.id, amount: 50000000, description: 'Vốn góp ban đầu',
-        contributedByPartnerId: userId, // FIX: Use dynamic userId
+        contributedByPartnerId: user.uid,
     });
 
     // 7. Ad Account
@@ -395,7 +405,7 @@ const seedInitialData = async (db: Firestore, userId: string) => {
     // 17. Withdrawal
     batch.set(doc(collection(db, 'withdrawals')), {
         date: todayStr, assetId: vcbAssetRef.id, amount: 2000000, vndAmount: 2000000,
-        withdrawnBy: userId, description: 'Rút tiền cá nhân' // FIX: Use dynamic userId
+        withdrawnBy: user.uid, description: 'Rút tiền cá nhân'
     });
 
     await batch.commit();
@@ -755,7 +765,7 @@ export const DataProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
     setIsLoading(true);
     try {
         await wipeAllFirestoreData(firestoreDb); // Ensure clean state before seeding
-        await seedInitialData(firestoreDb, user.uid);
+        await seedInitialData(firestoreDb, user);
         alert("Đã khôi phục dữ liệu mẫu thành công. Ứng dụng sẽ được tải lại.");
         window.location.reload();
     } catch (error) {
@@ -1717,8 +1727,33 @@ const updatePartner = async (updatedPartner: T.Partner) => {
       // ... (dependencies are unchanged) ...
   ]);
 
+  // FIX: Added implementation for enrichedDailyAdCosts to resolve the error.
   const enrichedDailyAdCosts = useMemo<EnrichedDailyAdCost[]>(() => {
-    // ... (rest of the function is unchanged) ...
+    const depositsByAccount = adDeposits.reduce((acc, deposit) => {
+        if (!acc[deposit.adAccountNumber]) {
+            acc[deposit.adAccountNumber] = [];
+        }
+        acc[deposit.adAccountNumber].push(deposit);
+        return acc;
+    }, {} as Record<string, T.AdDeposit[]>);
+
+    for (const accountNumber in depositsByAccount) {
+        depositsByAccount[accountNumber].sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime());
+    }
+
+    return dailyAdCosts.map(cost => {
+        const relevantDeposits = depositsByAccount[cost.adAccountNumber] || [];
+        const relevantDeposit = relevantDeposits.find(d => new Date(d.date) <= new Date(cost.date));
+        
+        const effectiveRate = relevantDeposit ? relevantDeposit.rate : 0;
+        const vndCost = cost.amount * effectiveRate;
+
+        return {
+            ...cost,
+            vndCost,
+            effectiveRate,
+        };
+    });
 }, [dailyAdCosts, adDeposits]);
   
   const { enrichedAdAccounts, adAccountTransactions, partnerAdAccountBalances } = useMemo(() => {
@@ -1846,8 +1881,22 @@ const updatePartner = async (updatedPartner: T.Partner) => {
     };
 }, [adAccounts, adDeposits, dailyAdCosts, adFundTransfers, assets, projects, user]);
 
+  // FIX: Added implementation for masterProjects to resolve the error.
   const masterProjects = useMemo<MasterProject[]>(() => {
-    // ... (rest of the function is unchanged) ...
+    const uniqueProjects = new Map<string, MasterProject>();
+    for (let i = projects.length - 1; i >= 0; i--) {
+        const project = projects[i];
+        const key = project.name.trim().toLowerCase();
+        if (!uniqueProjects.has(key)) {
+            uniqueProjects.set(key, {
+                name: project.name,
+                categoryId: project.categoryId,
+                nicheId: project.nicheId,
+                affiliateUrls: project.affiliateUrls,
+            });
+        }
+    }
+    return Array.from(uniqueProjects.values());
   }, [projects]);
   
     const calculatePeriodFinancials = (

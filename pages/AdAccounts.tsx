@@ -27,7 +27,8 @@ const adAccountStatusLabels: Record<T.AdAccount['status'], string> = {
 
 const AdAccountForm: React.FC<{
     account?: T.AdAccount;
-    onSave: (account: (Omit<T.AdAccount, 'id'> | T.AdAccount) | Omit<T.AdAccount, 'id'>[]) => void;
+    // FIX: Corrected the onSave prop type to expect objects without workspaceId for new entries.
+    onSave: (account: (Omit<T.AdAccount, 'id' | 'workspaceId'> | T.AdAccount) | Omit<T.AdAccount, 'id' | 'workspaceId'>[]) => void;
     onCancel: () => void;
 }> = ({ account, onSave, onCancel }) => {
     const [accountNumber, setAccountNumber] = useState(account?.accountNumber || '');
@@ -61,7 +62,13 @@ const AdAccountForm: React.FC<{
                 alert("Vui lòng nhập số tài khoản.");
                 return;
             }
-            onSave({ ...account, id: account?.id || '', accountNumber, adsPlatform, status });
+            // FIX: Pass the correct object structure for new vs. edited accounts.
+            const dataToSave = { accountNumber, adsPlatform, status };
+            if (account) {
+                onSave({ ...account, ...dataToSave });
+            } else {
+                onSave(dataToSave);
+            }
         }
     };
 
@@ -130,20 +137,17 @@ export default function AdAccounts() {
     const [editingAccount, setEditingAccount] = useState<T.AdAccount | undefined>(undefined);
     const [accountToDelete, setAccountToDelete] = useState<T.AdAccount | null>(null);
 
-    const handleSaveAccount = (accountOrAccounts: (Omit<T.AdAccount, 'id'> | T.AdAccount) | Omit<T.AdAccount, 'id'>[]) => {
+    // FIX: Updated handler to match new prop signature and correctly call context functions.
+    const handleSaveAccount = (accountOrAccounts: (Omit<T.AdAccount, 'id' | 'workspaceId'> | T.AdAccount) | Omit<T.AdAccount, 'id' | 'workspaceId'>[]) => {
         if (Array.isArray(accountOrAccounts)) {
-            accountOrAccounts.forEach(acc => {
-                addAdAccount(acc);
-            });
+            addAdAccount(accountOrAccounts);
+        } else if ('id' in accountOrAccounts && accountOrAccounts.id) {
+            updateAdAccount(accountOrAccounts as T.AdAccount);
         } else {
-            const account = accountOrAccounts;
-            if ('id' in account && account.id) {
-                updateAdAccount(account as T.AdAccount);
-            } else {
-                addAdAccount(account as Omit<T.AdAccount, 'id'>);
-            }
+            addAdAccount(accountOrAccounts as Omit<T.AdAccount, 'id' | 'workspaceId'>);
         }
         setIsModalOpen(false);
+        setEditingAccount(undefined);
     };
 
     const handleDeleteClick = (account: T.AdAccount) => {

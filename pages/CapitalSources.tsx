@@ -302,7 +302,8 @@ const ReceivablePaymentModal: React.FC<{
     receivable: EnrichedReceivable;
     assets: Asset[];
     onClose: () => void;
-    onSave: (payment: Omit<ReceivablePayment, 'id'>) => void;
+    // FIX: Changed onSave prop type to omit workspaceId, as it's added by the context.
+    onSave: (payment: Omit<ReceivablePayment, 'id' | 'workspaceId'>) => void;
 }> = ({ receivable, assets, onClose, onSave }) => {
     const { currentPeriod } = useData();
     const [amount, setAmount] = useState(receivable.remainingAmount);
@@ -416,7 +417,7 @@ export default function CapitalSources() {
     };
     const handleDeleteReceivableClick = (receivable: Receivable) => { setReceivableToDelete(receivable); };
     const handleConfirmDeleteReceivable = () => { if (receivableToDelete) { deleteReceivable(receivableToDelete.id); setReceivableToDelete(null); } };
-    const handleSaveReceivablePayment = (payment: Omit<ReceivablePayment, 'id'>) => {
+    const handleSaveReceivablePayment = (payment: Omit<ReceivablePayment, 'id' | 'workspaceId'>) => {
         addReceivablePayment(payment);
         const receivable = receivables.find(r => r.id === payment.receivableId);
         if (receivable) {
