@@ -215,18 +215,8 @@ const ConnectionCard: React.FC = () => {
     );
 };
 
-const COLLECTION_NAMES = [
-    'projects', 'dailyAdCosts', 'adDeposits', 'adFundTransfers', 'commissions', 
-    'assetTypes', 'assets', 'liabilities', 'receivables', 'receivablePayments', 
-    'exchangeLogs', 'miscellaneousExpenses', 'partners', 'withdrawals', 
-    'debtPayments', 'taxPayments', 'capitalInflows', 'categories', 'niches',
-    'adAccounts', 
-    'periodLiabilities', 'periodReceivables', 'periodDebtPayments', 'periodReceivablePayments'
-];
-
-
 export default function Settings() {
-    const { taxSettings, updateTaxSettings, seedData, setCurrentPage } = useData();
+    const { taxSettings, updateTaxSettings, seedData, setCurrentPage, deleteAllData } = useData();
     const fileInputRef = useRef<HTMLInputElement>(null);
     const [isConfirmDeleteOpen, setIsConfirmDeleteOpen] = useState(false);
     const [isConfirmImportOpen, setIsConfirmImportOpen] = useState(false);
@@ -253,6 +243,16 @@ export default function Settings() {
             alert("Kết nối Firebase không khả dụng.");
             return;
         }
+
+        const COLLECTION_NAMES = [
+            'projects', 'dailyAdCosts', 'adDeposits', 'adFundTransfers', 'commissions', 
+            'assetTypes', 'assets', 'liabilities', 'receivables', 'receivablePayments', 
+            'exchangeLogs', 'miscellaneousExpenses', 'partners', 'withdrawals', 
+            'debtPayments', 'taxPayments', 'capitalInflows', 'categories', 'niches',
+            'adAccounts', 'savings', 'investments', 'partnerLedger',
+            'periodLiabilities', 'periodDebtPayments', 'periodReceivables', 'periodReceivablePayments',
+            'partnerRequests'
+        ];
 
         const backupData: { [key: string]: any } = {};
         
@@ -303,46 +303,11 @@ export default function Settings() {
         event.target.value = '';
     };
 
-    const wipeAllFirestoreData = async () => {
-        if (!db) {
-            alert("Kết nối Firebase không khả dụng.");
-            throw new Error("DB not connected");
-        }
-        
-        for (const collectionName of COLLECTION_NAMES) {
-            const snapshot = await getDocs(collection(db, collectionName));
-            if(snapshot.empty) continue;
-            
-            const batches = [];
-            let currentBatch = writeBatch(db);
-            let operationCount = 0;
-            
-            snapshot.docs.forEach(doc => {
-                if (collectionName === 'partners' && doc.id === 'default-me') {
-                    return; // Skip deleting the default partner
-                }
-                currentBatch.delete(doc.ref);
-                operationCount++;
-                if (operationCount >= 499) {
-                    batches.push(currentBatch);
-                    currentBatch = writeBatch(db);
-                    operationCount = 0;
-                }
-            });
-            if(operationCount > 0) batches.push(currentBatch);
-            
-            await Promise.all(batches.map(batch => batch.commit()));
-        }
-
-        await deleteDoc(doc(db, 'settings', 'tax')).catch(()=>{});
-        await deleteDoc(doc(db, 'settings', 'periods')).catch(()=>{});
-    };
-
     const handleConfirmDeleteAllData = async () => {
         setIsConfirmDeleteOpen(false);
         setIsDeleting(true);
         try {
-            await wipeAllFirestoreData();
+            await deleteAllData();
             alert("Đã xóa toàn bộ dữ liệu. Ứng dụng sẽ được tải lại.");
             window.location.reload();
         } catch (error) {
@@ -359,13 +324,15 @@ export default function Settings() {
         setIsImporting(true);
 
         try {
-            await wipeAllFirestoreData();
+            await deleteAllData(); // Use the centralized function
 
             const dataToImport = JSON.parse(importData);
             let batch = writeBatch(db);
             let operationCount = 0;
 
-            for (const collectionName of COLLECTION_NAMES) {
+            const ALL_COLLECTIONS = [...Object.keys(dataToImport)].filter(k => k !== 'settings');
+
+            for (const collectionName of ALL_COLLECTIONS) {
                 if (dataToImport[collectionName] && Array.isArray(dataToImport[collectionName])) {
                     for (const docData of dataToImport[collectionName]) {
                         if (docData.id) {

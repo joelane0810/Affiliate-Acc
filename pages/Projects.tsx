@@ -323,10 +323,18 @@ const ProjectForm: React.FC<{ project?: T.Project; onSave: (project: Omit<T.Proj
             </div>
 
             <div className="border-t border-gray-700 pt-4">
-                <button type="button" onClick={() => setIsPartnership(!isPartnership)} className={`flex items-center space-x-2 px-3 py-2 rounded-md transition-colors text-sm font-medium ${isPartnership ? 'bg-primary-600/20 text-primary-300 ring-1 ring-primary-500' : 'text-gray-400 hover:bg-gray-700/50'}`}>
-                    <Users />
-                    <span>Dự án hợp tác</span>
-                </button>
+                <label className="flex items-center space-x-3 cursor-pointer p-2 rounded-md hover:bg-gray-700/50 w-fit">
+                    <input 
+                        type="checkbox" 
+                        checked={isPartnership} 
+                        onChange={e => setIsPartnership(e.target.checked)}
+                        className="h-5 w-5 rounded border-gray-600 bg-gray-900 text-primary-600 focus:ring-primary-500 focus:ring-offset-0"
+                    />
+                    <div className="flex items-center gap-2 text-gray-300">
+                        <Users />
+                        <span className="font-medium">Dự án hợp tác</span>
+                    </div>
+                </label>
             </div>
             
             {isPartnership && (

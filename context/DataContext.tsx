@@ -149,6 +149,7 @@ interface DataContextType {
   setViewingPeriod: (period: string) => void;
   clearViewingPeriod: () => void;
   seedData: () => Promise<void>;
+  deleteAllData: () => Promise<void>;
 
   currentPage: Page;
   setCurrentPage: (page: Page) => void;
@@ -214,10 +215,10 @@ interface DataContextType {
   user: User | null;
   authIsLoading: boolean;
   permissionError: string | null;
-  // FIX: Add missing properties for toast and notifications
   toast: Notification | null;
   clearToast: () => void;
   notifications: Notification[];
+  addNotification: (message: string, type: T.Notification['type']) => void;
   unreadCount: number;
   markNotificationsAsRead: () => void;
   partnerNameMap: Map<string, string>;
@@ -450,7 +451,7 @@ export const DataProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
   
   const clearToast = () => setToast(null);
 
-  const addNotification = (message: string, type: T.Notification['type']) => {
+  const addNotification = useCallback((message: string, type: T.Notification['type']) => {
     const newNotification: T.Notification = {
         id: `${type}-${Date.now()}`,
         timestamp: Date.now(),
@@ -462,7 +463,7 @@ export const DataProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
     if (type === 'partner') {
         setToast(newNotification);
     }
-  };
+  }, []);
 
   const unreadCount = useMemo(() => notifications.filter(n => !n.read).length, [notifications]);
   
@@ -701,7 +702,7 @@ export const DataProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
     } finally {
         setIsLoading(false);
     }
-  }, [firestoreDb, user]);
+  }, [firestoreDb, user, addNotification]);
 
   useEffect(() => {
     if (!firestoreDb || authIsLoading) {
@@ -762,6 +763,13 @@ export const DataProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
         alert("Đã xảy ra lỗi khi khôi phục dữ liệu mẫu.");
         setIsLoading(false);
     }
+  };
+
+  const deleteAllData = async () => {
+    if (!firestoreDb) {
+        throw new Error("DB not connected");
+    }
+    await wipeAllFirestoreData(firestoreDb);
   };
 
 
@@ -2005,7 +2013,7 @@ const updatePartner = async (updatedPartner: T.Partner) => {
     taxPayments, addTaxPayment,
     capitalInflows, addCapitalInflow, updateCapitalInflow, deleteCapitalInflow,
     taxSettings, updateTaxSettings,
-    activePeriod, viewingPeriod, openPeriod, closePeriod, closedPeriods, setViewingPeriod, clearViewingPeriod, seedData,
+    activePeriod, viewingPeriod, openPeriod, closePeriod, closedPeriods, setViewingPeriod, clearViewingPeriod, seedData, deleteAllData,
     currentPage, setCurrentPage,
     currentPeriod, isReadOnly,
     enrichedAssets,
@@ -2036,6 +2044,7 @@ const updatePartner = async (updatedPartner: T.Partner) => {
     toast,
     clearToast,
     notifications,
+    addNotification,
     unreadCount,
     markNotificationsAsRead,
     partnerNameMap,
