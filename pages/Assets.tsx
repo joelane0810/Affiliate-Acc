@@ -112,11 +112,14 @@ const AssetForm: React.FC<{
         let finalSharedWith = ownershipType === 'shared' ? [...sharedWith] : [];
 
         if (ownershipType === 'shared') {
-            const meShareIndex = finalSharedWith.findIndex(s => s.partnerId === 'default-me');
-            if (meShareIndex !== -1) {
-                finalSharedWith[meShareIndex] = { partnerId: 'default-me', permission: 'full' };
-            } else {
-                finalSharedWith.push({ partnerId: 'default-me', permission: 'full' });
+            const selfPartner = partners.find(p => p.isSelf);
+            if (selfPartner) {
+                const meShareIndex = finalSharedWith.findIndex(s => s.partnerId === selfPartner.id);
+                if (meShareIndex !== -1) {
+                    finalSharedWith[meShareIndex] = { partnerId: selfPartner.id, permission: 'full' };
+                } else {
+                    finalSharedWith.push({ partnerId: selfPartner.id, permission: 'full' });
+                }
             }
         }
 
@@ -183,7 +186,7 @@ const AssetForm: React.FC<{
                         <Label>Chia sẻ & Phân quyền</Label>
                         <div className="space-y-2 pt-1 max-h-40 overflow-y-auto bg-gray-900/50 p-3 rounded-md">
                             {partners.map(partner => {
-                                const isMe = partner.id === 'default-me';
+                                const isMe = partner.isSelf;
                                 const isSelected = sharedWith.some(p => p.partnerId === partner.id);
                                 return (
                                 <div key={partner.id} className="flex items-center justify-between p-2 rounded-md hover:bg-gray-800">
@@ -348,29 +351,31 @@ const CapitalInflowForm: React.FC<{
     onSave: (inflow: Omit<CapitalInflow, 'id' | 'workspaceId'>) => void;
     onCancel: () => void;
 }> = ({ inflow, assets, partners, onSave, onCancel }) => {
+    const selfPartner = useMemo(() => partners.find(p => p.isSelf), [partners]);
     const [date, setDate] = useState(inflow?.date || new Date().toISOString().split('T')[0]);
     const [description, setDescription] = useState(inflow?.description || '');
     const [assetId, setAssetId] = useState(inflow?.assetId || assets[0]?.id || '');
     const [amount, setAmount] = useState(inflow?.amount || 0);
     
     const [sourceType, setSourceType] = useState<'me' | 'partner' | 'external'>(() => {
-        if (inflow?.contributedByPartnerId && inflow.contributedByPartnerId !== 'default-me') return 'partner';
+        if (inflow?.contributedByPartnerId && inflow.contributedByPartnerId !== selfPartner?.id) return 'partner';
         if (inflow?.externalInvestorName) return 'external';
         return 'me';
     });
-    const [contributedByPartnerId, setContributedByPartnerId] = useState(inflow?.contributedByPartnerId || 'default-me');
+    const [contributedByPartnerId, setContributedByPartnerId] = useState(inflow?.contributedByPartnerId || selfPartner?.id || '');
     const [externalInvestorName, setExternalInvestorName] = useState(inflow?.externalInvestorName || '');
 
     const selectedAsset = useMemo(() => assets.find(a => a.id === assetId), [assets, assetId]);
     
     useEffect(() => {
         if (sourceType === 'partner') {
-            const firstOtherPartner = partners.find(p => p.id !== 'default-me');
-            if (firstOtherPartner && contributedByPartnerId === 'default-me') {
-                setContributedByPartnerId(firstOtherPartner.id);
+            const firstOtherPartner = partners.find(p => !p.isSelf);
+            // If current selection is self, switch to first other partner
+            if (contributedByPartnerId === selfPartner?.id) {
+                setContributedByPartnerId(firstOtherPartner?.id || '');
             }
         }
-    }, [sourceType, partners, contributedByPartnerId]);
+    }, [sourceType, partners, contributedByPartnerId, selfPartner]);
 
 
     const handleSubmit = (e: React.FormEvent) => {
@@ -385,8 +390,8 @@ const CapitalInflowForm: React.FC<{
     
         if (sourceType === 'partner') {
             newInflow.contributedByPartnerId = contributedByPartnerId;
-        } else if (sourceType === 'me') {
-            newInflow.contributedByPartnerId = 'default-me';
+        } else if (sourceType === 'me' && selfPartner) {
+            newInflow.contributedByPartnerId = selfPartner.id;
         } else if (sourceType === 'external') {
             newInflow.externalInvestorName = externalInvestorName;
         }
@@ -432,7 +437,7 @@ const CapitalInflowForm: React.FC<{
                 <div>
                     <Label htmlFor="inflowPartner">Đối tác góp vốn</Label>
                     <select id="inflowPartner" value={contributedByPartnerId} onChange={e => setContributedByPartnerId(e.target.value)} className={selectClassName} required>
-                        {partners.map(p => <option key={p.id} value={p.id}>{p.name}</option>)}
+                        {partners.filter(p => !p.isSelf).map(p => <option key={p.id} value={p.id}>{p.name}</option>)}
                     </select>
                 </div>
             )}
@@ -479,7 +484,8 @@ const TabButton: React.FC<{ active: boolean; onClick: () => void; children: Reac
     </button>
 );
 
-const BalanceSheetContent = () => {
+// FIX: Renamed 'BalanceSheetContent' to 'Assets' and made it a default export.
+export default function Assets() {
     const { 
         assets, addAsset, updateAsset, deleteAsset,
         assetTypes, addAssetType,
@@ -573,11 +579,13 @@ const BalanceSheetContent = () => {
     const enrichedCapitalInflows = useMemo(() => {
         const assetMap = new Map<string, Asset>(assets.map(a => [a.id, a]));
         const partnerMap = new Map<string, string>(partners.map(p => [p.id, p.name]));
+        const selfPartner = partners.find(p => p.isSelf);
+
         return capitalInflows
             .map(i => {
                 const asset = assetMap.get(i.assetId);
                 let sourceName = 'Tự góp vốn';
-                 if (i.contributedByPartnerId && i.contributedByPartnerId !== 'default-me') {
+                 if (i.contributedByPartnerId && i.contributedByPartnerId !== selfPartner?.id) {
                     sourceName = partnerMap.get(i.contributedByPartnerId) || 'Đối tác không xác định';
                 } else if (i.externalInvestorName) {
                     sourceName = i.externalInvestorName;
@@ -757,101 +765,23 @@ const BalanceSheetContent = () => {
                     <ConfirmationModal isOpen={!!withdrawalToDelete} onClose={() => setWithdrawalToDelete(null)} onConfirm={handleConfirmDeleteWithdrawal} title="Xác nhận xóa giao dịch rút" message={`Bạn có chắc muốn xóa giao dịch rút tiền "${withdrawalToDelete?.description}" không?`} />
                 
                     <Modal isOpen={isCapitalInflowModalOpen} onClose={() => setIsCapitalInflowModalOpen(false)} title={editingCapitalInflow ? 'Sửa Vốn góp/Đầu tư' : 'Thêm Vốn góp/Đầu tư'}>
-                        <CapitalInflowForm inflow={editingCapitalInflow} assets={assets} partners={partners} onSave={handleSaveCapitalInflow} onCancel={() => setIsCapitalInflowModalOpen(false)} />
+                        <CapitalInflowForm
+                            inflow={editingCapitalInflow}
+                            assets={assets}
+                            partners={partners}
+                            onSave={handleSaveCapitalInflow}
+                            onCancel={() => { setIsCapitalInflowModalOpen(false); setEditingCapitalInflow(undefined); }}
+                        />
                     </Modal>
-                    <ConfirmationModal isOpen={!!capitalInflowToDelete} onClose={() => setCapitalInflowToDelete(null)} onConfirm={handleConfirmDeleteCapitalInflow} title="Xác nhận xóa giao dịch" message={`Bạn có chắc muốn xóa giao dịch vốn góp "${capitalInflowToDelete?.description}" không?`} />
+                    <ConfirmationModal
+                        isOpen={!!capitalInflowToDelete}
+                        onClose={() => setCapitalInflowToDelete(null)}
+                        onConfirm={handleConfirmDeleteCapitalInflow}
+                        title="Xác nhận xóa giao dịch"
+                        message={`Bạn có chắc muốn xóa giao dịch vốn góp/đầu tư "${capitalInflowToDelete?.description}" không?`}
+                    />
                 </>
             )}
-        </div>
-    );
-}
-
-const TransactionHistoryContent = () => {
-    const { allTransactions, assets } = useData();
-    const [filters, setFilters] = useState({ assetId: 'all', startDate: '', endDate: '' });
-
-    const filteredTransactions = useMemo(() => {
-        return allTransactions.filter(t => {
-            if (filters.assetId !== 'all' && t.asset.id !== filters.assetId) return false;
-            if (filters.startDate && t.date < filters.startDate) return false;
-            if (filters.endDate && t.date > filters.endDate) return false;
-            return true;
-        });
-    }, [allTransactions, filters]);
-
-    const handleFilterChange = (field: keyof typeof filters, value: string) => {
-        setFilters(prev => ({ ...prev, [field]: value }));
-    };
-
-    return (
-        <Card>
-            <CardHeader>Lịch sử giao dịch</CardHeader>
-            <CardContent>
-                <div className="grid grid-cols-1 sm:grid-cols-3 gap-4 mb-6 p-4 bg-gray-900/50 rounded-lg">
-                    <div>
-                        <Label htmlFor="filter-asset">Tài sản</Label>
-                        <select id="filter-asset" value={filters.assetId} onChange={e => handleFilterChange('assetId', e.target.value)} className="w-full px-3 py-2 bg-gray-900 border border-gray-600 rounded-md focus:outline-none focus:ring-2 focus:ring-primary-500">
-                            <option value="all">Tất cả tài sản</option>
-                            {assets.map(a => <option key={a.id} value={a.id}>{a.name}</option>)}
-                        </select>
-                    </div>
-                    <div>
-                        <Label htmlFor="filter-start-date">Từ ngày</Label>
-                        <Input id="filter-start-date" type="date" value={filters.startDate} onChange={e => handleFilterChange('startDate', e.target.value)} />
-                    </div>
-                    <div>
-                        <Label htmlFor="filter-end-date">Đến ngày</Label>
-                        <Input id="filter-end-date" type="date" value={filters.endDate} onChange={e => handleFilterChange('endDate', e.target.value)} />
-                    </div>
-                </div>
-                <Table>
-                    <TableHead><TableRow>
-                        <TableHeader>Ngày</TableHeader>
-                        <TableHeader>Tài sản</TableHeader>
-                        <TableHeader>Loại</TableHeader>
-                        <TableHeader>Mô tả</TableHeader>
-                        <TableHeader>Người chuyển</TableHeader>
-                        <TableHeader>Người nhận</TableHeader>
-                        <TableHeader>Tiền vào</TableHeader>
-                        <TableHeader>Tiền ra</TableHeader>
-                    </TableRow></TableHead>
-                    <TableBody>
-                        {filteredTransactions.map(t => (
-                            <TableRow key={t.id}>
-                                <TableCell>{formatDate(t.date)}</TableCell>
-                                <TableCell className="font-medium text-white">{t.asset.name}</TableCell>
-                                <TableCell>{t.type}</TableCell>
-                                <TableCell className="text-left">{t.description}</TableCell>
-                                <TableCell>{t.sender || '—'}</TableCell>
-                                <TableCell>{t.receiver || '—'}</TableCell>
-                                <TableCell className="text-green-400 font-semibold">{t.inflow > 0 ? formatCurrency(t.inflow, t.asset.currency) : '—'}</TableCell>
-                                <TableCell className="text-red-400 font-semibold">{t.outflow > 0 ? formatCurrency(t.outflow, t.asset.currency) : '—'}</TableCell>
-                            </TableRow>
-                        ))}
-                    </TableBody>
-                </Table>
-            </CardContent>
-        </Card>
-    );
-};
-
-export default function Assets() {
-    const [activeTab, setActiveTab] = useState('balance');
-    
-    return (
-        <div>
-            <Header title="Tài sản" />
-            <div className="flex flex-wrap border-b border-gray-700 mb-6" role="tablist">
-                <TabButton active={activeTab === 'balance'} onClick={() => setActiveTab('balance')}>
-                    Bảng cân đối
-                </TabButton>
-                <TabButton active={activeTab === 'history'} onClick={() => setActiveTab('history')}>
-                    Lịch sử giao dịch
-                </TabButton>
-            </div>
-            
-            {activeTab === 'balance' && <BalanceSheetContent />}
-            {activeTab === 'history' && <TransactionHistoryContent />}
         </div>
     );
 }

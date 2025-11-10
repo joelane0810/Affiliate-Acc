@@ -119,9 +119,14 @@ const ExpenseForm: React.FC<{
         }
 
         const vndAmount = selectedAsset?.currency === 'USD' ? (amount * 25000) : amount;
-
-        const finalShares = !projectId && isPartnership 
-            ? shares.map(s => s.partnerId === 'default-me' ? { ...s, permission: 'full' as T.PermissionLevel } : s).filter(s => s.sharePercentage > 0)
+        
+        const selfPartner = partners.find(p => p.isSelf);
+        const finalShares = !projectId && isPartnership
+            ? shares.map(s =>
+                s.partnerId === selfPartner?.id
+                    ? { ...s, permission: 'full' as T.PermissionLevel }
+                    : s
+            ).filter(s => s.sharePercentage > 0)
             : undefined;
 
         const dataForSave: Partial<Omit<MiscellaneousExpense, 'id'>> = {
@@ -231,7 +236,7 @@ const ExpenseForm: React.FC<{
                         {shares.map(share => {
                              const partner = partners.find(p => p.id === share.partnerId);
                              if (!partner) return null;
-                             const isMe = share.partnerId === 'default-me';
+                             const isMe = partner.isSelf;
                              return (
                                 <div key={share.partnerId} className="flex items-center gap-2">
                                     <Label htmlFor={`share-${share.partnerId}`} className="w-1/3 mb-0">{partner.name}</Label>
