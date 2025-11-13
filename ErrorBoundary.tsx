@@ -11,15 +11,18 @@ interface State {
 }
 
 class ErrorBoundary extends Component<Props, State> {
-  // Fix: Replaced constructor with a public class field for state initialization.
-  // This is a more modern and robust way to define state in React class components,
-  // and it resolves the TypeScript errors where `this.state` and `this.props` were not
-  // being correctly recognized on the component instance. This fixes all reported errors.
-  public state: State = {
-    hasError: false,
-    error: undefined,
-    errorInfo: undefined,
-  };
+  // Fix: Reverted to using a constructor for state initialization.
+  // The public class field syntax was causing TypeScript errors where `this.props` and `this.setState`
+  // were not being recognized on the component instance, likely due to a build configuration issue.
+  // The constructor is a more universally supported and robust method for initialization.
+  constructor(props: Props) {
+    super(props);
+    this.state = {
+      hasError: false,
+      error: undefined,
+      errorInfo: undefined,
+    };
+  }
 
   static getDerivedStateFromError(error: Error): Partial<State> {
     // Cập nhật state để lần render tiếp theo sẽ hiển thị UI dự phòng.

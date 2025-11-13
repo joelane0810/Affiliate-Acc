@@ -174,6 +174,7 @@ export interface PartnerRequest {
     senderName: string;
     senderEmail: string;
     recipientEmail: string;
+    recipientEmailNormalized?: string;
     recipientUid?: string; // UID of the user who accepted the request
     status: 'pending' | 'accepted' | 'declined';
     createdAt: string; // ISO date string

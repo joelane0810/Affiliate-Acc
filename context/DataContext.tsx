@@ -556,18 +556,30 @@ export const DataProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
             }, { merge: true });
         }
 
-        // Step 2: Fetch all partner requests involving the current user using two separate queries for robustness.
+        // Step 2: Fetch all partner requests involving the current user.
         const sentQuery = query(collection(firestoreDb, "partnerRequests"), where("senderUid", "==", user.uid));
-        const receivedQuery = query(collection(firestoreDb, "partnerRequests"), where("recipientEmail", "==", user.email));
+        
+        // Create queries for receiving, one on the new normalized field for new requests, 
+        // and one on the old field for backward compatibility.
+        const receivedQueryNormalized = user.email 
+            ? query(collection(firestoreDb, "partnerRequests"), where("recipientEmailNormalized", "==", user.email.toLowerCase()))
+            : null;
+        const receivedQueryOriginal = user.email
+            ? query(collection(firestoreDb, "partnerRequests"), where("recipientEmail", "==", user.email))
+            : null;
 
-        const [sentSnapshot, receivedSnapshot] = await Promise.all([
-            getDocs(sentQuery),
-            getDocs(receivedQuery)
-        ]);
+        const promises = [getDocs(sentQuery)];
+        if (receivedQueryNormalized) promises.push(getDocs(receivedQueryNormalized));
+        if (receivedQueryOriginal) promises.push(getDocs(receivedQueryOriginal));
+
+        const snapshots = await Promise.all(promises);
 
         const allRequestsMap = new Map<string, T.PartnerRequest>();
-        sentSnapshot.docs.forEach(doc => allRequestsMap.set(doc.id, { ...doc.data() as T.PartnerRequest, id: doc.id }));
-        receivedSnapshot.docs.forEach(doc => allRequestsMap.set(doc.id, { ...doc.data() as T.PartnerRequest, id: doc.id }));
+        snapshots.forEach(snapshot => {
+            snapshot.docs.forEach(doc => {
+                allRequestsMap.set(doc.id, { ...doc.data() as T.PartnerRequest, id: doc.id });
+            });
+        });
 
         const allRequests = Array.from(allRequestsMap.values());
         setPartnerRequests(allRequests);
@@ -912,6 +924,7 @@ export const DataProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
             senderName: myName,
             senderEmail: user.email || '',
             recipientEmail: partner.loginEmail,
+            recipientEmailNormalized: partner.loginEmail.toLowerCase(),
             status: 'pending',
             createdAt: new Date().toISOString(),
         };
