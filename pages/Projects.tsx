@@ -501,7 +501,7 @@ const ProjectListContent: React.FC<{
                 <Table>
                     <TableHead>
                         <TableRow>
-                            <TableHeader>Tên dự án</TableHeader>
+                            <TableHeader className="text-left">Tên dự án</TableHeader>
                             <TableHeader>Sở hữu</TableHeader>
                             <TableHeader>Nền tảng</TableHeader>
                             <TableHeader>Loại</TableHeader>
@@ -515,15 +515,15 @@ const ProjectListContent: React.FC<{
                     <TableBody>
                         {enrichedProjects.map(p => (
                             <TableRow key={p.id}>
-                                <TableCell className="font-medium text-white">
-                                    <button 
-                                        onClick={() => onProjectClick(p)} 
-                                        className="text-left hover:text-primary-400 hover:underline disabled:no-underline disabled:text-white disabled:cursor-default"
+                                <TableCell className="font-medium text-white text-left">
+                                    <button
+                                        onClick={() => onProjectClick(p)}
+                                        className="inline-flex items-center gap-2 text-left hover:text-primary-400 hover:underline disabled:no-underline disabled:text-white disabled:cursor-default"
                                         disabled={!p.affiliateUrls || p.affiliateUrls.length === 0}
                                     >
-                                        {p.name}
+                                        {p.isPartnership && <Users className="text-primary-400 flex-shrink-0" width={16} height={16} />}
+                                        <span>{p.name}</span>
                                     </button>
-                                    {p.isPartnership && <Users className="inline-block ml-2 text-primary-400" width={16} height={16} />}
                                 </TableCell>
                                 <TableCell className="text-xs">
                                     {p.isPartnership && p.partnerShares && p.partnerShares.length > 0
