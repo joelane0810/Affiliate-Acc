@@ -557,29 +557,25 @@ export const DataProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
         }
 
         // Step 2: Fetch all partner requests involving the current user.
+        // This query is more robust as sender is matched by UID, and recipient by email (which is necessary for pending requests)
         const requestsQuery = query(collection(firestoreDb, "partnerRequests"), or(
-            where("senderEmail", "==", user.email),
+            where("senderUid", "==", user.uid),
             where("recipientEmail", "==", user.email)
         ));
         const requestsSnapshot = await getDocs(requestsQuery);
-        const allRequests = requestsSnapshot.docs.map(doc => ({ ...doc.data() as Omit<T.PartnerRequest, 'id'>, id: doc.id }));
+        const allRequests = requestsSnapshot.docs.map(doc => ({ ...doc.data() as T.PartnerRequest, id: doc.id }));
         setPartnerRequests(allRequests);
 
-        // Step 3: Determine trusted workspace UIDs from accepted requests.
+        // Step 3: Determine trusted workspace UIDs from accepted requests. This is now much simpler and more robust.
         const trustedWorkspaceIds = new Set<string>();
-        
-         const allPartnersSnapshot = await getDocs(collection(firestoreDb, 'partners'));
-         const allPartnersData = allPartnersSnapshot.docs.map(doc => ({ ...doc.data() as T.Partner, id: doc.id }));
-
-         allRequests.forEach(req => {
+        allRequests.forEach(req => {
             if (req.status === 'accepted') {
-                // I sent it and it was accepted, so the recipient's workspace is trusted.
-                if (req.senderEmail === user.email) {
-                    const recipient = allPartnersData.find(p => p.isSelf && p.loginEmail === req.recipientEmail);
-                    if (recipient) trustedWorkspaceIds.add(recipient.ownerUid);
+                // If I sent it, the recipient's UID is now in the request.
+                if (req.senderUid === user.uid && req.recipientUid) {
+                    trustedWorkspaceIds.add(req.recipientUid);
                 }
-                // It was sent to me and I accepted, so the sender's workspace is trusted.
-                else if (req.recipientEmail === user.email) {
+                // If I received and accepted it, I trust the sender.
+                else if (req.recipientUid === user.uid) {
                     trustedWorkspaceIds.add(req.senderUid);
                 }
             }
@@ -587,6 +583,14 @@ export const DataProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
 
 
         const workspaceIdsToFetch = [user.uid, ...Array.from(trustedWorkspaceIds)];
+        
+        // Step 3.5: Fetch partner data only from relevant workspaces.
+        let allPartnersData: (T.Partner & {id: string})[] = [];
+        if (workspaceIdsToFetch.length > 0) {
+             const partnersQuery = query(collection(firestoreDb, 'partners'), where("ownerUid", "in", workspaceIdsToFetch));
+             const allPartnersSnapshot = await getDocs(partnersQuery);
+             allPartnersData = allPartnersSnapshot.docs.map(doc => ({ ...doc.data() as T.Partner, id: doc.id }));
+        }
 
         // Step 4: Fetch data from all relevant workspaces.
         async function fetchDataFromWorkspaces<T extends {workspaceId: string}>(collectionName: string): Promise<T[]> {
@@ -665,13 +669,13 @@ export const DataProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
                 status = 'linked'; // Self is always linked
             } else if (p.loginEmail) {
                 // Check outgoing requests
-                const outgoingRequest = allRequests.find(r => r.senderEmail === user.email && r.recipientEmail === p.loginEmail);
+                const outgoingRequest = allRequests.find(r => r.senderUid === user.uid && r.recipientEmail === p.loginEmail);
                 if (outgoingRequest) {
                     if(outgoingRequest.status === 'pending') status = 'pending';
                     else if (outgoingRequest.status === 'accepted') status = 'linked';
                 } else {
                     // Check incoming accepted requests
-                    const incomingRequest = allRequests.find(r => r.senderEmail === p.loginEmail && r.recipientEmail === user.email);
+                    const incomingRequest = allRequests.find(r => r.senderUid && r.recipientUid === user.uid && allPartnersData.find(sender => sender.ownerUid === r.senderUid && sender.isSelf)?.loginEmail === p.loginEmail);
                     if (incomingRequest && incomingRequest.status === 'accepted') {
                         status = 'linked';
                     }
@@ -1004,8 +1008,9 @@ export const DataProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
     
     const sendPartnerRequest = async (partner: T.Partner) => {
         if (!firestoreDb || !user || !partner.loginEmail) return;
-        const existingRequest = partnerRequests.find(req => (req.senderEmail === user.email && req.recipientEmail === partner.loginEmail) || (req.senderEmail === partner.loginEmail && req.recipientEmail === user.email));
-        if (existingRequest && existingRequest.status !== 'declined') {
+        // FIX: Replaced `allPartnersData` with `partners` which is in scope.
+        const existingRequest = partnerRequests.find(req => (req.senderUid === user.uid && req.recipientEmail === partner.loginEmail) || (req.recipientEmail === user.email && partners.find(p => p.ownerUid === req.senderUid && p.isSelf)?.loginEmail === partner.loginEmail));
+        if (existingRequest) {
             addNotification(`Yêu cầu kết nối với ${partner.loginEmail} đã tồn tại.`, 'system'); return;
         }
         try {
@@ -1027,7 +1032,8 @@ export const DataProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
         if (!firestoreDb || !user) return;
         try {
             const requestRef = doc(firestoreDb, 'partnerRequests', request.id);
-            await updateDoc(requestRef, { status: 'accepted' });
+            // Add the recipient's UID to the request document upon acceptance
+            await updateDoc(requestRef, { status: 'accepted', recipientUid: user.uid });
             const senderAsPartner = partners.find(p => p.loginEmail === request.senderEmail);
             if (!senderAsPartner) {
                 await addPartner({ name: request.senderName, loginEmail: request.senderEmail });
@@ -1040,11 +1046,21 @@ export const DataProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
     };
 
     const declinePartnerRequest = async (request: T.PartnerRequest) => {
-        if (!firestoreDb) return;
+        if (!firestoreDb || !user) return;
         try {
+            // Simply delete the request document. This allows a new request to be sent later.
             const requestRef = doc(firestoreDb, 'partnerRequests', request.id);
-            await updateDoc(requestRef, { status: 'declined' });
-            setPartnerRequests(prev => prev.map(r => r.id === request.id ? { ...r, status: 'declined' } : r).filter(r => r.status !== 'declined'));
+            await deleteDoc(requestRef);
+    
+            // Update local state to reflect the change immediately
+            setPartnerRequests(prev => prev.filter(r => r.id !== request.id));
+            
+            // Also update the status of the local partner record if it exists
+            const partnerToUpdate = partners.find(p => p.ownerUid === user.uid && p.loginEmail === request.senderEmail);
+            if (partnerToUpdate) {
+                 setPartners(prev => prev.map(p => p.id === partnerToUpdate.id ? { ...p, status: 'unlinked' } : p));
+            }
+    
             addNotification(`Đã từ chối kết nối với ${request.senderName}.`, 'system');
         } catch (error) {
             console.error("Error declining partner request:", error); addNotification("Từ chối yêu cầu thất bại. Vui lòng thử lại.", 'system');
