@@ -131,7 +131,16 @@ const AssetForm: React.FC<{
             ownershipType,
             sharedWith: finalSharedWith,
         };
-        onSave({ ...asset, id: asset?.id || '', ...assetData });
+        // FIX: Correctly form the object for saving.
+        // For new assets, we must not include an 'id' property.
+        // For existing assets, we merge the updated data.
+        if (asset) {
+            onSave({ ...asset, ...assetData });
+        } else {
+            // This is a new asset, so we pass an object that matches Omit<Asset, 'id'>
+            // The old code always included an 'id' property, which was incorrect for new assets.
+            onSave(assetData);
+        }
     };
 
     const handleSaveAssetType = (assetType: Omit<AssetType, 'id'> | AssetType) => {
@@ -528,8 +537,9 @@ export default function Assets() {
         if ('id' in asset && asset.id) {
             updateAsset(asset as Asset);
         } else {
-            const { id, ...newAsset } = asset as Asset;
-            addAsset(newAsset);
+            // FIX: The else block handles new assets, which are of type Omit<Asset, 'id'>.
+            // The previous destructuring and type assertion were incorrect.
+            addAsset(asset as Omit<Asset, 'id'>);
         }
         setIsAssetModalOpen(false);
         setEditingAsset(undefined);
