@@ -69,7 +69,7 @@ const AssetForm: React.FC<{
     asset?: Asset;
     assetTypes: AssetType[];
     partners: Partner[];
-    onSave: (asset: Omit<Asset, 'id'> | Asset) => void;
+    onSave: (asset: Omit<Asset, 'id' | 'workspaceId'> | Asset) => void;
     onCancel: () => void;
     onAddAssetType: (assetType: Omit<AssetType, 'id'>) => void;
 }> = ({ asset, assetTypes, partners, onSave, onCancel, onAddAssetType }) => {
@@ -126,7 +126,6 @@ const AssetForm: React.FC<{
         const assetData = {
             name,
             typeId,
-            balance,
             currency,
             ownershipType,
             sharedWith: finalSharedWith,
@@ -137,9 +136,8 @@ const AssetForm: React.FC<{
         if (asset) {
             onSave({ ...asset, ...assetData });
         } else {
-            // This is a new asset, so we pass an object that matches Omit<Asset, 'id'>
-            // The old code always included an 'id' property, which was incorrect for new assets.
-            onSave(assetData);
+            // This is a new asset, so we pass an object that matches Omit<Asset, 'id' | 'workspaceId'>
+            onSave({...assetData, balance});
         }
     };
 
@@ -533,13 +531,11 @@ export default function Assets() {
     };
 
     // Asset handlers
-    const handleSaveAsset = (asset: Omit<Asset, 'id'> | Asset) => {
+    const handleSaveAsset = (asset: Omit<Asset, 'id' | 'workspaceId'> | Asset) => {
         if ('id' in asset && asset.id) {
             updateAsset(asset as Asset);
         } else {
-            // FIX: The else block handles new assets, which are of type Omit<Asset, 'id'>.
-            // The previous destructuring and type assertion were incorrect.
-            addAsset(asset as Omit<Asset, 'id'>);
+            addAsset(asset as Omit<Asset, 'id' | 'workspaceId'>);
         }
         setIsAssetModalOpen(false);
         setEditingAsset(undefined);

@@ -8,7 +8,7 @@ import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '.
 import { Modal } from '../components/ui/Modal';
 import { Input, Label } from '../components/ui/Input';
 import { NumberInput } from '../components/ui/NumberInput';
-import { Plus, Edit, Trash2, Users, X, ChevronDown } from '../components/icons/IconComponents';
+import { Plus, Edit, Trash2, Users, X, ChevronDown, Handshake } from '../components/icons/IconComponents';
 import { formatCurrency, isDateInPeriod, formatPercentage, formatDate, formatVietnameseCurrencyShorthand } from '../lib/utils';
 import { ConfirmationModal } from '../components/ui/ConfirmationModal';
 import { ResponsiveContainer, LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, Legend, TooltipProps } from 'recharts';
@@ -479,13 +479,13 @@ const ProjectFilters: React.FC<{
 
 const ProjectListContent: React.FC<{ 
     enrichedProjects: any[];
-    partnerNameMap: Map<string, string>;
     onProjectClick: (project: T.Project) => void;
     onEditClick: (project: T.Project) => void; 
     onDeleteClick: (project: T.Project) => void;
     isReadOnly: boolean;
-}> = ({ enrichedProjects, partnerNameMap, onProjectClick, onEditClick, onDeleteClick, isReadOnly }) => {
-    
+}> = ({ enrichedProjects, onProjectClick, onEditClick, onDeleteClick, isReadOnly }) => {
+    const { user, partners, partnerNameMap } = useData();
+
     const totals = useMemo(() => {
         return enrichedProjects.reduce((acc, p) => {
             acc.revenue += p.revenue;
@@ -513,7 +513,17 @@ const ProjectListContent: React.FC<{
                         </TableRow>
                     </TableHead>
                     <TableBody>
-                        {enrichedProjects.map(p => (
+                        {enrichedProjects.map(p => {
+                            const isSharedByOther = user && p.workspaceId !== user.uid;
+                            const ownerPartner = isSharedByOther ? partners.find(ptr => ptr.ownerUid === p.workspaceId && ptr.isSelf) : null;
+                            let ownershipDisplay = 'Tôi';
+                            if (isSharedByOther) {
+                                ownershipDisplay = ownerPartner?.name || 'Đối tác';
+                            } else if (p.isPartnership && p.partnerShares?.length > 0) {
+                                ownershipDisplay = p.partnerShares.map((s: T.PartnerShare) => partnerNameMap.get(s.partnerId) || 'N/A').filter((name: string) => name !== 'Tôi').join(', ');
+                            }
+
+                            return (
                             <TableRow key={p.id}>
                                 <TableCell className="font-medium text-white text-left">
                                     <button
@@ -521,14 +531,16 @@ const ProjectListContent: React.FC<{
                                         className="inline-flex items-center gap-2 text-left hover:text-primary-400 hover:underline disabled:no-underline disabled:text-white disabled:cursor-default"
                                         disabled={!p.affiliateUrls || p.affiliateUrls.length === 0}
                                     >
-                                        {p.isPartnership && <Users className="text-primary-400 flex-shrink-0" width={16} height={16} />}
+                                        {isSharedByOther && (
+                                            <span title={`Được chia sẻ bởi ${ownerPartner?.name || 'Đối tác'}`}>
+                                                <Handshake width={16} height={16} className="text-primary-400 flex-shrink-0" />
+                                            </span>
+                                        )}
                                         <span>{p.name}</span>
                                     </button>
                                 </TableCell>
                                 <TableCell className="text-xs">
-                                    {p.isPartnership && p.partnerShares && p.partnerShares.length > 0
-                                        ? p.partnerShares.map((s: T.PartnerShare) => partnerNameMap.get(s.partnerId) || 'N/A').filter(Boolean).join(', ')
-                                        : 'Tôi'}
+                                    {ownershipDisplay}
                                 </TableCell>
                                 <TableCell>{p.adsPlatforms.map((ap: T.AdsPlatform) => adsPlatformLabels[ap]).join(', ')}</TableCell>
                                 <TableCell>{projectTypeLabels[p.projectType]}</TableCell>
@@ -542,7 +554,7 @@ const ProjectListContent: React.FC<{
                                 <TableCell className={`font-bold ${p.profit >= 0 ? 'text-green-400' : 'text-red-400'}`}>
                                     {formatCurrency(p.profit)}
                                 </TableCell>
-                                {!isReadOnly && (
+                                {!isReadOnly && !isSharedByOther && (
                                     <TableCell>
                                         <div className="flex items-center space-x-3 justify-center">
                                             <button onClick={() => onEditClick(p)} className="text-gray-400 hover:text-primary-400"><Edit /></button>
@@ -550,8 +562,9 @@ const ProjectListContent: React.FC<{
                                         </div>
                                     </TableCell>
                                 )}
+                                {!isReadOnly && isSharedByOther && <TableCell><span className="text-xs text-gray-500">Chỉ xem</span></TableCell>}
                             </TableRow>
-                        ))}
+                        )})}
                     </TableBody>
                     <tfoot className="border-t-2 border-gray-700 bg-gray-800">
                         <TableRow className="hover:bg-gray-800">
@@ -800,7 +813,7 @@ const UrlListModal: React.FC<{
 export default function Projects() {
     const { 
         isReadOnly, addProject, updateProject, deleteProject, currentPeriod, 
-        projects, partners, commissions, enrichedDailyAdCosts, miscellaneousExpenses, partnerNameMap
+        projects, partners, commissions, enrichedDailyAdCosts, miscellaneousExpenses
     } = useData();
     const [activeTab, setActiveTab] = useState<'list' | 'trends'>('list');
 
@@ -930,7 +943,6 @@ export default function Projects() {
                     />
                     <ProjectListContent 
                         enrichedProjects={filteredAndEnrichedProjects} 
-                        partnerNameMap={partnerNameMap}
                         onProjectClick={handleProjectClick}
                         onEditClick={handleEditClick}
                         onDeleteClick={handleDeleteClick}

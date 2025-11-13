@@ -105,6 +105,7 @@ export interface Asset {
     currency: 'VND' | 'USD';
     ownershipType: 'personal' | 'shared';
     sharedWith?: AssetShare[];
+    workspaceId: string;
 }
 
 export interface AdDeposit {
@@ -364,6 +365,8 @@ export interface PeriodLiability {
     currency: 'VND' | 'USD';
     period: string;
     workspaceId: string;
+    isPartnership?: boolean;
+    partnerShares?: PartnerShare[];
 }
 
 export interface PeriodDebtPayment {
@@ -383,6 +386,8 @@ export interface PeriodReceivable {
     currency: 'VND' | 'USD';
     period: string;
     workspaceId: string;
+    isPartnership?: boolean;
+    partnerShares?: PartnerShare[];
 }
 
 export interface PeriodReceivablePayment {

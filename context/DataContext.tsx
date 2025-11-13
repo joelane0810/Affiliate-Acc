@@ -81,7 +81,7 @@ interface DataContextType {
   deleteAssetType: (id: string) => Promise<void>;
 
   assets: T.Asset[];
-  addAsset: (asset: Omit<T.Asset, 'id'>) => Promise<void>;
+  addAsset: (asset: Omit<T.Asset, 'id' | 'workspaceId'>) => Promise<void>;
   updateAsset: (asset: T.Asset) => Promise<void>;
   deleteAsset: (id: string) => Promise<void>;
 
@@ -103,7 +103,7 @@ interface DataContextType {
   exchangeLogs: T.ExchangeLog[];
   addExchangeLog: (log: Omit<T.ExchangeLog, 'id' | 'workspaceId'>) => Promise<void>;
   updateExchangeLog: (log: T.ExchangeLog) => Promise<void>;
-  deleteExchangeLog: (log: T.ExchangeLog) => Promise<void>;
+  deleteExchangeLog: (id: string) => Promise<void>;
 
   miscellaneousExpenses: T.MiscellaneousExpense[];
   addMiscellaneousExpense: (expense: Omit<T.MiscellaneousExpense, 'id' | 'workspaceId'>) => Promise<void>;
@@ -210,7 +210,7 @@ interface DataContextType {
   allPartnerLedgerEntries: T.PartnerLedgerEntry[];
   addPartnerLedgerEntry: (entry: Omit<T.PartnerLedgerEntry, 'id' | 'workspaceId'>) => Promise<void>;
   updatePartnerLedgerEntry: (entry: T.PartnerLedgerEntry) => Promise<void>;
-  deletePartnerLedgerEntry: (entry: T.PartnerLedgerEntry) => Promise<void>;
+  deletePartnerLedgerEntry: (id: string) => Promise<void>;
   partnerAssetBalances: Map<string, { assetId: string, assetName: string, balance: number, currency: 'VND' | 'USD' }[]>;
   user: User | null;
   authIsLoading: boolean;
@@ -321,9 +321,9 @@ const seedInitialData = async (db: Firestore, user: User) => {
 
     // 4. Assets
     const vcbAssetRef = doc(collection(db, 'assets'));
-    batch.set(vcbAssetRef, { name: 'Vietcombank', typeId: 'bank', balance: 0, currency: 'VND', ownershipType: 'personal' });
+    batch.set(vcbAssetRef, { name: 'Vietcombank', typeId: 'bank', balance: 0, currency: 'VND', ownershipType: 'personal', workspaceId: user.uid });
     const clickbankAssetRef = doc(collection(db, 'assets'));
-    batch.set(clickbankAssetRef, { name: 'ClickBank', typeId: 'platform', balance: 0, currency: 'USD', ownershipType: 'shared', sharedWith: [{ partnerId: user.uid, permission: 'full' }] });
+    batch.set(clickbankAssetRef, { name: 'ClickBank', typeId: 'platform', balance: 0, currency: 'USD', ownershipType: 'shared', sharedWith: [{ partnerId: user.uid, permission: 'full' }], workspaceId: user.uid });
 
     // 5. Projects
     const project1Ref = doc(collection(db, 'projects'));
@@ -471,7 +471,7 @@ export const DataProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
         read: false,
     };
     setNotifications(prev => [newNotification, ...prev].slice(0, 50)); // Keep last 50
-    if (type === 'partner') {
+    if (type === 'partner' || type === 'system') { // Show toast for system messages too
         setToast(newNotification);
     }
   }, []);
@@ -482,6 +482,34 @@ export const DataProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
       setNotifications(prev => prev.map(n => ({...n, read: true})));
   };
 
+  const addPartner = useCallback(async (partnerData: Partial<Omit<T.Partner, 'id' | 'ownerUid' | 'ownerName'>>) => {
+    if (!firestoreDb || !user) return;
+
+    if (partners.some(p => p.name.trim().toLowerCase() === partnerData.name?.trim().toLowerCase() && p.ownerUid === user.uid)) {
+        addNotification(`Đối tác "${partnerData.name}" đã tồn tại.`, 'system');
+        return;
+    }
+    if (partnerData.loginEmail && partners.some(p => p.loginEmail === partnerData.loginEmail && p.ownerUid === user.uid)) {
+         addNotification(`Email đối tác "${partnerData.loginEmail}" đã tồn tại.`, 'system');
+        return;
+    }
+
+    try {
+        const myName = partners.find(p => p.isSelf)?.name || user.displayName || 'Chủ sở hữu';
+        const newPartnerData: Omit<T.Partner, 'id'> = {
+            name: partnerData.name || 'Đối tác mới',
+            loginEmail: partnerData.loginEmail || undefined,
+            ownerUid: user.uid,
+            ownerName: myName,
+        };
+        const docRef = await addDoc(collection(firestoreDb, 'partners'), newPartnerData);
+        setPartners(prev => [...prev, { ...newPartnerData, id: docRef.id }]);
+        addNotification(`Đã thêm đối tác "${newPartnerData.name}".`, 'system');
+    } catch (e) {
+        console.error("Error adding partner: ", e);
+        addNotification("Thêm đối tác thất bại.", 'system');
+    }
+}, [firestoreDb, user, partners, addNotification]);
 
   useEffect(() => {
     if (firebaseConfig) {
@@ -539,26 +567,20 @@ export const DataProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
 
         // Step 3: Determine trusted workspace UIDs from accepted requests.
         const trustedWorkspaceIds = new Set<string>();
-        allRequests.forEach(req => {
-            if (req.status === 'accepted') {
-                if (req.senderUid === user.uid) {
-                    // This is an outgoing request that was accepted. Find the recipient's UID.
-                    // This requires a lookup, which is more complex. For now, we'll rely on incoming.
-                } else if (req.recipientEmail === user.email) {
-                    // This is an incoming request that I accepted. The sender's UID is a trusted workspace.
-                    trustedWorkspaceIds.add(req.senderUid);
-                }
-            }
-        });
-
+        
          const allPartnersSnapshot = await getDocs(collection(firestoreDb, 'partners'));
          const allPartnersData = allPartnersSnapshot.docs.map(doc => ({ ...doc.data() as T.Partner, id: doc.id }));
 
          allRequests.forEach(req => {
-            if (req.status === 'accepted' && req.senderEmail === user.email) {
-                const recipient = allPartnersData.find(p => p.isSelf && p.loginEmail === req.recipientEmail);
-                if (recipient) {
-                    trustedWorkspaceIds.add(recipient.ownerUid);
+            if (req.status === 'accepted') {
+                // I sent it and it was accepted, so the recipient's workspace is trusted.
+                if (req.senderEmail === user.email) {
+                    const recipient = allPartnersData.find(p => p.isSelf && p.loginEmail === req.recipientEmail);
+                    if (recipient) trustedWorkspaceIds.add(recipient.ownerUid);
+                }
+                // It was sent to me and I accepted, so the sender's workspace is trusted.
+                else if (req.recipientEmail === user.email) {
+                    trustedWorkspaceIds.add(req.senderUid);
                 }
             }
         });
@@ -632,11 +654,9 @@ export const DataProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
             fetchDataFromWorkspaces<T.PeriodDebtPayment>('periodDebtPayments'),
             fetchDataFromWorkspaces<T.PeriodReceivable>('periodReceivables'),
             fetchDataFromWorkspaces<T.PeriodReceivablePayment>('periodReceivablePayments'),
-            fetchGlobalCollection<T.Asset>('assets'),
+            fetchDataFromWorkspaces<T.Asset>('assets'),
             fetchGlobalCollection<T.AssetType>('assetTypes'),
         ]);
-        
-        const partnerMapForLinking = new Map(allPartnersData.map(p => [p.loginEmail, p]));
         
         // Add status to partners owned by the current user
         const myPartners = allPartnersData.filter(p => p.ownerUid === user.uid).map(p => {
@@ -644,10 +664,17 @@ export const DataProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
             if (p.isSelf) {
                 status = 'linked'; // Self is always linked
             } else if (p.loginEmail) {
+                // Check outgoing requests
                 const outgoingRequest = allRequests.find(r => r.senderEmail === user.email && r.recipientEmail === p.loginEmail);
                 if (outgoingRequest) {
                     if(outgoingRequest.status === 'pending') status = 'pending';
                     else if (outgoingRequest.status === 'accepted') status = 'linked';
+                } else {
+                    // Check incoming accepted requests
+                    const incomingRequest = allRequests.find(r => r.senderEmail === p.loginEmail && r.recipientEmail === user.email);
+                    if (incomingRequest && incomingRequest.status === 'accepted') {
+                        status = 'linked';
+                    }
                 }
             }
             return { ...p, status };
@@ -662,13 +689,24 @@ export const DataProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
         const myRepresentationInOtherWorkspaces = allPartnersData.filter(p => p.loginEmail === user.email && p.ownerUid !== user.uid);
         const myRepresentationIds = new Set(myRepresentationInOtherWorkspaces.map(p => p.id));
         
-        const filterShared = <T extends { workspaceId: string; isPartnership?: boolean; partnerShares?: T.PartnerShare[]; }>(item: T): boolean => {
+        const filterShared = <T extends { 
+            workspaceId: string; 
+            isPartnership?: boolean; 
+            partnerShares?: T.PartnerShare[];
+            ownershipType?: 'personal' | 'shared';
+            sharedWith?: T.AssetShare[];
+        }>(item: T): boolean => {
             if (item.workspaceId === user.uid) {
                 return true; // Always include user's own items.
             }
             if (trustedWorkspaceIds.has(item.workspaceId)) {
+                // For Projects, Misc Expenses, Period Debts/Receivables
                 if (item.isPartnership && item.partnerShares) {
                     return item.partnerShares.some(share => myRepresentationIds.has(share.partnerId));
+                }
+                // For Assets
+                if (item.ownershipType === 'shared' && item.sharedWith) {
+                    return item.sharedWith.some(share => myRepresentationIds.has(share.partnerId));
                 }
             }
             return false;
@@ -695,11 +733,11 @@ export const DataProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
         setSavings(fetchedSavings);
         setInvestments(fetchedInvestments);
         setPartnerLedgerEntries(fetchedPartnerLedger);
-        setPeriodLiabilities(fetchedPeriodLiabilities);
+        setPeriodLiabilities(fetchedPeriodLiabilities.filter(filterShared));
         setPeriodDebtPayments(fetchedPeriodDebtPayments);
-        setPeriodReceivables(fetchedPeriodReceivables);
+        setPeriodReceivables(fetchedPeriodReceivables.filter(filterShared));
         setPeriodReceivablePayments(fetchedPeriodReceivablePayments);
-        setAssets(fetchedAssets);
+        setAssets(fetchedAssets.filter(filterShared));
         setAssetTypes(fetchedAssetTypes);
 
         console.log("All data fetched successfully for user:", user.uid, "from workspaces:", workspaceIdsToFetch);
@@ -713,7 +751,7 @@ export const DataProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
     } finally {
         setIsLoading(false);
     }
-  }, [firestoreDb, user, addNotification]);
+  }, [firestoreDb, user]);
 
   useEffect(() => {
     if (!firestoreDb || authIsLoading) {
@@ -926,6 +964,92 @@ export const DataProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
         setDailyAdCosts(prev => prev.filter(c => c.id !== id));
     } catch (e) { console.error("Error deleting daily ad cost: ", e); }
   };
+  
+    const updatePartner = async (updatedPartner: T.Partner) => {
+        if (!firestoreDb || !user) return;
+        if (partners.some(p => p.id !== updatedPartner.id && p.name.trim().toLowerCase() === updatedPartner.name.trim().toLowerCase() && p.ownerUid === user.uid)) {
+            addNotification(`Tên đối tác "${updatedPartner.name}" đã tồn tại.`, 'system'); return;
+        }
+        if (updatedPartner.loginEmail && partners.some(p => p.id !== updatedPartner.id && p.loginEmail === updatedPartner.loginEmail && p.ownerUid === user.uid)) {
+            addNotification(`Email đối tác "${updatedPartner.loginEmail}" đã tồn tại.`, 'system'); return;
+        }
+        const { id, ownerUid, ownerName, isSelf, ...partnerData } = updatedPartner;
+        try {
+            await updateDoc(doc(firestoreDb, 'partners', id), partnerData);
+            setPartners(prev => prev.map(p => p.id === id ? updatedPartner : p));
+            addNotification(`Đã cập nhật đối tác "${updatedPartner.name}".`, 'system');
+        } catch (e) {
+            console.error("Error updating partner: ", e); addNotification("Cập nhật đối tác thất bại.", 'system');
+        }
+    };
+
+    const deletePartner = async (id: string) => {
+        if (!firestoreDb) return;
+        const partnerToDelete = partners.find(p => p.id === id);
+        if (!partnerToDelete || partnerToDelete.isSelf) {
+            addNotification("Không thể xóa đối tác này.", 'system'); return;
+        }
+        const isUsed = projects.some(p => p.partnerShares?.some(s => s.partnerId === id));
+        if (isUsed) {
+            addNotification(`Không thể xóa đối tác "${partnerToDelete.name}" vì họ đang được liên kết với một hoặc nhiều dự án.`, 'system'); return;
+        }
+        try {
+            await deleteDoc(doc(firestoreDb, 'partners', id));
+            setPartners(prev => prev.filter(p => p.id !== id));
+            addNotification(`Đã xóa đối tác "${partnerToDelete.name}".`, 'system');
+        } catch (e) {
+            console.error("Error deleting partner: ", e); addNotification("Xóa đối tác thất bại.", 'system');
+        }
+    };
+    
+    const sendPartnerRequest = async (partner: T.Partner) => {
+        if (!firestoreDb || !user || !partner.loginEmail) return;
+        const existingRequest = partnerRequests.find(req => (req.senderEmail === user.email && req.recipientEmail === partner.loginEmail) || (req.senderEmail === partner.loginEmail && req.recipientEmail === user.email));
+        if (existingRequest && existingRequest.status !== 'declined') {
+            addNotification(`Yêu cầu kết nối với ${partner.loginEmail} đã tồn tại.`, 'system'); return;
+        }
+        try {
+            const myName = partners.find(p => p.isSelf)?.name || user.displayName || 'Đối tác';
+            const newRequestData: Omit<T.PartnerRequest, 'id'> = {
+                senderUid: user.uid, senderName: myName, senderEmail: user.email!,
+                recipientEmail: partner.loginEmail, status: 'pending', createdAt: new Date().toISOString(),
+            };
+            const docRef = await addDoc(collection(firestoreDb, 'partnerRequests'), newRequestData);
+            setPartnerRequests(prev => [...prev, { ...newRequestData, id: docRef.id }]);
+            setPartners(prev => prev.map(p => p.id === partner.id ? { ...p, status: 'pending' } : p));
+            addNotification(`Đã gửi yêu cầu kết nối tới ${partner.loginEmail}.`, 'system');
+        } catch (error) {
+            console.error("Error sending partner request:", error); addNotification("Gửi yêu cầu thất bại. Vui lòng thử lại.", 'system');
+        }
+    };
+
+    const acceptPartnerRequest = async (request: T.PartnerRequest) => {
+        if (!firestoreDb || !user) return;
+        try {
+            const requestRef = doc(firestoreDb, 'partnerRequests', request.id);
+            await updateDoc(requestRef, { status: 'accepted' });
+            const senderAsPartner = partners.find(p => p.loginEmail === request.senderEmail);
+            if (!senderAsPartner) {
+                await addPartner({ name: request.senderName, loginEmail: request.senderEmail });
+            }
+            addNotification(`Đã chấp nhận kết nối với ${request.senderName}. Đang tải lại dữ liệu...`, 'partner');
+            await fetchAllData();
+        } catch (error) {
+            console.error("Error accepting partner request:", error); addNotification("Chấp nhận yêu cầu thất bại. Vui lòng thử lại.", 'system');
+        }
+    };
+
+    const declinePartnerRequest = async (request: T.PartnerRequest) => {
+        if (!firestoreDb) return;
+        try {
+            const requestRef = doc(firestoreDb, 'partnerRequests', request.id);
+            await updateDoc(requestRef, { status: 'declined' });
+            setPartnerRequests(prev => prev.map(r => r.id === request.id ? { ...r, status: 'declined' } : r).filter(r => r.status !== 'declined'));
+            addNotification(`Đã từ chối kết nối với ${request.senderName}.`, 'system');
+        } catch (error) {
+            console.error("Error declining partner request:", error); addNotification("Từ chối yêu cầu thất bại. Vui lòng thử lại.", 'system');
+        }
+    };
 
   // --- Placeholder for other CRUD functions ---
   // ... (The full implementation of all other CRUD functions would go here)
@@ -962,6 +1086,104 @@ export const DataProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
     return transactions.sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime());
   }, [savings, assets]);
 
+// FIX: Implement missing Asset and AssetType CRUD functions
+const addAssetType = async (assetType: Omit<T.AssetType, 'id'>) => {
+    if (!firestoreDb) return;
+    if (assetTypes.some(at => at.name.trim().toLowerCase() === assetType.name.trim().toLowerCase())) {
+        addNotification(`Loại tài sản "${assetType.name}" đã tồn tại.`, 'system');
+        return;
+    }
+    try {
+        const docRef = await addDoc(collection(firestoreDb, 'assetTypes'), assetType);
+        setAssetTypes(prev => [...prev, { ...assetType, id: docRef.id }]);
+        addNotification(`Đã thêm loại tài sản "${assetType.name}".`, 'system');
+    } catch (e) { console.error("Error adding asset type: ", e); addNotification("Thêm loại tài sản thất bại.", 'system'); }
+};
+
+const updateAssetType = async (updatedAssetType: T.AssetType) => {
+    if (!firestoreDb) return;
+    if (assetTypes.some(at => at.id !== updatedAssetType.id && at.name.trim().toLowerCase() === updatedAssetType.name.trim().toLowerCase())) {
+        addNotification(`Loại tài sản "${updatedAssetType.name}" đã tồn tại.`, 'system');
+        return;
+    }
+    const { id, ...data } = updatedAssetType;
+    try {
+        await updateDoc(doc(firestoreDb, 'assetTypes', id), data);
+        setAssetTypes(prev => prev.map(at => at.id === id ? updatedAssetType : at));
+        addNotification(`Đã cập nhật loại tài sản "${updatedAssetType.name}".`, 'system');
+    } catch (e) { console.error("Error updating asset type: ", e); addNotification("Cập nhật loại tài sản thất bại.", 'system'); }
+};
+
+const deleteAssetType = async (id: string) => {
+    if (!firestoreDb) return;
+    const typeToDelete = assetTypes.find(at => at.id === id);
+    if (!typeToDelete) return;
+
+    if (assets.some(a => a.typeId === id)) {
+        addNotification(`Không thể xóa loại tài sản "${typeToDelete.name}" vì nó đang được sử dụng.`, 'system');
+        return;
+    }
+    try {
+        await deleteDoc(doc(firestoreDb, 'assetTypes', id));
+        setAssetTypes(prev => prev.filter(at => at.id !== id));
+        addNotification(`Đã xóa loại tài sản "${typeToDelete.name}".`, 'system');
+    } catch (e) { console.error("Error deleting asset type: ", e); addNotification("Xóa loại tài sản thất bại.", 'system'); }
+};
+
+const addAsset = async (asset: Omit<T.Asset, 'id' | 'workspaceId'>) => {
+    if (!firestoreDb || !user) return;
+    if (assets.some(a => a.name.trim().toLowerCase() === asset.name.trim().toLowerCase())) {
+        addNotification(`Tên tài sản "${asset.name}" đã tồn tại.`, 'system');
+        return;
+    }
+    try {
+        const newAssetData = { ...asset, workspaceId: user.uid };
+        const docRef = await addDoc(collection(firestoreDb, 'assets'), newAssetData);
+        setAssets(prev => [...prev, { ...newAssetData, id: docRef.id }]);
+        addNotification(`Đã thêm tài sản "${asset.name}".`, 'system');
+    } catch (e) { console.error("Error adding asset: ", e); addNotification("Thêm tài sản thất bại.", 'system'); }
+};
+
+const updateAsset = async (updatedAsset: T.Asset) => {
+    if (!firestoreDb) return;
+    if (assets.some(a => a.id !== updatedAsset.id && a.name.trim().toLowerCase() === updatedAsset.name.trim().toLowerCase())) {
+        addNotification(`Tên tài sản "${updatedAsset.name}" đã tồn tại.`, 'system');
+        return;
+    }
+    const { id, balance, ...assetData } = updatedAsset;
+    try {
+        await updateDoc(doc(firestoreDb, 'assets', id), assetData);
+        setAssets(prev => prev.map(a => a.id === id ? updatedAsset : a));
+        addNotification(`Đã cập nhật tài sản "${updatedAsset.name}".`, 'system');
+    } catch (e) { console.error("Error updating asset: ", e); addNotification("Cập nhật tài sản thất bại.", 'system'); }
+};
+
+const deleteAsset = async (id: string) => {
+    if (!firestoreDb) return;
+    const assetToDelete = assets.find(a => a.id === id);
+    if (!assetToDelete) return;
+
+    const isUsed = [
+        ...commissions, ...adDeposits, ...miscellaneousExpenses, ...withdrawals, 
+        ...debtPayments, ...taxPayments, ...capitalInflows, ...savings, ...investments,
+        ...receivablePayments, ...periodDebtPayments, ...periodReceivablePayments
+    ].some(item => 'assetId' in item && (item as { assetId: string }).assetId === id);
+
+    const isUsedInExchange = exchangeLogs.some(e => e.sellingAssetId === id || e.receivingAssetId === id);
+    const isUsedInReceivable = receivables.some(r => r.outflowAssetId === id);
+    const isUsedInInvestmentLiquidation = investments.some(i => i.liquidationAssetId === id);
+
+    if (isUsed || isUsedInExchange || isUsedInReceivable || isUsedInInvestmentLiquidation) {
+        addNotification(`Không thể xóa tài sản "${assetToDelete.name}" vì nó đã được sử dụng trong các giao dịch.`, 'system');
+        return;
+    }
+
+    try {
+        await deleteDoc(doc(firestoreDb, 'assets', id));
+        setAssets(prev => prev.filter(a => a.id !== id));
+        addNotification(`Đã xóa tài sản "${assetToDelete.name}".`, 'system');
+    } catch (e) { console.error("Error deleting asset: ", e); addNotification("Xóa tài sản thất bại.", 'system'); }
+};
 
   // Placeholder values for missing memoized calculations
   const placeholderValue: any = {
@@ -969,15 +1191,11 @@ export const DataProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
     addAdDeposit: async () => {}, updateAdDeposit: async () => {}, deleteAdDeposit: async () => {},
     addAdFundTransfer: async () => {}, updateAdFundTransfer: async () => {}, deleteAdFundTransfer: async () => {},
     addCommission: async () => {}, updateCommission: async () => {}, deleteCommission: async () => {},
-    addAssetType: async () => {}, updateAssetType: async () => {}, deleteAssetType: async () => {},
-    addAsset: async () => {}, updateAsset: async () => {}, deleteAsset: async () => {},
     addLiability: async () => {}, updateLiability: async () => {}, deleteLiability: async () => {},
     addReceivable: async () => {}, updateReceivable: async () => {}, deleteReceivable: async () => {},
     addReceivablePayment: async () => {}, updateReceivablePayment: async () => {}, deleteReceivablePayment: async () => {},
     addExchangeLog: async () => {}, updateExchangeLog: async () => {}, deleteExchangeLog: async () => {},
     addMiscellaneousExpense: async () => {}, updateMiscellaneousExpense: async () => {}, deleteMiscellaneousExpense: async () => {},
-    addPartner: async () => {}, updatePartner: async () => {}, deletePartner: async () => {},
-    sendPartnerRequest: async () => {}, acceptPartnerRequest: async () => {}, declinePartnerRequest: async () => {},
     addWithdrawal: async () => {}, updateWithdrawal: async () => {}, deleteWithdrawal: async () => {},
     addDebtPayment: async () => {}, updateDebtPayment: async () => {}, deleteDebtPayment: async () => {},
     addTaxPayment: async () => {},
@@ -1010,7 +1228,9 @@ export const DataProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
 
   const value: DataContextType = {
     isLoading, projects, addProject, updateProject, deleteProject, adAccounts, addAdAccount, updateAdAccount, deleteAdAccount,
-    dailyAdCosts, addDailyAdCost, updateDailyAdCost, deleteDailyAdCost, partners, partnerRequests, assetTypes, assets,
+    dailyAdCosts, addDailyAdCost, updateDailyAdCost, deleteDailyAdCost, partners, addPartner, updatePartner, deletePartner,
+    partnerRequests, sendPartnerRequest, acceptPartnerRequest, declinePartnerRequest,
+    assetTypes, addAssetType, updateAssetType, deleteAssetType, assets, addAsset, updateAsset, deleteAsset,
     commissions, exchangeLogs, miscellaneousExpenses, adDeposits, adFundTransfers, liabilities, receivables, receivablePayments,
     withdrawals, debtPayments, taxPayments, capitalInflows, categories, niches, savings, investments, partnerLedgerEntries,
     periodLiabilities, periodDebtPayments, periodReceivables, periodReceivablePayments, taxSettings, activePeriod,

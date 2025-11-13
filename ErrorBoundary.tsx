@@ -11,18 +11,21 @@ interface State {
 }
 
 class ErrorBoundary extends Component<Props, State> {
-  // FIX: Replaced constructor with a public class field for state.
-  // This modern syntax correctly initializes state on the component instance,
-  // fixing the errors where `this.state`, `this.props`, and `this.setState` were not found.
-  public state: State = {
-    hasError: false,
-    error: undefined,
-    errorInfo: undefined,
-  };
+  // FIX: Replaced the public class field for state with a constructor.
+  // This ensures the component is properly initialized by calling `super(props)`,
+  // which makes `this.state`, `this.props`, and `this.setState` available and fixes the errors.
+  constructor(props: Props) {
+    super(props);
+    this.state = {
+      hasError: false,
+      error: undefined,
+      errorInfo: undefined,
+    };
+  }
 
-  static getDerivedStateFromError(error: Error): Partial<State> {
+  static getDerivedStateFromError(error: Error): State {
     // Cập nhật state để lần render tiếp theo sẽ hiển thị UI dự phòng.
-    return { hasError: true, error: error };
+    return { hasError: true, error: error, errorInfo: undefined };
   }
 
   componentDidCatch(error: Error, errorInfo: ErrorInfo) {

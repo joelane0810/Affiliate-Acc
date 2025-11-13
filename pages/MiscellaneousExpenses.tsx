@@ -9,7 +9,7 @@ import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '.
 import { Modal } from '../components/ui/Modal';
 import { Input, Label } from '../components/ui/Input';
 import { NumberInput } from '../components/ui/NumberInput';
-import { Plus, Edit, Trash2, Users } from '../components/icons/IconComponents';
+import { Plus, Edit, Trash2, Users, Handshake } from '../components/icons/IconComponents';
 import { formatCurrency, formatDate, isDateInPeriod } from '../lib/utils';
 import { ConfirmationModal } from '../components/ui/ConfirmationModal';
 
@@ -277,6 +277,7 @@ const ExpenseForm: React.FC<{
 
 export default function MiscellaneousExpenses() {
     const { 
+        user,
         miscellaneousExpenses, addMiscellaneousExpense, updateMiscellaneousExpense, deleteMiscellaneousExpense, 
         assets, projects, partners, addPartner, currentPeriod, isReadOnly, partnerNameMap
     } = useData();
@@ -343,23 +344,39 @@ export default function MiscellaneousExpenses() {
                         </TableHead>
                         <TableBody>
                             {enrichedExpenses.map(e => {
+                                const isSharedByOther = user && e.workspaceId !== user.uid;
+                                const ownerPartner = isSharedByOther ? partners.find(p => p.ownerUid === e.workspaceId && p.isSelf) : null;
+                                
                                 let ownershipDisplay = 'Tôi';
                                 const project = e.projectId ? projectMap.get(e.projectId) : null;
-                                if (project?.isPartnership && project.partnerShares && project.partnerShares.length > 0) {
-                                    ownershipDisplay = project.partnerShares.map(s => partnerNameMap.get(s.partnerId)).filter(Boolean).join(', ');
-                                } else if (!project && e.isPartnership && e.partnerShares && e.partnerShares.length > 0) {
-                                    ownershipDisplay = e.partnerShares.map(s => partnerNameMap.get(s.partnerId)).filter(Boolean).join(', ');
+
+                                if (isSharedByOther) {
+                                     ownershipDisplay = ownerPartner?.name || 'Đối tác';
+                                } else if (project?.isPartnership && project.partnerShares?.length) {
+                                    ownershipDisplay = project.partnerShares.map(s => partnerNameMap.get(s.partnerId)).filter(name => name !== 'Tôi').join(', ');
+                                } else if (!project && e.isPartnership && e.partnerShares?.length) {
+                                    ownershipDisplay = e.partnerShares.map(s => partnerNameMap.get(s.partnerId)).filter(name => name !== 'Tôi').join(', ');
                                 }
+
                                 return (
                                 <TableRow key={e.id}>
                                     <TableCell>{formatDate(e.date)}</TableCell>
-                                    <TableCell className="font-medium text-white">{e.description}</TableCell>
+                                    <TableCell className="font-medium text-white">
+                                        <div className="flex items-center gap-2">
+                                            {isSharedByOther && (
+                                                <span title={`Được chia sẻ bởi ${ownerPartner?.name || 'Đối tác'}`}>
+                                                    <Handshake width={16} height={16} className="text-primary-400" />
+                                                </span>
+                                            )}
+                                            <span>{e.description}</span>
+                                        </div>
+                                    </TableCell>
                                     <TableCell>{e.projectName}</TableCell>
                                     <TableCell className="text-xs">{ownershipDisplay}</TableCell>
                                     <TableCell>{e.assetInfo.name}</TableCell>
                                     <TableCell className="font-semibold text-red-400">{formatCurrency(e.amount, e.assetInfo.currency)}</TableCell>
                                     <TableCell className="text-yellow-400">{formatCurrency(e.vndAmount * (e.vatRate || 0) / 100)}</TableCell>
-                                    {!isReadOnly && (
+                                    {!isReadOnly && !isSharedByOther && (
                                         <TableCell>
                                             <div className="flex items-center space-x-3 justify-center">
                                                 <button onClick={() => { setEditingExpense(e); setIsModalOpen(true); }} className="text-gray-400 hover:text-primary-400"><Edit /></button>
@@ -367,6 +384,7 @@ export default function MiscellaneousExpenses() {
                                             </div>
                                         </TableCell>
                                     )}
+                                     {!isReadOnly && isSharedByOther && <TableCell><span className="text-xs text-gray-500">Chỉ xem</span></TableCell>}
                                 </TableRow>
                             )})}
                         </TableBody>

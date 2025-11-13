@@ -152,7 +152,7 @@ const AdCostForm: React.FC<{
 };
 
 const AdCostsContent = () => {
-    const { projects, adAccounts, enrichedDailyAdCosts, addDailyAdCost, updateDailyAdCost, deleteDailyAdCost, currentPeriod, isReadOnly, partnerNameMap } = useData();
+    const { user, partners, projects, adAccounts, enrichedDailyAdCosts, addDailyAdCost, updateDailyAdCost, deleteDailyAdCost, currentPeriod, isReadOnly, partnerNameMap } = useData();
     const [isModalOpen, setIsModalOpen] = useState(false);
     const [editingCost, setEditingCost] = useState<T.DailyAdCost | undefined>(undefined);
     const [isConfirmModalOpen, setIsConfirmModalOpen] = useState(false);
@@ -232,21 +232,28 @@ const AdCostsContent = () => {
                             <TableBody>
                                 {enrichedCostsForPeriod.map(cost => {
                                     const project = projectMap.get(cost.projectId);
+                                    const isSharedByOther = user && project && project.workspaceId !== user.uid;
+                                    let ownershipDisplay = 'Tôi';
+                                    if (isSharedByOther) {
+                                        const ownerPartner = partners.find(ptr => ptr.ownerUid === project.workspaceId && ptr.isSelf);
+                                        ownershipDisplay = ownerPartner?.name || 'Đối tác';
+                                    } else if (project?.isPartnership && project.partnerShares?.length > 0) {
+                                        ownershipDisplay = project.partnerShares.map((s: T.PartnerShare) => partnerNameMap.get(s.partnerId) || 'N/A').filter((name: string) => name !== 'Tôi').join(', ');
+                                    }
+                                    
                                     return (
                                     <TableRow key={cost.id}>
                                         <TableCell>{formatDate(cost.date)}</TableCell>
                                         <TableCell className="font-medium text-white">{cost.projectName}</TableCell>
                                         <TableCell className="text-xs">
-                                            {project?.isPartnership && project.partnerShares && project.partnerShares.length > 0
-                                                ? project.partnerShares.map(s => partnerNameMap.get(s.partnerId)).filter(Boolean).join(', ')
-                                                : 'Tôi'}
+                                            {ownershipDisplay}
                                         </TableCell>
                                         <TableCell>{cost.adAccountNumber}</TableCell>
                                         <TableCell>{formatCurrency(cost.amount, 'USD')}</TableCell>
                                         <TableCell>{cost.effectiveRate ? cost.effectiveRate.toLocaleString('vi-VN') : '—'}</TableCell>
                                         <TableCell className="text-red-400 font-semibold">{formatCurrency(cost.vndCost)}</TableCell>
                                         <TableCell className="text-yellow-400">{formatCurrency(cost.vndCost * (cost.vatRate || 0) / 100)}</TableCell>
-                                        {!isReadOnly && (
+                                        {!isReadOnly && !isSharedByOther && (
                                             <TableCell>
                                                 <div className="flex items-center space-x-3 justify-center">
                                                     <button onClick={() => { setEditingCost(cost); setIsModalOpen(true); }} className="text-gray-400 hover:text-primary-400"><Edit /></button>
@@ -254,6 +261,7 @@ const AdCostsContent = () => {
                                                 </div>
                                             </TableCell>
                                         )}
+                                        {!isReadOnly && isSharedByOther && <TableCell><span className="text-xs text-gray-500">Chỉ xem</span></TableCell>}
                                     </TableRow>
                                 )})}
                             </TableBody>
