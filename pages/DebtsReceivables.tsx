@@ -17,7 +17,6 @@ import { Plus, Edit, Trash2 } from '../components/icons/IconComponents';
 
 const PeriodLiabilityForm: React.FC<{
     liability?: PeriodLiability;
-    // FIX: Changed onSave prop type to omit workspaceId, as it's added by the context.
     onSave: (liability: Omit<PeriodLiability, 'id' | 'period' | 'workspaceId'>) => void;
     onCancel: () => void;
 }> = ({ liability, onSave, onCancel }) => {
@@ -73,7 +72,6 @@ const PeriodLiabilityForm: React.FC<{
 
 const PeriodReceivableForm: React.FC<{
     receivable?: PeriodReceivable;
-    // FIX: Changed onSave prop type to omit workspaceId, as it's added by the context.
     onSave: (receivable: Omit<PeriodReceivable, 'id' | 'period' | 'workspaceId'>) => void;
     onCancel: () => void;
 }> = ({ receivable, onSave, onCancel }) => {
@@ -129,7 +127,6 @@ const PeriodDebtPaymentModal: React.FC<{
     liability: EnrichedPeriodLiability;
     assets: Asset[];
     onClose: () => void;
-    // FIX: Changed onSave prop type to omit workspaceId, as it's added by the context.
     onSave: (paymentInfo: Omit<T.PeriodDebtPayment, 'id' | 'workspaceId'>) => void;
 }> = ({ liability, assets, onClose, onSave }) => {
     const payableAssets = useMemo(() => assets.filter(a => a.currency === liability.currency), [assets, liability]);
@@ -184,7 +181,6 @@ const PeriodReceivablePaymentModal: React.FC<{
     receivable: EnrichedPeriodReceivable;
     assets: Asset[];
     onClose: () => void;
-    // FIX: Changed onSave prop type to omit workspaceId, as it's added by the context.
     onSave: (paymentInfo: Omit<T.PeriodReceivablePayment, 'id' | 'workspaceId'>) => void;
 }> = ({ receivable, assets, onClose, onSave }) => {
     const receivableAssets = useMemo(() => assets.filter(a => a.currency === receivable.currency), [assets, receivable]);

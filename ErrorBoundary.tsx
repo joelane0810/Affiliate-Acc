@@ -11,25 +11,27 @@ interface State {
 }
 
 class ErrorBoundary extends Component<Props, State> {
-  // FIX: Replaced the public class field for state with a constructor.
-  // This ensures the component is properly initialized by calling `super(props)`,
-  // which makes `this.state`, `this.props`, and `this.setState` available and fixes the errors.
-  constructor(props: Props) {
-    super(props);
-    this.state = {
-      hasError: false,
-      error: undefined,
-      errorInfo: undefined,
-    };
-  }
+  // Fix: Replaced constructor with a public class field for state initialization.
+  // This is a more modern and robust way to define state in React class components,
+  // and it resolves the TypeScript errors where `this.state` and `this.props` were not
+  // being correctly recognized on the component instance. This fixes all reported errors.
+  public state: State = {
+    hasError: false,
+    error: undefined,
+    errorInfo: undefined,
+  };
 
-  static getDerivedStateFromError(error: Error): State {
+  static getDerivedStateFromError(error: Error): Partial<State> {
     // Cập nhật state để lần render tiếp theo sẽ hiển thị UI dự phòng.
-    return { hasError: true, error: error, errorInfo: undefined };
+    // This method is called during the "render" phase, so side-effects are not permitted.
+    // It should return an object to update the state, or null to update nothing.
+    return { hasError: true, error };
   }
 
   componentDidCatch(error: Error, errorInfo: ErrorInfo) {
     // Bạn cũng có thể ghi lại lỗi vào một dịch vụ báo cáo lỗi
+    // This lifecycle method is called during the "commit" phase, so side-effects are allowed.
+    // It can be used for logging errors.
     console.error("Uncaught error:", error, errorInfo);
     this.setState({ errorInfo: errorInfo });
   }

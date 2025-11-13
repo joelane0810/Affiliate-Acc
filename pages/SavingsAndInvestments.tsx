@@ -31,7 +31,6 @@ const TabButton: React.FC<{ active: boolean; onClick: () => void; children: Reac
 // --- Savings Components ---
 const SavingForm: React.FC<{
     saving?: T.Saving;
-    // FIX: Corrected onSave prop type to allow objects without workspaceId for new entries.
     onSave: (saving: Omit<T.Saving, 'id' | 'workspaceId'> | T.Saving) => void;
     onCancel: () => void;
     assets: T.Asset[];
@@ -47,7 +46,6 @@ const SavingForm: React.FC<{
     const selectedAsset = useMemo(() => assets.find(a => a.id === assetId), [assets, assetId]);
     const currency = selectedAsset?.currency || 'VND';
 
-    // FIX: Adjusted handleSubmit to create the correct object for new vs. edited savings.
     const handleSubmit = (e: React.FormEvent) => {
         e.preventDefault();
         if (!assetId) {
@@ -118,7 +116,6 @@ const SavingsContent = () => {
     
     const assetMap = useMemo(() => new Map(assets.map(a => [a.id, a.name])), [assets]);
 
-    // FIX: Updated handler to match new prop signature and correctly call context functions.
     const handleSave = (savingData: Omit<T.Saving, 'id' | 'workspaceId'> | T.Saving) => {
         if ('id' in savingData && savingData.id) {
             updateSaving(savingData as T.Saving);

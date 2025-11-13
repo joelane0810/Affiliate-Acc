@@ -27,8 +27,7 @@ const adAccountStatusLabels: Record<T.AdAccount['status'], string> = {
 
 const AdAccountForm: React.FC<{
     account?: T.AdAccount;
-    // FIX: Corrected the onSave prop type to expect objects without workspaceId for new entries.
-    onSave: (account: (Omit<T.AdAccount, 'id' | 'workspaceId'> | T.AdAccount) | Omit<T.AdAccount, 'id' | 'workspaceId'>[]) => void;
+    onSave: (account: Omit<T.AdAccount, 'id' | 'workspaceId'> | T.AdAccount | Omit<T.AdAccount, 'id' | 'workspaceId'>[]) => void;
     onCancel: () => void;
 }> = ({ account, onSave, onCancel }) => {
     const [accountNumber, setAccountNumber] = useState(account?.accountNumber || '');
@@ -62,7 +61,6 @@ const AdAccountForm: React.FC<{
                 alert("Vui lòng nhập số tài khoản.");
                 return;
             }
-            // FIX: Pass the correct object structure for new vs. edited accounts.
             const dataToSave = { accountNumber, adsPlatform, status };
             if (account) {
                 onSave({ ...account, ...dataToSave });
@@ -137,8 +135,7 @@ export default function AdAccounts() {
     const [editingAccount, setEditingAccount] = useState<T.AdAccount | undefined>(undefined);
     const [accountToDelete, setAccountToDelete] = useState<T.AdAccount | null>(null);
 
-    // FIX: Updated handler to match new prop signature and correctly call context functions.
-    const handleSaveAccount = (accountOrAccounts: (Omit<T.AdAccount, 'id' | 'workspaceId'> | T.AdAccount) | Omit<T.AdAccount, 'id' | 'workspaceId'>[]) => {
+    const handleSaveAccount = (accountOrAccounts: Omit<T.AdAccount, 'id' | 'workspaceId'> | T.AdAccount | Omit<T.AdAccount, 'id' | 'workspaceId'>[]) => {
         if (Array.isArray(accountOrAccounts)) {
             addAdAccount(accountOrAccounts);
         } else if ('id' in accountOrAccounts && accountOrAccounts.id) {
